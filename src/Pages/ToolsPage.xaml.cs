@@ -285,7 +285,7 @@ public partial class ToolsPage : UserControl
         {
             var x = cmp.Text.Trim().Replace(" ", "");
             if (x.Length == 0 || h == default) { verdict.Text = ""; return; }
-            bool ok = new[] { h.Item1, h.Item2, h.Item3 }.Any(v => v.Equals(x, StringComparison.OrdinalIgnoreCase));
+            bool ok = new[] { h.Item1, h.Item2, h.Item3 }.Any(v => string.Equals(v, x, StringComparison.OrdinalIgnoreCase));
             verdict.Text = ok ? "✅ Совпадает" : "❌ Не совпадает";
             verdict.Foreground = (Brush)FindResource(ok ? "GoodBrush" : "BadBrush");
         }
