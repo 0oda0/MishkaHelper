@@ -18,12 +18,16 @@ public partial class App : Application
     {
         _single = new Mutex(true, "MishkaHelper.Single", out bool first);
         _showSignal = new EventWaitHandle(false, EventResetMode.AutoReset, "MishkaHelper.Show");
+        var quitSignal = new EventWaitHandle(false, EventResetMode.AutoReset, "MishkaHelper.Quit");
         if (!first)
         {
-            _showSignal.Set();   // ask the running copy to show itself
+            // Ask the running copy to show itself, or to exit (used by the installer/updater).
+            (e.Args.Contains("--quit") ? quitSignal : _showSignal).Set();
             Shutdown();
             return;
         }
+        if (e.Args.Contains("--quit")) { Shutdown(); return; }
+        new Thread(() => { if (quitSignal.WaitOne()) Dispatcher.Invoke(Quit); }) { IsBackground = true }.Start();
 
         DispatcherUnhandledException += (_, ex) =>
         {
@@ -50,6 +54,13 @@ public partial class App : Application
         {
             ShowMain();
             Shots.Run(e.Args[si + 1], _main!);
+            return;
+        }
+
+        if (Array.IndexOf(e.Args, "--selftest") is int ti and >= 0 && ti + 1 < e.Args.Length)
+        {
+            ShowMain();
+            SelfTest.Run(e.Args[ti + 1], _main!, ti + 2 < e.Args.Length ? e.Args[ti + 2] : "");
             return;
         }
 

@@ -73,8 +73,7 @@ public static class Security
     public static async Task<(bool Threats, string Output)> Scan(ScanKind kind, string? path = null)
     {
         var args = $"-Scan -ScanType {(int)kind}" + (kind == ScanKind.Custom ? $" -File \"{path}\"" : "");
-        var outp = await Shell.RunAsync(MpCmd, args, 24 * 3600_000, System.Text.Encoding.Unicode);
-        if (string.IsNullOrWhiteSpace(outp)) outp = await Shell.RunAsync(MpCmd, args, 24 * 3600_000);
+        var outp = await Shell.RunAsync(MpCmd, args, 24 * 3600_000);   // MpCmdRun prints plain ASCII
         bool threats = Regex.IsMatch(outp, @"found \d+ threats|Threat\s+:", RegexOptions.IgnoreCase) && !outp.Contains("found no threats", StringComparison.OrdinalIgnoreCase);
         if (kind != ScanKind.Custom) { Settings.Current.LastScan = DateTime.Now; Settings.Save(); }
         return (threats, outp);
@@ -111,8 +110,7 @@ public static class Security
 
     public static async Task<List<string>> Quarantine()
     {
-        var o = await Shell.RunAsync(MpCmd, "-Restore -ListAll", 60_000, System.Text.Encoding.Unicode);
-        if (!o.Contains("ThreatName", StringComparison.OrdinalIgnoreCase)) o = await Shell.RunAsync(MpCmd, "-Restore -ListAll", 60_000);
+        var o = await Shell.RunAsync(MpCmd, "-Restore -ListAll", 60_000);
         return Regex.Matches(o, @"ThreatName\s*=\s*(.+)").Select(m => m.Groups[1].Value.Trim()).Distinct().ToList();
     }
 
@@ -151,8 +149,9 @@ public static class Security
         void Add(string name, string? path, string where, StartupItem? st = null, int? pid = null)
         {
             if (string.IsNullOrWhiteSpace(path)) return;
-            path = Environment.ExpandEnvironmentVariables(path.Trim('"'));
-            if (!File.Exists(path) || res.ContainsKey(path)) return;
+            path = Environment.ExpandEnvironmentVariables(path.Trim('"')).Replace('/', '\\');
+            if (path.EndsWith(".lnk", StringComparison.OrdinalIgnoreCase)) path = LinkTarget(path) ?? path;
+            if (!File.Exists(path) || res.ContainsKey(path) || string.Equals(path, Environment.ProcessPath, StringComparison.OrdinalIgnoreCase)) return;
             var (score, reasons) = Rate(path);
             if (score > 0) res[path] = new(name, path, where, reasons, score, st, pid);
         }
@@ -201,21 +200,38 @@ public static class Security
         var win = Environment.GetFolderPath(Environment.SpecialFolder.Windows).ToLowerInvariant();
         bool inWindows = lower.StartsWith(win);
 
+        // Store apps live in WindowsApps and are package-signed (a plain file check says "unsigned").
+        if (lower.Contains(@"\windowsapps\")) return (0, reasons);
+
         if (!inWindows && SystemNames.Contains(name)) { score += 5; reasons.Add("Системное имя вне папки Windows"); }
         if (lower.Contains(@"\temp\") || lower.Contains(@"\tmp\")) { score += 3; reasons.Add("Запуск из временной папки"); }
         if (lower.Contains(@"\downloads\") || lower.Contains(@"\users\public\")) { score += 2; reasons.Add("Запуск из Загрузок / Public"); }
-        if (lower.Contains(@"\appdata\roaming\") && !lower.Contains(@"\microsoft\")) { score += 1; reasons.Add("Из AppData\\Roaming"); }
         try { if ((File.GetAttributes(path) & FileAttributes.Hidden) != 0) { score += 2; reasons.Add("Скрытый файл"); } } catch { }
 
-        // Catalog-signed Windows binaries fail a plain file signature check; trust their location instead.
-        if (!inWindows)
+        var ext = Path.GetExtension(lower);
+        if (ext is ".bat" or ".cmd" or ".vbs" or ".js" or ".ps1" or ".hta") { score += 2; reasons.Add("Скрипт в автозапуске"); }
+        else if (!inWindows && ext is ".exe" or ".dll" or ".scr")
         {
+            // Catalog-signed Windows binaries fail a plain file check, so only non-Windows files are verified.
+            // Unsigned software in Program Files is common (PostgreSQL, games); in user-writable folders it isn't.
+            bool userWritable = lower.Contains(@"\appdata\") || lower.Contains(@"\programdata\") || lower.Contains(@"\users\public\") || lower.Contains(@"\downloads\");
             var sig = Signature(path);
-            if (sig == null) { score += 2; reasons.Add("Нет цифровой подписи"); }
+            if (sig == null && userWritable) { score += 2; reasons.Add("Без подписи в пользовательской папке"); }
             else if (sig == "") { score += 3; reasons.Add("Подпись недействительна"); }
+            else if (sig is { Length: > 0 }) score -= 2;   // valid signature outweighs an odd location
         }
-        // Signed and in a normal place → not interesting.
         return score >= 2 ? (score, reasons) : (0, reasons);
+    }
+
+    static string? LinkTarget(string lnk)
+    {
+        try
+        {
+            dynamic sh = Activator.CreateInstance(Type.GetTypeFromProgID("WScript.Shell")!)!;
+            string t = sh.CreateShortcut(lnk).TargetPath;
+            return string.IsNullOrEmpty(t) ? null : t;
+        }
+        catch { return null; }
     }
 
     /// <summary>null = unsigned, "" = signature present but invalid, otherwise signer name.</summary>

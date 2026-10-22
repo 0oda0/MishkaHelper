@@ -100,11 +100,15 @@ public static class Cleaner
                 foreach (var f in e)
                 {
                     ct.ThrowIfCancellationRequested();
+                    if (f.Contains(@"\.net\", StringComparison.OrdinalIgnoreCase)) continue;   // extracted libs of running .NET apps (incl. us)
                     if (t.MinAgeDays > 0) { try { if (File.GetLastWriteTime(f) > cutoff) continue; } catch { continue; } }
                     yield return f;
                 }
             }
     }
+
+    /// <summary>Files skipped because a program holds them; reset by the caller before a run.</summary>
+    public static int LastSkipped;
 
     /// <summary>Delete what Measure found. Locked files are skipped. Returns bytes freed.</summary>
     public static long Clean(CleanTarget t, CancellationToken ct, Action<string>? progress = null)
@@ -137,7 +141,7 @@ public static class Cleaner
                 File.Delete(f);
                 freed += len;
             }
-            catch { /* in use — skip */ }
+            catch { Interlocked.Increment(ref LastSkipped); /* in use — skip */ }
         }
         if (t.Patterns.Length == 1 && t.Patterns[0] == "*")
             foreach (var dir in t.Paths().Where(Directory.Exists))

@@ -56,8 +56,10 @@ public static class RadialMenu
         w.Width = w.Height = Size;
         Native.GetCursorPos(out var p);
         double scale = VisualTreeHelper.GetDpi(w).DpiScaleX;   // ponytail: system DPI; per-monitor offset if menus land wrong on a 2nd screen
-        w.Left = p.X / scale - Size / 2;
-        w.Top = p.Y / scale - Size / 2;
+        // Centre on the cursor but keep the whole ring on the screen the cursor is on.
+        var wa = System.Windows.Forms.Screen.FromPoint(new System.Drawing.Point(p.X, p.Y)).WorkingArea;
+        w.Left = Math.Clamp(p.X / scale - Size / 2, wa.Left / scale, wa.Right / scale - Size);
+        w.Top = Math.Clamp(p.Y / scale - Size / 2, wa.Top / scale, wa.Bottom / scale - Size);
 
         var canvas = new Canvas { Width = Size, Height = Size, Background = Brushes.Transparent };
         w.Content = canvas;
@@ -162,9 +164,24 @@ public static class RadialMenu
         canvas.RenderTransform = st;
         canvas.Opacity = 0;
         _w = w;
+        var fgAtOpen = Native.GetForegroundWindow();   // the app the user was in
         w.Show();
+        var hwnd = new System.Windows.Interop.WindowInteropHelper(w).Handle;
+        // The hotkey owner may take the foreground; forcing it (AttachThreadInput) makes it flicker and lose focus again.
+        Native.SetForegroundWindow(hwnd);
         w.Activate();
-        Native.SetForegroundWindow(new System.Windows.Interop.WindowInteropHelper(w).Handle);
+        Log.Info($"radial: shown at {w.Left:0},{w.Top:0} cursor={p.X},{p.Y} fgBefore={fgAtOpen} fgNow={Native.GetForegroundWindow()} me={hwnd}");
+
+        // Safety net: if we didn't get focus, Deactivated never fires. Close once the user switches to some
+        // *other* window than the one that was in front when the menu opened (i.e. they clicked away).
+        var watch = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
+        watch.Tick += (_, _) =>
+        {
+            var fg = Native.GetForegroundWindow();
+            if (fg != hwnd && fg != fgAtOpen && !closing) { Log.Info($"radial: focus moved to {fg}, closing"); w.Close(); }
+        };
+        w.Closed += (_, _) => watch.Stop();
+        watch.Start();
         var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
         st.BeginAnimation(ScaleTransform.ScaleXProperty, new DoubleAnimation(1, TimeSpan.FromMilliseconds(160)) { EasingFunction = ease });
         st.BeginAnimation(ScaleTransform.ScaleYProperty, new DoubleAnimation(1, TimeSpan.FromMilliseconds(160)) { EasingFunction = ease });

@@ -19,6 +19,7 @@ public static partial class Native
 
     // Windows
     [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
+    [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
     [DllImport("user32.dll")] public static extern IntPtr SetWindowPos(IntPtr hWnd, IntPtr after, int x, int y, int cx, int cy, uint flags);
     [DllImport("user32.dll")] public static extern int GetWindowLong(IntPtr hWnd, int index);
     [DllImport("user32.dll")] public static extern int SetWindowLong(IntPtr hWnd, int index, int value);

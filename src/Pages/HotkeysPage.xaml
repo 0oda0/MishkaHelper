@@ -23,7 +23,7 @@
         <Border Style="{StaticResource Card}">
             <StackPanel>
                 <TextBlock Text="Программы в радиальном меню" Style="{StaticResource H2}"/>
-                <TextBlock Style="{StaticResource Dim}" Text="Открывается по Ctrl+Alt+Space (по умолчанию) → «Программы». Можно добавлять exe, ярлыки, папки и ссылки."/>
+                <TextBlock Style="{StaticResource Dim}" Text="Открывается по Ctrl+Alt+R (по умолчанию) → «Программы». Можно добавлять exe, ярлыки, папки и ссылки."/>
                 <StackPanel x:Name="Launchers" Margin="0,10,0,0"/>
                 <WrapPanel Margin="0,8,0,0">
                     <Button Style="{StaticResource AccentButton}" Content="+ Программа…" Click="AddApp_Click"/>

@@ -69,14 +69,12 @@ public static class SystemInfo
         try
         {
             const string ns = @"root\Microsoft\Windows\Storage";
-            var rel = new Dictionary<string, ManagementObject>();
-            using (var r = new ManagementObjectSearcher(ns, "SELECT * FROM MSFT_StorageReliabilityCounter"))
-                foreach (ManagementObject o in r.Get()) rel[o["DeviceId"]?.ToString() ?? ""] = o;
             using var s = new ManagementObjectSearcher(ns, "SELECT * FROM MSFT_PhysicalDisk");
             foreach (ManagementObject o in s.Get())
             {
-                var id = o["DeviceId"]?.ToString() ?? "";
-                rel.TryGetValue(id, out var rc);
+                // Same link as Get-PhysicalDisk | Get-StorageReliabilityCounter (DeviceIds don't match between the classes).
+                ManagementObject? rc = null;
+                try { rc = o.GetRelated("MSFT_StorageReliabilityCounter").Cast<ManagementObject>().FirstOrDefault(); } catch { }
                 int? I(string p) => rc?[p] is { } v && Convert.ToInt64(v) is var l && l > 0 ? (int)l : null;
                 var media = Convert.ToInt32(o["MediaType"]) switch { 3 => "HDD", 4 => "SSD", 5 => "SCM", _ => "Диск" };
                 if (Convert.ToInt32(o["BusType"]) == 17) media = "NVMe SSD";

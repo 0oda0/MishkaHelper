@@ -27,7 +27,7 @@ public static class Defaults
     {
         var hk = new Dictionary<string, string>
         {
-            ["radial"] = "Ctrl+Alt+Space",
+            ["radial"] = "Ctrl+Alt+R",   // Ctrl+Alt+Space belongs to Claude's quick entry
             ["quick"] = "Ctrl+Alt+Q",
             ["main"] = "Ctrl+Alt+H",
             ["audioNext"] = "Ctrl+Alt+A",
@@ -44,6 +44,7 @@ public static class Defaults
             ["widgets"] = "Ctrl+Alt+W",
             ["fanMax"] = "Ctrl+Alt+F",
         };
+        if (s.Hotkeys.GetValueOrDefault("radial") == "Ctrl+Alt+Space") s.Hotkeys["radial"] = hk["radial"];   // old default
         foreach (var (k, v) in hk) s.Hotkeys.TryAdd(k, v);
 
         if (s.Profiles.Count == 0)

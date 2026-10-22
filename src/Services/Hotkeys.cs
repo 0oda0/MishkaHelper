@@ -17,7 +17,7 @@ public static class Hotkeys
         _src = new HwndSource(new HwndSourceParameters("MishkaHotkeys") { ParentWindow = new IntPtr(-3) });   // HWND_MESSAGE
         _src.AddHook((IntPtr h, int msg, IntPtr w, IntPtr l, ref bool handled) =>
         {
-            if (msg == Native.WM_HOTKEY && Ids.TryGetValue(w.ToInt32(), out var action)) { Actions.Run(action); handled = true; }
+            if (msg == Native.WM_HOTKEY && Ids.TryGetValue(w.ToInt32(), out var action)) { Log.Info("hotkey " + action); Actions.Run(action); handled = true; }
             return IntPtr.Zero;
         });
         Reload();
@@ -38,6 +38,7 @@ public static class Hotkeys
             if (Native.RegisterHotKey(_src.Handle, id, mods | repeat, vk)) Ids[id] = action;
             else Failed.Add(action);
         }
+        if (Failed.Count > 0) Log.Info("hotkeys taken by other apps: " + string.Join(", ", Failed.Select(a => $"{a}={Settings.Current.Hotkeys[a]}")));
     }
 
     /// <summary>Unregister everything while the recorder listens; Reload() brings them back.</summary>

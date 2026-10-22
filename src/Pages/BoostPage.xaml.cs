@@ -93,6 +93,7 @@ public partial class BoostPage : UserControl
             if (!UiKit.Confirm("Удалить выбранное?\n\n" + string.Join("\n", chosen.Select(c => "• " + c.Name)) + "\n\nФайлы, занятые программами, будут пропущены.")) return;
             clean.IsEnabled = analyze.IsEnabled = false;
             long freed = 0;
+            Cleaner.LastSkipped = 0;
             foreach (var t in chosen)
             {
                 status.Text = "Чищу: " + t.Name;
@@ -102,7 +103,8 @@ public partial class BoostPage : UserControl
             }
             Cleaner.FlushDns();
             Settings.Current.LastClean = DateTime.Now; Settings.Save();
-            status.Text = $"Готово! Освобождено {Cleaner.Size(freed)}";
+            status.Text = $"Готово! Освобождено {Cleaner.Size(freed)}" +
+                (Cleaner.LastSkipped > 0 ? $". Пропущено файлов: {Cleaner.LastSkipped} — они сейчас заняты программами (загрузки, установщики), удалятся в следующий раз." : "");
             Osd.Show("\uE945", $"Освобождено {Cleaner.Size(freed)}");
             clean.IsEnabled = true;
             await Measure();

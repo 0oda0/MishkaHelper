@@ -182,7 +182,7 @@ public static class SysMon
             if (PerformanceCounterCategory.Exists("GPU Adapter Memory"))
                 _vram = new PerformanceCounterCategory("GPU Adapter Memory").GetInstanceNames()
                     .Select(n => new PerformanceCounter("GPU Adapter Memory", "Dedicated Usage", n)).ToList();
-            foreach (var c in _gpu) c.NextValue();
+            foreach (var c in _gpu) Next(c);   // prime; instances of exited processes vanish between enumerate and read
         }
         catch (Exception e) { Log.Error(e); }
     }
