@@ -21,6 +21,19 @@ public static class Defaults
         ["dnd"] = "Не беспокоить",
         ["widgets"] = "Показать/скрыть виджеты",
         ["fanMax"] = "Вентиляторы на максимум",
+        ["palette"] = "Палитра команд (поиск по всем функциям)",
+        ["topmost"] = "Активное окно поверх всех",
+        ["opacity"] = "Прозрачность активного окна",
+        ["killFg"] = "Убить зависшее активное окно",
+        ["colorPick"] = "Пипетка: цвет под курсором",
+        ["screenOff"] = "Выключить экран",
+        ["keepAwake"] = "Не засыпать (вкл/выкл)",
+        ["lock"] = "Заблокировать ПК",
+        ["night"] = "Ночной свет",
+        ["wifi"] = "Wi-Fi вкл/выкл",
+        ["bt"] = "Bluetooth вкл/выкл",
+        ["recycle"] = "Очистить корзину",
+        ["explorer"] = "Перезапустить Проводник",
     };
 
     public static void Fill(AppSettings s)
@@ -43,6 +56,13 @@ public static class Defaults
             ["dnd"] = "Ctrl+Alt+D",
             ["widgets"] = "Ctrl+Alt+W",
             ["fanMax"] = "Ctrl+Alt+F",
+            ["palette"] = "Ctrl+Alt+K",
+            ["topmost"] = "Ctrl+Alt+T",
+            ["opacity"] = "Ctrl+Alt+Y",
+            ["killFg"] = "Ctrl+Alt+F4",
+            ["colorPick"] = "Ctrl+Alt+C",
+            ["screenOff"] = "", ["keepAwake"] = "", ["lock"] = "", ["night"] = "Ctrl+Alt+N",
+            ["wifi"] = "", ["bt"] = "", ["recycle"] = "", ["explorer"] = "",
         };
         if (s.Hotkeys.GetValueOrDefault("radial") == "Ctrl+Alt+Space") s.Hotkeys["radial"] = hk["radial"];   // old default
         foreach (var (k, v) in hk) s.Hotkeys.TryAdd(k, v);
@@ -56,7 +76,8 @@ public static class Defaults
                 new Profile { Name = "Ночь", Icon = "", PowerMode = "Balanced", AcerMode = 0, Brightness = 25, NightLight = true, Volume = 20, DoNotDisturb = true },
             });
 
-        foreach (var kind in new[] { "system", "battery", "clock", "network", "profiles", "audio" })
+        foreach (var kind in new[] { "system", "battery", "clock", "network", "profiles", "audio",
+                     "notes", "todo", "timer", "media", "ping", "mic", "disks", "calendar", "currency", "procs", "fans", "worldclock", "countdown", "launcher" })
             if (!s.Widgets.Any(w => w.Kind == kind))
                 s.Widgets.Add(new WidgetConfig { Kind = kind, Left = 60, Top = 60 + s.Widgets.Count * 150 });
 

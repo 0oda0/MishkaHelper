@@ -35,6 +35,7 @@ public partial class MainWindow : Window
             "Nitro" => new NitroPage(),
             "Boost" => new BoostPage(),
             "Security" => new SecurityPage(),
+            "Tools" => new ToolsPage(),
             "Profiles" => new ProfilesPage(),
             "Hotkeys" => new HotkeysPage(),
             "Widgets" => new WidgetsPage(),

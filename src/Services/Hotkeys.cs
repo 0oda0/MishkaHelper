@@ -72,6 +72,11 @@ public static class Hotkeys
         return vk != 0 && mods != 0;
     }
 
+    /// <summary>Human label for a stored combo ("Ctrl+Alt+OemPlus" → "Ctrl+Alt+=").</summary>
+    public static string Pretty(string combo) => combo
+        .Replace("OemPlus", "=").Replace("OemMinus", "−").Replace("PageUp", "PgUp").Replace("PageDown", "PgDn")
+        .Replace("Space", "Пробел").Replace("Return", "Enter");
+
     /// <summary>Format a key press from a WPF KeyDown for the recorder in the Hotkeys page.</summary>
     public static string? Format(KeyEventArgs e)
     {

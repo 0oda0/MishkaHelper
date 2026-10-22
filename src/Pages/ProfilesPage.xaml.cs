@@ -168,7 +168,7 @@ public partial class ProfilesPage : UserControl
             del.Click += (_, _) => { Settings.Current.AppRules.Remove(r); Save(); RenderRules(); };
             DockPanel.SetDock(del, Dock.Right);
             row.Children.Add(del);
-            row.Children.Add(UiKit.Text($"{r.Process}  →  {r.Profile}", 13));
+            row.Children.Add(UiKit.Text($"{r.Process}  →  {r.Profile}" + (r.Priority switch { "High" => "  ·  высокий приоритет", "AboveNormal" => "  ·  приоритет выше обычного", _ => "" }), 13));
             Rules.Children.Add(row);
         }
     }
@@ -177,7 +177,8 @@ public partial class ProfilesPage : UserControl
     {
         var proc = RuleProc.Text.Trim().Replace(".exe", "", StringComparison.OrdinalIgnoreCase);
         if (proc.Length == 0 || RuleProfile.SelectedItem is not string prof) return;
-        Settings.Current.AppRules.Add(new AppRule { Process = proc, Profile = prof });
+        var prio = RulePrio.SelectedIndex switch { 1 => "AboveNormal", 2 => "High", _ => "" };
+        Settings.Current.AppRules.Add(new AppRule { Process = proc, Profile = prof, Priority = prio });
         RuleProc.Text = "";
         Save(); RenderRules();
     }

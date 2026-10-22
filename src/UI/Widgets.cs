@@ -11,7 +11,7 @@ using NAudio.CoreAudioApi;
 namespace MishkaHelper.Core;
 
 /// <summary>Desktop widgets: draggable, pinned to desktop or always on top, per-widget opacity.</summary>
-public static class Widgets
+public static partial class Widgets
 {
     public static readonly Dictionary<string, string> Names = new()
     {
@@ -22,7 +22,23 @@ public static class Widgets
         ["profiles"] = "Профили",
         ["audio"] = "Звук",
         ["launcher"] = "Программы",
+        ["notes"] = "Заметки",
+        ["todo"] = "Список дел",
+        ["timer"] = "Помодоро и секундомер",
+        ["media"] = "Сейчас играет",
+        ["ping"] = "Пинг и интернет",
+        ["mic"] = "Индикатор микрофона",
+        ["disks"] = "Место на дисках",
+        ["calendar"] = "Календарь",
+        ["currency"] = "Курсы валют (ЦБ РФ)",
+        ["procs"] = "Топ процессов",
+        ["fans"] = "Вентиляторы Nitro",
+        ["worldclock"] = "Мировое время",
+        ["countdown"] = "Обратный отсчёт",
     };
+
+    /// <summary>Widgets with text input need real focus; the rest never steal it.</summary>
+    static bool NeedsFocus(string kind) => kind is "notes" or "todo";
 
     static readonly Dictionary<string, Window> Open = new();
     static IDisposable? _live;
@@ -82,7 +98,7 @@ public static class Widgets
     {
         if (Open.ContainsKey(kind) || !Names.ContainsKey(kind)) return;
         var cfg = Config(kind);
-        var w = Floating.Create(clickThrough: false);
+        var w = Floating.Create(clickThrough: false, noActivate: !NeedsFocus(kind));
         w.Topmost = cfg.Topmost;
         w.Opacity = Math.Clamp(cfg.Opacity, 0.2, 1);
         var (content, onSample, slow) = Build(kind);
@@ -97,7 +113,7 @@ public static class Widgets
         w.Left = cfg.Left; w.Top = cfg.Top;
         EnsureOnScreen(w);
 
-        border.MouseLeftButtonDown += (_, e) => { if (e.ButtonState == MouseButtonState.Pressed && e.OriginalSource is not Slider and not Button) try { w.DragMove(); } catch { } };
+        border.MouseLeftButtonDown += (_, e) => { if (e.ButtonState == MouseButtonState.Pressed && !IsInteractive(e.OriginalSource as DependencyObject)) try { w.DragMove(); } catch { } };
         w.LocationChanged += (_, _) => { cfg.Left = w.Left; cfg.Top = w.Top; };
         border.ContextMenu = Menu(kind, w, cfg);
 
@@ -114,7 +130,13 @@ public static class Widgets
         if (slow != null)
         {
             slow();
-            t = new DispatcherTimer { Interval = TimeSpan.FromSeconds(kind == "clock" ? 1 : 30) };
+            t = new DispatcherTimer { Interval = TimeSpan.FromSeconds(kind switch
+            {
+                "clock" or "timer" or "worldclock" or "countdown" or "mic" => 1,
+                "ping" or "procs" or "media" => 2,
+                "currency" => 3600,
+                _ => 30,
+            }) };
             t.Tick += (_, _) => slow();
             t.Start();
         }
@@ -174,6 +196,19 @@ public static class Widgets
         "profiles" => (Header("", "Профили", UiKit.ProfileButtons()), null, null),
         "audio" => AudioWidget(),
         "launcher" => LauncherWidget(),
+        "notes" => NotesWidget(),
+        "todo" => TodoWidget(),
+        "timer" => TimerWidget(),
+        "media" => MediaWidget(),
+        "ping" => PingWidget(),
+        "mic" => MicWidget(),
+        "disks" => DisksWidget(),
+        "calendar" => CalendarWidget(),
+        "currency" => CurrencyWidget(),
+        "procs" => ProcsWidget(),
+        "fans" => FansWidget(),
+        "worldclock" => WorldClockWidget(),
+        "countdown" => CountdownWidget(),
         _ => (new TextBlock(), null, null),
     };
 

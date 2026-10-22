@@ -20,6 +20,32 @@ public static class Audio
     {
         _notifier = new Notifier();
         En.RegisterEndpointNotificationCallback(_notifier);
+        WatchCap();
+    }
+
+    // Volume limiter: clamp the default output to Settings.VolumeCap whenever anything raises it.
+    static MMDevice? _capDev;
+
+    static void WatchCap()
+    {
+        try
+        {
+            if (_capDev != null) _capDev.AudioEndpointVolume.OnVolumeNotification -= OnVolume;
+            _capDev = Default(DataFlow.Render);
+            if (_capDev != null) _capDev.AudioEndpointVolume.OnVolumeNotification += OnVolume;
+        }
+        catch (Exception e) { Log.Error(e); }
+    }
+
+    static void OnVolume(AudioVolumeNotificationData d)
+    {
+        int cap = Settings.Current.VolumeCap;
+        if (cap > 0 && d.MasterVolume * 100 > cap + 0.5)
+            ThreadPool.QueueUserWorkItem(_ =>
+            {
+                Volume = cap;
+                System.Windows.Application.Current?.Dispatcher.BeginInvoke(() => Osd.Show("", $"Лимит громкости {cap}%", cap));
+            });
     }
 
     static MMDevice? Default(DataFlow f)
@@ -121,7 +147,11 @@ public static class Audio
         }
         public void OnDeviceAdded(string id) => Changed?.Invoke();
         public void OnDeviceRemoved(string id) => Changed?.Invoke();
-        public void OnDefaultDeviceChanged(DataFlow flow, Role role, string id) => Changed?.Invoke();
+        public void OnDefaultDeviceChanged(DataFlow flow, Role role, string id)
+        {
+            if (flow == DataFlow.Render && role == Role.Multimedia) ThreadPool.QueueUserWorkItem(_ => WatchCap());
+            Changed?.Invoke();
+        }
         public void OnPropertyValueChanged(string id, PropertyKey key) { }
     }
 

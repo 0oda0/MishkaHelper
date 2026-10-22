@@ -22,10 +22,38 @@ public static class Services
         {
             _tick++;
             Try(Profiles.CheckApps);
+            if (_tick % 12 == 3) Try(AutoTheme);                         // every minute
             if (_tick % 60 == 1) await Devices.CheckBatteries();          // every 5 min
             if (_tick % 360 == 2) await Scheduled();                     // every 30 min
         };
         _jobs.Start();
+
+        // Caps/Num Lock OSD (the Nitro keyboard has no Caps LED). Cheap poll, only while enabled.
+        bool caps = Toolbox.CapsLock, num = Toolbox.NumLock;
+        var keys = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(200) };
+        keys.Tick += (_, _) =>
+        {
+            if (!Settings.Current.LockKeysOsd) return;
+            bool c = Toolbox.CapsLock, n = Toolbox.NumLock;
+            if (c != caps) Osd.Show("", c ? "CAPS LOCK вкл" : "Caps Lock выкл");
+            if (n != num) Osd.Show("", n ? "Num Lock вкл" : "Num Lock выкл");
+            (caps, num) = (c, n);
+        };
+        keys.Start();
+    }
+
+    static bool? _wasDark;
+
+    /// <summary>Switch Windows light/dark by time of day; applies once per transition so manual changes stick until the next one.</summary>
+    static void AutoTheme()
+    {
+        var s = Settings.Current;
+        if (!s.AutoTheme || !TimeSpan.TryParse(s.LightAt, out var light) || !TimeSpan.TryParse(s.DarkAt, out var dark)) return;
+        var now = DateTime.Now.TimeOfDay;
+        bool shouldBeDark = light < dark ? now < light || now >= dark : now >= dark && now < light;
+        if (_wasDark == shouldBeDark) return;
+        _wasDark = shouldBeDark;
+        if (Tweaks.DarkTheme != shouldBeDark) Tweaks.DarkTheme = shouldBeDark;
     }
 
     public static void Stop()
@@ -40,6 +68,7 @@ public static class Services
     static async Task Scheduled()
     {
         var s = Settings.Current;
+        if (s.CheckUpdates && (DateTime.Now - s.LastUpdateCheck).TotalDays >= 1) await Toolbox.CheckForUpdate(silent: true);
         if (s.ScanIntervalDays > 0 && (DateTime.Now - s.LastScan).TotalDays >= s.ScanIntervalDays)
         {
             Toast.Show("", "Плановая проверка", "Быстрая проверка Defender запущена");

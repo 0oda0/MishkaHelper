@@ -42,7 +42,7 @@ public partial class HotkeysPage : UserControl
         g.Children.Add(label);
 
         Settings.Current.Hotkeys.TryGetValue(action, out var combo);
-        var btn = new Button { Content = string.IsNullOrEmpty(combo) ? "не задано" : combo, Margin = new Thickness(0), MinWidth = 200, FontFamily = new FontFamily("Consolas, Segoe UI") };
+        var btn = new Button { Content = string.IsNullOrEmpty(combo) ? "не задано" : Hotkeys.Pretty(combo), Margin = new Thickness(0), MinWidth = 200, FontFamily = new FontFamily("Consolas, Segoe UI") };
         btn.Click += (_, _) => Record(btn, action);
         Grid.SetColumn(btn, 1);
         var clear = new Button { Content = "", FontFamily = (FontFamily)FindResource("IconFont"), Style = (Style)FindResource("GhostButton"), ToolTip = "Убрать" };
@@ -77,7 +77,7 @@ public partial class HotkeysPage : UserControl
         void Done(string text)
         {
             win.PreviewKeyDown -= h;
-            btn.Content = text.Length == 0 ? "не задано" : text;
+            btn.Content = text.Length == 0 ? "не задано" : Hotkeys.Pretty(text);
             btn.ClearValue(Button.BorderBrushProperty);
             Hotkeys.Reload();
         }

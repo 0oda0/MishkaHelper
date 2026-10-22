@@ -39,6 +39,11 @@
                     <WrapPanel Margin="0,6,0,0">
                         <TextBox x:Name="RuleProc" Width="180" Margin="0,0,8,8"/>
                         <ComboBox x:Name="RuleProfile" Width="160" Margin="0,0,8,8"/>
+                        <ComboBox x:Name="RulePrio" Width="190" Margin="0,0,8,8" SelectedIndex="0">
+                            <ComboBoxItem Content="Приоритет: обычный"/>
+                            <ComboBoxItem Content="Приоритет: выше обычного"/>
+                            <ComboBoxItem Content="Приоритет: высокий"/>
+                        </ComboBox>
                         <Button Content="Добавить правило" Click="AddRule_Click"/>
                         <Button Content="Выбрать из запущенных…" Click="PickProc_Click"/>
                     </WrapPanel>

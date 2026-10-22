@@ -10,6 +10,9 @@ public partial class WidgetsPage : UserControl
     {
         ["system"] = "", ["battery"] = "", ["clock"] = "", ["network"] = "",
         ["profiles"] = "", ["audio"] = "", ["launcher"] = "",
+        ["notes"] = "", ["todo"] = "", ["timer"] = "", ["media"] = "", ["ping"] = "", ["mic"] = "",
+        ["disks"] = "", ["calendar"] = "", ["currency"] = "", ["procs"] = "", ["fans"] = "",
+        ["worldclock"] = "", ["countdown"] = "",
     };
 
     public WidgetsPage()

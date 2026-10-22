@@ -12,7 +12,7 @@ public static class Shots
     {
         Directory.CreateDirectory(dir);
         await Task.Delay(1500);
-        foreach (var p in new[] { "Home", "Controls", "System", "Devices", "Nitro", "Boost", "Security", "Profiles", "Hotkeys", "Widgets", "Settings" })
+        foreach (var p in new[] { "Home", "Controls", "System", "Devices", "Nitro", "Boost", "Security", "Tools", "Profiles", "Hotkeys", "Widgets", "Settings" })
         {
             main.Navigate(p);
             await Task.Delay(p is "Devices" or "Security" or "System" ? 6000 : 2500);
@@ -29,13 +29,19 @@ public static class Shots
             if (w.Content is System.Windows.Controls.Canvas) Save(w, Path.Combine(dir, "Radial.png"));
         RadialMenu.Toggle();
 
-        var kinds = new[] { "system", "battery", "clock", "network", "audio", "profiles" };
+        var kinds = Widgets.Names.Keys.ToArray();
         var was = kinds.Where(Widgets.IsOpen).ToList();
         foreach (var k in kinds) Widgets.Set(k, true);
         await Task.Delay(5000);
         int i = 0;
         foreach (Window w in Application.Current.Windows)
-            if (w.Content is System.Windows.Controls.Border && w != main) Save(w, Path.Combine(dir, $"Widget{i++}.png"));
+            if (w.Content is System.Windows.Controls.Border && w != main) Save(w, Path.Combine(dir, $"Widget{i++:00}.png"));
+        CommandPalette.Toggle();
+        await Task.Delay(600);
+        foreach (Window w in Application.Current.Windows)
+            if (w.IsVisible && w.Content is System.Windows.Controls.Border { Child: System.Windows.Controls.StackPanel { Children.Count: 2 } } && w != main)
+                Save(w, Path.Combine(dir, "Palette.png"));
+        CommandPalette.Toggle();
         foreach (var k in kinds.Except(was)) Widgets.Set(k, false);
 
         Osd.Show("", "Громкость", 55);

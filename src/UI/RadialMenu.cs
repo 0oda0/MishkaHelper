@@ -39,6 +39,18 @@ public static class RadialMenu
                 ? Acer.SupportedModes().Select(m => new Item("", m.Name, () => { Acer.Mode = m.Id; Osd.Show("", "Режим: " + m.Name); })).ToList()
                 : Power.Modes.Select(m => new Item("", m.Name, () => { Power.Mode = m.Key; Osd.Show("", "Питание: " + m.Name); })).ToList()),
             new("", "Скриншот", () => Actions.Run("screenshot")),
+            new("", "Инструменты", Sub: () => new List<Item>
+            {
+                new("", "Окно поверх", () => Actions.Run("topmost")),
+                new("", "Пипетка", () => Actions.Run("colorPick")),
+                new("", "Не засыпать", () => Actions.Run("keepAwake")),
+                new("", "Выключить экран", () => Actions.Run("screenOff")),
+                new("", "Заблокировать", () => Actions.Run("lock")),
+                new("", "Очистить корзину", () => Actions.Run("recycle")),
+                new("", "Пинг", () => Actions.Run("ping")),
+                new("", "Пароль в буфер", () => Actions.Run("password")),
+                new("", "Палитра команд", () => Actions.Run("palette")),
+            }),
             new("", "Виджеты", () => Actions.Run("widgets")),
             new("", "Wi-Fi", () => Actions.Run("wifi")),
             new("", "Диспетчер", () => Actions.Run("taskmgr")),

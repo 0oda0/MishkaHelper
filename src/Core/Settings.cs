@@ -22,6 +22,13 @@ public class AppRule
 {
     public string Process { get; set; } = "";   // e.g. "cs2"
     public string Profile { get; set; } = "";
+    public string Priority { get; set; } = "";  // "", "AboveNormal", "High"
+}
+
+public class TodoItem
+{
+    public string Text { get; set; } = "";
+    public bool Done { get; set; }
 }
 
 public class Launcher
@@ -83,6 +90,23 @@ public class AppSettings
 
     /// <summary>Last keyboard zone colours we set (#RRGGBB ×4). The firmware's read-back doesn't reflect changes.</summary>
     public List<string> KeyboardZones { get; set; } = new();
+
+    // Widgets data
+    public string Notes { get; set; } = "";
+    public List<TodoItem> Todos { get; set; } = new();
+    public List<string> WorldClocks { get; set; } = new() { "Europe/Moscow", "Asia/Tokyo", "America/New_York" };
+    public string PingHost { get; set; } = "1.1.1.1";
+    public DateTime CountdownTo { get; set; } = new(DateTime.Now.Year + 1, 1, 1);
+    public string CountdownName { get; set; } = "Новый год";
+
+    // Background helpers
+    public int VolumeCap { get; set; }               // 0 = off
+    public bool AutoTheme { get; set; }
+    public string LightAt { get; set; } = "07:00";
+    public string DarkAt { get; set; } = "21:00";
+    public bool LockKeysOsd { get; set; } = true;
+    public bool CheckUpdates { get; set; } = true;
+    public DateTime LastUpdateCheck { get; set; }
 }
 
 public static class Settings

@@ -77,7 +77,13 @@ public static class Profiles
         {
             _appTrigger = hit.Process;
             _beforeApp = Active;
-            ui.BeginInvoke(() => Apply(hit.Profile));
+            if (!string.IsNullOrEmpty(hit.Profile)) ui.BeginInvoke(() => Apply(hit.Profile));
+            if (Enum.TryParse<ProcessPriorityClass>(hit.Priority, out var prio))
+                foreach (var p in Process.GetProcessesByName(hit.Process.Replace(".exe", "", StringComparison.OrdinalIgnoreCase)))
+                {
+                    try { p.PriorityClass = prio; } catch { }
+                    p.Dispose();
+                }
         }
         else if (hit == null && _appTrigger != null)
         {

@@ -61,7 +61,34 @@ public static class Actions
                     break;
                 case "screenshot": Shell.Open("ms-screenclip:"); break;
                 case "taskmgr": Shell.Open("taskmgr.exe"); break;
-                case "lock": Shell.Open("rundll32.exe", "user32.dll,LockWorkStation"); break;
+                case "lock": Toolbox.Lock(); break;
+                case "palette": CommandPalette.Toggle(); break;
+                case "topmost": Osd.Show("", Toolbox.ToggleTopmost()); break;
+                case "opacity": Osd.Show("", "Прозрачность окна", Toolbox.CycleOpacity()); break;
+                case "killFg": Osd.Show("", Toolbox.KillForeground()); break;
+                case "colorPick":
+                    var (hex, _) = Toolbox.PickColor();
+                    Osd.Show("", $"{hex} — скопировано");
+                    break;
+                case "screenOff": await Task.Delay(400); Toolbox.ScreenOff(); break;   // let the key-up pass first, or the screen wakes again
+                case "keepAwake":
+                    Toolbox.KeepAwake = !Toolbox.KeepAwake;
+                    Osd.Show("", Toolbox.KeepAwake ? "Не засыпать: вкл" : "Не засыпать: выкл");
+                    break;
+                case "recycle": Toolbox.EmptyRecycleBin(); Osd.Show("", "Корзина очищена"); break;
+                case "explorer": Toolbox.RestartExplorer(); Osd.Show("", "Проводник перезапущен"); break;
+                case "desktopIcons": Toolbox.ToggleDesktopIcons(); break;
+                case "taskbar": Toolbox.TaskbarAutoHide = !Toolbox.TaskbarAutoHide; Osd.Show("", Toolbox.TaskbarAutoHide ? "Панель задач скрывается" : "Панель задач видна"); break;
+                case "dark": Tweaks.DarkTheme = !Tweaks.DarkTheme; Osd.Show("", Tweaks.DarkTheme ? "Тёмная тема" : "Светлая тема"); break;
+                case "sysinfo": System.Windows.Clipboard.SetText(Toolbox.SystemReport()); Osd.Show("", "Сведения о ПК скопированы"); break;
+                case "ping":
+                    var ms = await Toolbox.Ping(Settings.Current.PingHost);
+                    Osd.Show("", ms < 0 ? "Нет ответа" : $"Пинг {ms} мс");
+                    break;
+                case "password":
+                    System.Windows.Clipboard.SetText(Toolbox.Password(16, true));
+                    Osd.Show("", "Пароль скопирован в буфер");
+                    break;
                 default:
                     if (action.StartsWith("profile:")) Profiles.Apply(action[8..]);
                     else if (action.StartsWith("launch:") && int.TryParse(action[7..], out var i) && i < Settings.Current.Launchers.Count)
@@ -70,6 +97,7 @@ public static class Actions
                         Shell.Open(l.Path, l.Args);
                     }
                     else if (action.StartsWith("audio:")) { Audio.SetDefault(action[6..]); Osd.Show("", Audio.DefaultName(DataFlow.Render)); }
+                    else if (action.StartsWith("page:")) App.Current.Navigate(action[5..]);
                     break;
             }
         }
