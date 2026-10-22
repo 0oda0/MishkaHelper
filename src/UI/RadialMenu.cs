@@ -14,7 +14,16 @@ namespace MishkaHelper.Core;
 /// </summary>
 public static class RadialMenu
 {
-    record Item(string Icon, string Label, Action? Run = null, Func<List<Item>>? Sub = null);
+    record Item(string Icon, string Label, Action? Run = null, Func<List<Item>>? Sub = null, ImageSource? Img = null);
+
+    const int PerPage = 11;   // more segments than this get unreadable → "Ещё" pages
+
+    static List<Item> WidgetItems() =>
+        new List<Item> { new("", "Все: показать / скрыть", () => Actions.Run("widgets")) }
+            .Concat(Widgets.Names.Select(kv => new Item(Widgets.IsOpen(kv.Key) ? "" : Widgets.Icons.GetValueOrDefault(kv.Key, ""),
+                (Widgets.IsOpen(kv.Key) ? "✓ " : "") + kv.Value.Split(" (")[0],
+                () => Widgets.Set(kv.Key, !Widgets.IsOpen(kv.Key)))))
+            .ToList();
 
     static Window? _w;
     const double Size = 480, Inner = 78, Outer = 210;
@@ -25,13 +34,16 @@ public static class RadialMenu
         Open();
     }
 
+    /// <summary>Dev/screenshots: open the wheel straight into a submenu by its label.</summary>
+    public static void OpenAt(string label) { _w?.Close(); Open(label); }
+
     static List<Item> Root()
     {
         var l = new List<Item>
         {
             new("", "Профили", Sub: () => Settings.Current.Profiles.Select(p => new Item(p.Icon, p.Name, () => Profiles.Apply(p))).ToList()),
             new("", "Звук", Sub: () => Audio.Devices(DataFlow.Render).Select(d => new Item(d.IsDefault ? "" : "", Short(d.Name), () => Actions.Run("audio:" + d.Id))).ToList()),
-            new("", "Программы", Sub: () => Settings.Current.Launchers.Select((x, i) => new Item("", x.Name, () => Actions.Run("launch:" + i))).ToList()),
+            new("", "Программы", Sub: () => Settings.Current.Launchers.Select((x, i) => new Item("", x.Name, () => Actions.Run("launch:" + i), Img: AppIcon.For(x))).ToList()),
             new("", "Ускорить", () => Actions.Run("boost")),
             new("", "Микрофон", () => Actions.Run("micMute")),
             new("", "Не беспокоить", () => Actions.Run("dnd")),
@@ -51,7 +63,7 @@ public static class RadialMenu
                 new("", "Пароль в буфер", () => Actions.Run("password")),
                 new("", "Палитра команд", () => Actions.Run("palette")),
             }),
-            new("", "Виджеты", () => Actions.Run("widgets")),
+            new("", "Виджеты", Sub: WidgetItems),
             new("", "Wi-Fi", () => Actions.Run("wifi")),
             new("", "Диспетчер", () => Actions.Run("taskmgr")),
         };
@@ -59,9 +71,18 @@ public static class RadialMenu
         return l;
     }
 
+    /// <summary>Long submenus (20 widgets, many programs) show 11 items + "Ещё →"; Back walks the pages.</summary>
+    static List<Item> Paged(List<Item> all, int page = 0)
+    {
+        if (all.Count <= PerPage + 1) return all;
+        var chunk = all.Skip(page * PerPage).Take(PerPage).ToList();
+        if ((page + 1) * PerPage < all.Count) chunk.Add(new Item("", "Ещё →", Sub: () => Paged(all, page + 1)));
+        return chunk;
+    }
+
     static string Short(string s) => s.Length > 18 ? s[..17] + "…" : s;
 
-    static void Open()
+    static void Open(string? startIn = null)
     {
         var w = Floating.Create(clickThrough: false, noActivate: false);
         w.SizeToContent = SizeToContent.Manual;
@@ -77,6 +98,7 @@ public static class RadialMenu
         w.Content = canvas;
         var stack = new Stack<List<Item>>();
         List<Item> items = Root();
+        var stack0 = startIn != null ? items.FirstOrDefault(x => x.Label == startIn) : null;
         int hover = -1;
         var paths = new List<Path>();
         var center = new TextBlock { FontSize = 15, FontWeight = FontWeights.SemiBold, TextAlignment = TextAlignment.Center, Width = Inner * 2 - 16, TextWrapping = TextWrapping.Wrap };
@@ -109,7 +131,10 @@ public static class RadialMenu
                 canvas.Children.Add(path); paths.Add(path);
                 double mid = (a0 + a1) / 2 * Math.PI / 180, rr = (Inner + Outer) / 2;
                 var label = new StackPanel { Width = 92, IsHitTestVisible = false };
-                label.Children.Add(new TextBlock { Text = items[i].Icon, FontFamily = (FontFamily)Application.Current.Resources["IconFont"], FontSize = 22, HorizontalAlignment = HorizontalAlignment.Center, Foreground = (Brush)Application.Current.Resources["AccentBrush"] });
+                if (items[i].Img is { } img)
+                    label.Children.Add(new Image { Source = img, Width = 30, Height = 30, HorizontalAlignment = HorizontalAlignment.Center });
+                else
+                    label.Children.Add(new TextBlock { Text = items[i].Icon, FontFamily = (FontFamily)Application.Current.Resources["IconFont"], FontSize = 22, HorizontalAlignment = HorizontalAlignment.Center, Foreground = (Brush)Application.Current.Resources["AccentBrush"] });
                 label.Children.Add(new TextBlock { Text = items[i].Label, FontSize = 11, HorizontalAlignment = HorizontalAlignment.Center, TextAlignment = TextAlignment.Center, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 4, 0, 0) });
                 canvas.Children.Add(label);
                 label.Measure(new System.Windows.Size(92, double.PositiveInfinity));
@@ -151,7 +176,7 @@ public static class RadialMenu
         {
             if (idx < 0 || idx >= items.Count) { Back(); return; }
             var it = items[idx];
-            if (it.Sub != null) { stack.Push(items); items = it.Sub(); Render(); return; }
+            if (it.Sub != null) { stack.Push(items); items = Paged(it.Sub()); Render(); return; }
             w.Close();
             it.Run?.Invoke();
         }
@@ -170,6 +195,7 @@ public static class RadialMenu
         w.Deactivated += (_, _) => { if (!closing) w.Close(); };
         w.Closed += (_, _) => _w = null;
 
+        if (stack0?.Sub != null) { stack.Push(items); items = Paged(stack0.Sub()); }
         Render();
         canvas.RenderTransformOrigin = new Point(0.5, 0.5);
         var st = new ScaleTransform(0.6, 0.6);

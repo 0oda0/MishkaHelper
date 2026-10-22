@@ -40,7 +40,9 @@ public class JarvisSettings
     public string WhisperModel { get; set; } = "turbo";   // turbo | base | small
     public string Microphone { get; set; } = "";          // device name, "" = default
     public bool Speak { get; set; } = true;
-    public string Tts { get; set; } = "piper";            // piper | windows
+    public string Tts { get; set; } = "edge";             // edge (online neural) | piper (offline) | windows
+    public string EdgeVoice { get; set; } = "ru-RU-DmitryNeural";
+    public int EdgePitch { get; set; }                     // percent, e.g. -5
     public string PiperVoice { get; set; } = "dmitri";
     public bool VoiceFx { get; set; } = true;              // "AI butler" effect
     public string Voice { get; set; } = "";               // Windows voice name

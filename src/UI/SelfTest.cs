@@ -214,6 +214,29 @@ public static class SelfTest
             }
         });
 
+        // Voice samples for choosing: every Edge voice plain, plus the butler effect on the male ones.
+        await Step("voices", async () =>
+        {
+            var j = Settings.Current.Jarvis;
+            var dir = Path.Combine(Path.GetDirectoryName(file)!, "voices");
+            Directory.CreateDirectory(dir);
+            const string line = "Добрый вечер, сэр. Все системы в норме, температура процессора сорок пять градусов. Напоминаю: завтра в девять у вас пара по физике. Чем могу помочь?";
+            j.Tts = "edge";
+            int n = 1;
+            foreach (var (id, name) in EdgeTts.Russian)
+            {
+                foreach (var fx in new[] { false, true })
+                {
+                    if (fx && id.Contains("Svetlana")) continue;
+                    j.EdgeVoice = id; j.VoiceFx = fx; j.EdgePitch = fx ? -4 : 0;
+                    var fn = $"{n:00}-{id.Split('-')[2].Replace("MultilingualNeural", "").Replace("Neural", "")}{(fx ? "-jarvis-fx" : "")}.wav";
+                    try { var sec = await Voice.RenderToFile(line, Path.Combine(dir, fn)); L($"voice {fn}: {sec:0.0}s"); }
+                    catch (Exception e) { L($"voice {fn}: FAIL {e.Message}"); }
+                }
+                n++;
+            }
+        });
+
         // Real end-to-end update: check GitHub, download this edition's package, apply (the app quits and restarts).
         await Step("update", async () =>
         {
@@ -223,7 +246,7 @@ public static class SelfTest
             if (u != null) { L("installing…"); await Updater.Install(u, f => { if ((int)(f * 100) % 25 == 0) L($"  {f:P0}"); }); }
         });
 
-        if (filter.Contains("brain") || filter.Contains("ears") || filter.Contains("voice") || filter.Contains("update")) { L("DONE"); App.Current.Quit(); return; }
+        if (filter.Contains("brain") || filter.Contains("ears") || filter.Contains("voice") || filter.Contains("voices") || filter.Contains("update")) { L("DONE"); App.Current.Quit(); return; }
         L("DONE, rendering pages");
         Shots.Run(Path.Combine(Path.GetDirectoryName(file)!, "shots-admin"), main);   // quits when done
     }

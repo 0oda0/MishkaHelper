@@ -53,13 +53,27 @@ public static class Voice
 
     public static void Stop() { try { _out?.Stop(); } catch { } }
 
-    /// <summary>Self-test: synthesize with the current settings into a WAV file; returns seconds of audio.</summary>
+    /// <summary>Engine chain: Edge neural (online) → Piper (offline) → Windows voice; then the optional butler effect.</summary>
+    static async Task<ISampleProvider> Render(string text, JarvisSettings s)
+    {
+        ISampleProvider? audio = null;
+        if (s.Tts == "edge")
+        {
+            try { audio = Mp3(await EdgeTts.Synthesize(text, s.EdgeVoice, (int)Math.Round((s.Rate - 1) * 100), s.EdgePitch)); }
+            catch (Exception e) { Log.Info("edge tts: " + e.Message); }   // offline → fall through
+        }
+        if (audio == null && (s.Tts is "piper" or "edge") && PiperReady(s.PiperVoice)) audio = await PiperAudio(text, s.PiperVoice, s.Rate);
+        audio ??= await WindowsAudio(text, s);
+        return s.VoiceFx ? new ButlerFx(audio) : audio;
+    }
+
+    // ACM MP3 decoder ships with Windows.
+    static ISampleProvider Mp3(byte[] mp3) => new Mp3FileReaderBase(new MemoryStream(mp3), wf => new AcmMp3FrameDecompressor(wf)).ToSampleProvider();
+
+    /// <summary>Self-test / samples: synthesize with the current settings into a WAV file; returns seconds of audio.</summary>
     public static async Task<double> RenderToFile(string text, string path)
     {
-        var s = Settings.Current.Jarvis;
-        ISampleProvider? audio = s.Tts == "piper" && PiperReady(s.PiperVoice) ? await PiperAudio(text, s.PiperVoice, s.Rate) : null;
-        audio ??= await WindowsAudio(text, s);
-        if (s.VoiceFx) audio = new ButlerFx(audio);
+        var audio = await Render(text, Settings.Current.Jarvis);
         WaveFileWriter.CreateWaveFile16(path, audio);
         return new FileInfo(path).Length / 2.0 / audio.WaveFormat.SampleRate;
     }
@@ -72,10 +86,7 @@ public static class Voice
         await One.WaitAsync();
         try
         {
-            ISampleProvider? audio = null;
-            if (s.Tts == "piper" && PiperReady(s.PiperVoice)) audio = await PiperAudio(text, s.PiperVoice, s.Rate);
-            audio ??= await WindowsAudio(text, s);
-            if (s.VoiceFx) audio = new ButlerFx(audio);
+            var audio = await Render(text, s);
 
             Ears.Muted = true;
             Speaking?.Invoke(true);

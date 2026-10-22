@@ -14,6 +14,16 @@ namespace MishkaHelper.Core;
 /// <summary>Second batch of desktop widgets.</summary>
 public static partial class Widgets
 {
+    /// <summary>Glyph per widget kind (Widgets page, radial menu).</summary>
+    public static readonly Dictionary<string, string> Icons = new()
+    {
+        ["system"] = "", ["battery"] = "", ["clock"] = "", ["network"] = "",
+        ["profiles"] = "", ["audio"] = "", ["launcher"] = "",
+        ["notes"] = "", ["todo"] = "", ["timer"] = "", ["media"] = "", ["ping"] = "", ["mic"] = "",
+        ["disks"] = "", ["calendar"] = "", ["currency"] = "", ["procs"] = "", ["fans"] = "",
+        ["worldclock"] = "", ["countdown"] = "",
+    };
+
     static Brush B(string key) => (Brush)Application.Current.Resources[key];
 
     static bool IsInteractive(DependencyObject? d)

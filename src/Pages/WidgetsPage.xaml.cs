@@ -1,4 +1,4 @@
-﻿using System.Windows;
+using System.Windows;
 using System.Windows.Controls;
 using MishkaHelper.Core;
 
@@ -6,14 +6,7 @@ namespace MishkaHelper.Pages;
 
 public partial class WidgetsPage : UserControl
 {
-    static readonly Dictionary<string, string> Icons = new()
-    {
-        ["system"] = "", ["battery"] = "", ["clock"] = "", ["network"] = "",
-        ["profiles"] = "", ["audio"] = "", ["launcher"] = "",
-        ["notes"] = "", ["todo"] = "", ["timer"] = "", ["media"] = "", ["ping"] = "", ["mic"] = "",
-        ["disks"] = "", ["calendar"] = "", ["currency"] = "", ["procs"] = "", ["fans"] = "",
-        ["worldclock"] = "", ["countdown"] = "",
-    };
+    static Dictionary<string, string> Icons => Widgets.Icons;
 
     public WidgetsPage()
     {

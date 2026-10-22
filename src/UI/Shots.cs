@@ -39,6 +39,16 @@ public static class Shots
             if (w.Content is System.Windows.Controls.Canvas) Save(w, Path.Combine(dir, "Radial.png"));
         RadialMenu.Toggle();
 
+        foreach (var (sub, name) in new[] { ("Программы", "RadialPrograms"), ("Виджеты", "RadialWidgets") })
+        {
+            RadialMenu.OpenAt(sub);
+            await Task.Delay(800);
+            foreach (Window w in Application.Current.Windows)
+                if (w.Content is System.Windows.Controls.Canvas) Save(w, Path.Combine(dir, name + ".png"));
+            RadialMenu.Toggle();
+            await Task.Delay(200);
+        }
+
         var kinds = Widgets.Names.Keys.ToArray();
         var was = kinds.Where(Widgets.IsOpen).ToList();
         foreach (var k in kinds) Widgets.Set(k, true);

@@ -105,6 +105,12 @@ public static class Defaults
             j.Tts = "piper"; j.PiperVoice = "dmitri"; j.VoiceFx = true; j.Rate = 1.0;
             j.Version = 2;
         }
+        // v3: Piper voice was rejected → Microsoft neural voices (online, Piper stays as offline fallback).
+        if (s.Jarvis.Version < 3)
+        {
+            s.Jarvis.Tts = "edge"; s.Jarvis.EdgeVoice = "ru-RU-DmitryNeural"; s.Jarvis.VoiceFx = false;
+            s.Jarvis.Version = 3;
+        }
 
         if (s.Scenarios.Count == 0)
             s.Scenarios.AddRange(new[]
