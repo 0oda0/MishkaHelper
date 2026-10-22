@@ -80,6 +80,9 @@ public class AppSettings
     public List<string> CleanTargets { get; set; } = new();
 
     public string WeatherCity { get; set; } = "Москва";
+
+    /// <summary>Last keyboard zone colours we set (#RRGGBB ×4). The firmware's read-back doesn't reflect changes.</summary>
+    public List<string> KeyboardZones { get; set; } = new();
 }
 
 public static class Settings

@@ -37,8 +37,9 @@ public partial class NitroPage : UserControl
         }
         for (int z = 0; z < 4; z++)
         {
-            var (r, g, b) = Acer.GetZone(1 << z);
-            _colors[z] = Color.FromRgb(r, g, b);
+            var saved = Settings.Current.KeyboardZones;
+            if (saved.Count == 4) _colors[z] = (Color)ColorConverter.ConvertFromString(saved[z]);
+            else { var (r, g, b) = Acer.GetZone(1 << z); _colors[z] = Color.FromRgb(r, g, b); }
             int zz = z;
             var box = new Border { CornerRadius = new CornerRadius(10), Margin = new Thickness(0, 0, 8, 0), Cursor = Cursors.Hand, BorderThickness = new Thickness(2) };
             box.MouseLeftButtonUp += (_, _) => { _zone = 1 << zz; HighlightZones(); };
@@ -89,6 +90,8 @@ public partial class NitroPage : UserControl
         Acer.SetKeyboard(_effect, _effect == 0 ? 0 : (int)KbSpeed.Value, (int)KbBright.Value, KbReverse.IsChecked == true ? 2 : 1, c.R, c.G, c.B);
         if (_effect == 0)
             for (int z = 0; z < 4; z++) Acer.SetZone(1 << z, _colors[z].R, _colors[z].G, _colors[z].B);
+        Settings.Current.KeyboardZones = _colors.Select(x => $"#{x.R:X2}{x.G:X2}{x.B:X2}").ToList();
+        Settings.Save();
     }
 
     void Fan_Checked(object sender, RoutedEventArgs e)
