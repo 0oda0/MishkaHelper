@@ -1,1 +1,78 @@
-﻿<UserControl x:Class="MishkaHelper.Pages.SecurityPage" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"><TextBlock Text="Security"/></UserControl>
+﻿<UserControl x:Class="MishkaHelper.Pages.SecurityPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <StackPanel>
+        <TextBlock Text="Защита" Style="{StaticResource H1}"/>
+        <TextBlock Text="Движок Microsoft Defender + проверка по VirusTotal + поиск подозрительного в автозагрузке и процессах" Style="{StaticResource Dim}" FontSize="13" Margin="0,0,0,18"/>
+
+        <UniformGrid Columns="2">
+            <Border Style="{StaticResource Card}">
+                <StackPanel>
+                    <TextBlock Text="Состояние" Style="{StaticResource H2}"/>
+                    <TextBlock x:Name="Status" TextWrapping="Wrap" LineHeight="22"/>
+                    <WrapPanel Margin="0,12,0,0">
+                        <Button x:Name="UpdBtn" Content="Обновить базы" Click="Update_Click"/>
+                        <Button Content="Центр безопасности…" Click="OpenWinSec_Click"/>
+                    </WrapPanel>
+                </StackPanel>
+            </Border>
+            <Border Style="{StaticResource Card}">
+                <StackPanel>
+                    <TextBlock Text="Проверка" Style="{StaticResource H2}"/>
+                    <WrapPanel>
+                        <Button x:Name="QuickBtn" Style="{StaticResource AccentButton}" Content="Быстрая" Click="Quick_Click"/>
+                        <Button x:Name="FullBtn" Content="Полная (весь диск)" Click="Full_Click"/>
+                        <Button x:Name="CustomBtn" Content="Папка…" Click="Custom_Click"/>
+                        <Button x:Name="FileBtn" Content="Файл…" Click="File_Click"/>
+                    </WrapPanel>
+                    <ProgressBar x:Name="ScanBar" IsIndeterminate="True" Visibility="Collapsed" Margin="0,6,0,6"/>
+                    <TextBlock x:Name="ScanStatus" Style="{StaticResource Dim}" FontSize="13"/>
+                    <Button x:Name="CancelBtn" Content="Остановить" Visibility="Collapsed" HorizontalAlignment="Left" Margin="0,8,0,0" Click="Cancel_Click"/>
+                    <TextBlock Text="Проверка по расписанию" Style="{StaticResource Dim}" Margin="0,12,0,4"/>
+                    <ComboBox x:Name="Schedule" Width="220" HorizontalAlignment="Left" SelectionChanged="Schedule_Changed"/>
+                </StackPanel>
+            </Border>
+        </UniformGrid>
+
+        <Border Style="{StaticResource Card}">
+            <StackPanel>
+                <DockPanel>
+                    <Button DockPanel.Dock="Right" x:Name="SweepBtn" Style="{StaticResource AccentButton}" Content="Проверить" Click="Sweep_Click"/>
+                    <TextBlock Text="Автозагрузка, задачи, службы, процессы в трее" Style="{StaticResource H2}"/>
+                </DockPanel>
+                <TextBlock Style="{StaticResource Dim}" Text="Ищет то, где обычно прячутся вредоносные программы: запуск из Temp и Загрузок, отсутствие цифровой подписи, системные имена не на своём месте. Это подсказки, а не приговор — сомнительное проверь через VirusTotal."/>
+                <TextBlock x:Name="SweepStatus" Style="{StaticResource Dim}" Margin="0,8,0,0"/>
+                <StackPanel x:Name="Suspects" Margin="0,6,0,0"/>
+            </StackPanel>
+        </Border>
+
+        <UniformGrid Columns="2">
+            <Border Style="{StaticResource Card}">
+                <StackPanel>
+                    <TextBlock Text="Найденные угрозы" Style="{StaticResource H2}"/>
+                    <StackPanel x:Name="Threats"/>
+                </StackPanel>
+            </Border>
+            <Border Style="{StaticResource Card}">
+                <StackPanel>
+                    <DockPanel>
+                        <Button DockPanel.Dock="Right" Style="{StaticResource GhostButton}" Content="&#xE72C;" FontFamily="{StaticResource IconFont}" Click="Quarantine_Click" ToolTip="Обновить"/>
+                        <TextBlock Text="Карантин" Style="{StaticResource H2}"/>
+                    </DockPanel>
+                    <StackPanel x:Name="Quarantine"/>
+                </StackPanel>
+            </Border>
+        </UniformGrid>
+
+        <Border Style="{StaticResource Card}">
+            <StackPanel>
+                <TextBlock Text="VirusTotal" Style="{StaticResource H2}"/>
+                <TextBlock Style="{StaticResource Dim}" Text="Проверка файла 70+ антивирусами. На сервер уходит только отпечаток (SHA-256), сам файл остаётся на компьютере."/>
+                <WrapPanel Margin="0,10,0,0">
+                    <Button x:Name="VtBtn" Content="Выбрать файл…" Click="Vt_Click"/>
+                </WrapPanel>
+                <TextBlock x:Name="VtResult" TextWrapping="Wrap" Margin="0,4,0,0"/>
+            </StackPanel>
+        </Border>
+    </StackPanel>
+</UserControl>

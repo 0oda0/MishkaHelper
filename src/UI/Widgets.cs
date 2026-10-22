@@ -64,8 +64,15 @@ public static class Widgets
         else if (Open.TryGetValue(kind, out var w)) w.Close();
     }
 
+    public static void SetOpacity(string kind, double v)
+    {
+        Config(kind).Opacity = v;
+        if (Open.TryGetValue(kind, out var w)) w.Opacity = v;
+    }
+
     public static void Refresh(string kind)
     {
+        if (kind == "clock") _weatherAt = default;
         if (!Open.TryGetValue(kind, out var w)) return;
         w.Close();
         Show(kind);
@@ -195,7 +202,7 @@ public static class Widgets
             cpu.Value = s.Cpu; cpu.Label = $"{s.Cpu:0}%"; cpu.InvalidateVisual();
             gpu.Value = s.Gpu; gpu.Label = $"{s.Gpu:0}%"; gpu.InvalidateVisual();
             ram.Value = s.Ram; ram.Label = $"{s.Ram:0}%"; ram.InvalidateVisual();
-            info.Text = (s.CpuTemp > 0 ? $"CPU {s.CpuTemp}°C   GPU {s.GpuTemp}°C" : "") +
+            info.Text = (s.CpuTemp > 0 ? $"CPU {s.CpuTemp}°C" + (s.GpuTemp > 0 ? $"   GPU {s.GpuTemp}°C" : "") : "") +
                         (s.CpuFan > 0 ? $"\nВентиляторы {s.CpuFan} / {s.GpuFan} об/мин" : "") +
                         $"\nRAM {s.RamUsedGb:0.0} / {s.RamTotalGb:0} ГБ";
         }, null);

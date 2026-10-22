@@ -1,1 +1,50 @@
-﻿<UserControl x:Class="MishkaHelper.Pages.ProfilesPage" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"><TextBlock Text="Profiles"/></UserControl>
+﻿<UserControl x:Class="MishkaHelper.Pages.ProfilesPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <StackPanel>
+        <DockPanel>
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                <Button Content="Сохранить текущее как профиль" Click="Snapshot_Click"/>
+                <Button Style="{StaticResource AccentButton}" Content="+ Новый профиль" Click="New_Click"/>
+            </StackPanel>
+            <StackPanel>
+                <TextBlock Text="Профили" Style="{StaticResource H1}"/>
+                <TextBlock Text="Набор настроек одной кнопкой. Пустое поле — «не трогать»." Style="{StaticResource Dim}" FontSize="13" Margin="0,0,0,18"/>
+            </StackPanel>
+        </DockPanel>
+        <WrapPanel x:Name="List"/>
+
+        <Border Style="{StaticResource Card}">
+            <StackPanel>
+                <TextBlock Text="Автоматическое переключение" Style="{StaticResource H2}"/>
+                <CheckBox x:Name="Auto" Style="{StaticResource Switch}" Content="Включить автопрофили" Click="Auto_Click"/>
+                <StackPanel x:Name="AutoPanel" Margin="0,8,0,0">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition/>
+                            <ColumnDefinition Width="16"/>
+                            <ColumnDefinition/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Text="При отключении зарядки" Style="{StaticResource Dim}" Margin="0,0,0,4"/>
+                            <ComboBox x:Name="OnBattery" SelectionChanged="Power_Changed"/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="2">
+                            <TextBlock Text="При подключении зарядки" Style="{StaticResource Dim}" Margin="0,0,0,4"/>
+                            <ComboBox x:Name="OnAc" SelectionChanged="Power_Changed"/>
+                        </StackPanel>
+                    </Grid>
+                    <TextBlock Text="При запуске программы (по имени процесса, например cs2, dota2, valorant)" Style="{StaticResource Dim}" Margin="0,14,0,6"/>
+                    <StackPanel x:Name="Rules"/>
+                    <WrapPanel Margin="0,6,0,0">
+                        <TextBox x:Name="RuleProc" Width="180" Margin="0,0,8,8"/>
+                        <ComboBox x:Name="RuleProfile" Width="160" Margin="0,0,8,8"/>
+                        <Button Content="Добавить правило" Click="AddRule_Click"/>
+                        <Button Content="Выбрать из запущенных…" Click="PickProc_Click"/>
+                    </WrapPanel>
+                    <TextBlock Style="{StaticResource Dim}" Text="Когда программа закроется, вернётся профиль, который был до неё."/>
+                </StackPanel>
+            </StackPanel>
+        </Border>
+    </StackPanel>
+</UserControl>

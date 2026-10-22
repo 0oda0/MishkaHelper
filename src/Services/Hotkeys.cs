@@ -33,9 +33,19 @@ public static class Hotkeys
         {
             if (!TryParse(combo, out var mods, out var vk)) continue;
             int id = next++;
-            if (Native.RegisterHotKey(_src.Handle, id, mods | Native.MOD_NOREPEAT, vk)) Ids[id] = action;
+            // Volume/brightness repeat while held; everything else fires once.
+            uint repeat = action is "volUp" or "volDown" or "brightUp" or "brightDown" ? 0 : Native.MOD_NOREPEAT;
+            if (Native.RegisterHotKey(_src.Handle, id, mods | repeat, vk)) Ids[id] = action;
             else Failed.Add(action);
         }
+    }
+
+    /// <summary>Unregister everything while the recorder listens; Reload() brings them back.</summary>
+    public static void Suspend()
+    {
+        if (_src == null) return;
+        foreach (var id in Ids.Keys) Native.UnregisterHotKey(_src.Handle, id);
+        Ids.Clear();
     }
 
     public static void Stop() { if (_src != null) foreach (var id in Ids.Keys) Native.UnregisterHotKey(_src.Handle, id); _src?.Dispose(); }

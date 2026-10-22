@@ -1,1 +1,117 @@
-﻿<UserControl x:Class="MishkaHelper.Pages.ControlsPage" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"><TextBlock Text="Controls"/></UserControl>
+﻿<UserControl x:Class="MishkaHelper.Pages.ControlsPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <StackPanel>
+        <TextBlock Text="Управление" Style="{StaticResource H1}"/>
+        <TextBlock Text="Все регуляторы в одном месте" Style="{StaticResource Dim}" FontSize="13" Margin="0,0,0,18"/>
+
+        <Border Style="{StaticResource Card}">
+            <StackPanel>
+                <TextBlock Text="Связь и режимы" Style="{StaticResource H2}"/>
+                <WrapPanel x:Name="Tiles"/>
+            </StackPanel>
+        </Border>
+
+        <UniformGrid Columns="2">
+            <!-- Sound -->
+            <Border Style="{StaticResource Card}">
+                <StackPanel>
+                    <TextBlock Text="Звук" Style="{StaticResource H2}"/>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="36"/>
+                            <ColumnDefinition/>
+                            <ColumnDefinition Width="40"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition/>
+                            <RowDefinition/>
+                        </Grid.RowDefinitions>
+                        <Button x:Name="MuteBtn" Style="{StaticResource GhostButton}" FontFamily="{StaticResource IconFont}" FontSize="16" Click="Mute_Click" ToolTip="Звук вкл/выкл"/>
+                        <Slider Grid.Column="1" x:Name="Vol" Maximum="100" VerticalAlignment="Center" ValueChanged="Vol_Changed"/>
+                        <TextBlock Grid.Column="2" Text="{Binding Value, ElementName=Vol, StringFormat={}{0:0}}" HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                        <Button Grid.Row="1" x:Name="MicBtn" Style="{StaticResource GhostButton}" FontFamily="{StaticResource IconFont}" FontSize="16" Click="Mic_Click" ToolTip="Микрофон вкл/выкл"/>
+                        <Slider Grid.Row="1" Grid.Column="1" x:Name="Mic" Maximum="100" VerticalAlignment="Center" ValueChanged="Mic_Changed"/>
+                        <TextBlock Grid.Row="1" Grid.Column="2" Text="{Binding Value, ElementName=Mic, StringFormat={}{0:0}}" HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                    </Grid>
+                    <TextBlock Text="Вывод" Style="{StaticResource Dim}" Margin="0,10,0,4"/>
+                    <ComboBox x:Name="Output" DisplayMemberPath="Name" SelectionChanged="Output_Changed"/>
+                    <TextBlock Text="Микрофон" Style="{StaticResource Dim}" Margin="0,10,0,4"/>
+                    <ComboBox x:Name="Input" DisplayMemberPath="Name" SelectionChanged="Input_Changed"/>
+                    <CheckBox x:Name="AutoSwitch" Style="{StaticResource Switch}" Content="Переключать на наушники при подключении" Margin="0,12,0,0" Click="AutoSwitch_Click"/>
+                </StackPanel>
+            </Border>
+
+            <!-- Mixer -->
+            <Border Style="{StaticResource Card}">
+                <StackPanel>
+                    <DockPanel>
+                        <Button DockPanel.Dock="Right" Style="{StaticResource GhostButton}" Content="&#xE72C;" FontFamily="{StaticResource IconFont}" Click="RefreshMixer" ToolTip="Обновить"/>
+                        <TextBlock Text="Микшер приложений" Style="{StaticResource H2}"/>
+                    </DockPanel>
+                    <StackPanel x:Name="Mixer"/>
+                </StackPanel>
+            </Border>
+
+            <!-- Display -->
+            <Border Style="{StaticResource Card}">
+                <StackPanel>
+                    <TextBlock Text="Экран" Style="{StaticResource H2}"/>
+                    <DockPanel>
+                        <TextBlock Text="&#xE706;" Style="{StaticResource Icon}" Width="36" FontSize="16"/>
+                        <TextBlock DockPanel.Dock="Right" Text="{Binding Value, ElementName=Bright, StringFormat={}{0:0}}" Width="40" TextAlignment="Right" VerticalAlignment="Center"/>
+                        <Slider x:Name="Bright" Maximum="100" VerticalAlignment="Center" ValueChanged="Bright_Changed"/>
+                    </DockPanel>
+                    <TextBlock Text="Частота обновления" Style="{StaticResource Dim}" Margin="0,12,0,6"/>
+                    <WrapPanel x:Name="Rates"/>
+                    <TextBlock Text="Разрешение" Style="{StaticResource Dim}" Margin="0,6,0,4"/>
+                    <ComboBox x:Name="Res" SelectionChanged="Res_Changed"/>
+                    <WrapPanel Margin="0,12,0,0">
+                        <Button Content="Масштаб и HDR…" Click="DisplaySettings_Click"/>
+                        <Button Content="Обои и тема…" Click="Personalize_Click"/>
+                    </WrapPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- Power -->
+            <Border Style="{StaticResource Card}">
+                <StackPanel>
+                    <TextBlock Text="Питание" Style="{StaticResource H2}"/>
+                    <TextBlock Text="Режим Windows" Style="{StaticResource Dim}" Margin="0,0,0,6"/>
+                    <WrapPanel x:Name="WinModes"/>
+                    <TextBlock Text="Схема электропитания" Style="{StaticResource Dim}" Margin="0,6,0,4"/>
+                    <ComboBox x:Name="Plans" DisplayMemberPath="Name" SelectionChanged="Plans_Changed"/>
+                    <Grid Margin="0,10,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition/>
+                            <ColumnDefinition Width="12"/>
+                            <ColumnDefinition/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Text="Отключать экран" Style="{StaticResource Dim}" Margin="0,0,0,4"/>
+                            <ComboBox x:Name="ScreenOff" SelectionChanged="Timeouts_Changed"/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="2">
+                            <TextBlock Text="Сон" Style="{StaticResource Dim}" Margin="0,0,0,4"/>
+                            <ComboBox x:Name="SleepOff" SelectionChanged="Timeouts_Changed"/>
+                        </StackPanel>
+                    </Grid>
+                    <TextBlock x:Name="Battery" Margin="0,12,0,0" TextWrapping="Wrap"/>
+                </StackPanel>
+            </Border>
+        </UniformGrid>
+
+        <!-- Tweaks -->
+        <Border Style="{StaticResource Card}">
+            <StackPanel>
+                <TextBlock Text="Система и мышь" Style="{StaticResource H2}"/>
+                <UniformGrid Columns="2" x:Name="Switches"/>
+                <DockPanel Margin="0,12,0,0">
+                    <TextBlock Text="Скорость курсора" Width="160" VerticalAlignment="Center"/>
+                    <TextBlock DockPanel.Dock="Right" Text="{Binding Value, ElementName=MouseSpeed, StringFormat={}{0:0}}" Width="40" TextAlignment="Right" VerticalAlignment="Center"/>
+                    <Slider x:Name="MouseSpeed" Minimum="1" Maximum="20" IsSnapToTickEnabled="True" TickFrequency="1" ValueChanged="MouseSpeed_Changed"/>
+                </DockPanel>
+            </StackPanel>
+        </Border>
+    </StackPanel>
+</UserControl>

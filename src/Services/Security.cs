@@ -8,7 +8,7 @@ using System.Text.RegularExpressions;
 
 namespace MishkaHelper.Core;
 
-public record DefenderStatus(bool Enabled, bool RealTime, string SigVersion, DateTime SigUpdated, DateTime LastQuick, DateTime LastFull, string OtherAv);
+public record DefenderStatus(bool Enabled, bool Passive, bool RealTime, string SigVersion, DateTime SigUpdated, DateTime LastQuick, DateTime LastFull, string OtherAv);
 public record Threat(string Name, string Severity, string Resources, DateTime When, bool Resolved, long Id);
 public record Suspect(string Name, string Path, string Where, List<string> Reasons, int Score, StartupItem? Startup = null, int? Pid = null)
 {
@@ -35,7 +35,7 @@ public static class Security
 
     public static DefenderStatus Status()
     {
-        bool en = false, rt = false;
+        bool en = false, rt = false, passive = false;
         string ver = "?";
         DateTime upd = default, q = default, f = default;
         try
@@ -45,6 +45,7 @@ public static class Security
             {
                 en = (bool)o["AntivirusEnabled"];
                 rt = (bool)o["RealTimeProtectionEnabled"];
+                passive = (o["AMRunningMode"]?.ToString() ?? "").Contains("Passive", StringComparison.OrdinalIgnoreCase);
                 ver = o["AntivirusSignatureVersion"]?.ToString() ?? "?";
                 upd = Dmtf(o["AntivirusSignatureLastUpdated"]);
                 q = Dmtf(o["QuickScanEndTime"]);
@@ -61,7 +62,7 @@ public static class Security
                 if (o["displayName"] is string n && !n.Contains("Defender", StringComparison.OrdinalIgnoreCase) && !n.Contains("Microsoft")) other.Add(n);
         }
         catch { }
-        return new(en, rt, ver, upd, q, f, string.Join(", ", other));
+        return new(en, passive, rt, ver, upd, q, f, string.Join(", ", other));
     }
 
     static DateTime Dmtf(object? v) => v is string s && s.Length > 0 ? ManagementDateTimeConverter.ToDateTime(s) : default;

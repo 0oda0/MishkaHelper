@@ -42,6 +42,17 @@ public partial class App : Application
 
         Services.Start();
 
+        // Keep the logon task pointing at this exe (first run, or the app was moved/updated).
+        if (Settings.Current.StartWithWindows)
+            Task.Run(() => { if (!Autostart.PointsHere) Autostart.Set(true); });
+
+        if (Array.IndexOf(e.Args, "--shots") is int si and >= 0 && si + 1 < e.Args.Length)
+        {
+            ShowMain();
+            Shots.Run(e.Args[si + 1], _main!);
+            return;
+        }
+
         bool tray = e.Args.Contains("--tray") || (e.Args.Contains("--autostart") && Settings.Current.StartMinimized);
         if (!tray) ShowMain();
     }

@@ -22,7 +22,7 @@ public partial class QuickPanel : Window
     public QuickPanel()
     {
         InitializeComponent();
-        foreach (var t in UiKit.StandardTiles()) { t.Width = 116; Tiles.Children.Add(t); }
+        foreach (var t in UiKit.StandardTiles()) { t.Width = 108; Tiles.Children.Add(t); }
         Vol.Value = Audio.Volume;
         MuteBtn.Content = Audio.Muted ? "" : "";
         if (Display.HasBrightness) Bright.Value = Display.Brightness; else Bright.IsEnabled = false;
@@ -37,7 +37,9 @@ public partial class QuickPanel : Window
             Left = wa.Right - ActualWidth + 4;
             Top = wa.Bottom - ActualHeight + 4;
         };
-        Deactivated += (_, _) => Close();
+        bool closing = false;
+        Closing += (_, _) => closing = true;
+        Deactivated += (_, _) => { if (!closing) Close(); };
         KeyDown += (_, e) => { if (e.Key == System.Windows.Input.Key.Escape) Close(); };
         _live = SysMon.Live();
         SysMon.Updated += OnSample;

@@ -1,1 +1,48 @@
-﻿<UserControl x:Class="MishkaHelper.Pages.DevicesPage" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"><TextBlock Text="Devices"/></UserControl>
+﻿<UserControl x:Class="MishkaHelper.Pages.DevicesPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <StackPanel>
+        <DockPanel>
+            <Button DockPanel.Dock="Right" Click="Refresh_Click" VerticalAlignment="Center">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="&#xE72C;" FontFamily="{StaticResource IconFont}" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                    <TextBlock Text="Обновить"/>
+                </StackPanel>
+            </Button>
+            <StackPanel>
+                <TextBlock Text="Устройства" Style="{StaticResource H1}"/>
+                <TextBlock Text="Наушники, мыши, клавиатуры, геймпады, флешки — что подключено и что по умолчанию" Style="{StaticResource Dim}" FontSize="13" Margin="0,0,0,18"/>
+            </StackPanel>
+        </DockPanel>
+
+        <UniformGrid Columns="2">
+            <Border Style="{StaticResource Card}">
+                <StackPanel>
+                    <TextBlock Text="Вывод звука" Style="{StaticResource H2}"/>
+                    <StackPanel x:Name="Outputs"/>
+                </StackPanel>
+            </Border>
+            <Border Style="{StaticResource Card}">
+                <StackPanel>
+                    <TextBlock Text="Микрофоны" Style="{StaticResource H2}"/>
+                    <StackPanel x:Name="Inputs"/>
+                </StackPanel>
+            </Border>
+        </UniformGrid>
+
+        <TextBlock Text="Подключённая периферия" Style="{StaticResource H2}" Margin="0,8,0,10"/>
+        <TextBlock x:Name="Loading" Text="Ищу устройства…" Style="{StaticResource Dim}"/>
+        <WrapPanel x:Name="List"/>
+
+        <Border Style="{StaticResource Card}">
+            <StackPanel>
+                <DockPanel>
+                    <Button DockPanel.Dock="Right" x:Name="ScanBtn" Content="Найти новые устройства" Click="Scan_Click"/>
+                    <TextBlock Text="Bluetooth: добавить устройство" Style="{StaticResource H2}"/>
+                </DockPanel>
+                <TextBlock Text="Переведи наушники или геймпад в режим сопряжения и нажми «Найти»." Style="{StaticResource Dim}"/>
+                <StackPanel x:Name="Found" Margin="0,10,0,0"/>
+            </StackPanel>
+        </Border>
+    </StackPanel>
+</UserControl>

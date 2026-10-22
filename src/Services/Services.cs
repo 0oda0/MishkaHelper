@@ -63,6 +63,9 @@ public static class Autostart
 
     public static bool Enabled => Shell.Run("schtasks", $"/query /tn {Task}").Contains(Task);
 
+    public static bool PointsHere =>
+        Shell.Run("schtasks", $"/query /tn {Task} /xml").Contains(Environment.ProcessPath!, StringComparison.OrdinalIgnoreCase);
+
     /// <summary>Logon task with highest privileges: starts elevated without a UAC prompt.</summary>
     public static void Set(bool on)
     {

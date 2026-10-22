@@ -10,6 +10,20 @@ public record DeviceItem(string ContainerId, string Name, string Kind, string Ic
     public string Status => Disabled ? "Отключено" : Connected ? "Подключено" : Paired ? "Не подключено" : "—";
 }
 
+/// <summary>Built-in touchpad on/off by disabling its HID node.</summary>
+public static class Touchpad
+{
+    public static (string Id, bool Enabled)? Find()
+    {
+        using var s = new System.Management.ManagementObjectSearcher("SELECT PNPDeviceID, Name, ConfigManagerErrorCode FROM Win32_PnPEntity WHERE Name LIKE '%touchpad%' OR Name LIKE '%TouchPad%'");
+        foreach (System.Management.ManagementObject o in s.Get())
+            return (o["PNPDeviceID"].ToString()!, Convert.ToInt32(o["ConfigManagerErrorCode"]) != 22);
+        return null;
+    }
+
+    public static Task Set(string id, bool on) => Shell.RunAsync("pnputil", $"/{(on ? "enable" : "disable")}-device \"{id}\"");
+}
+
 /// <summary>
 /// Physical peripherals the way Settings → "Bluetooth и устройства" shows them (device containers),
 /// with battery, enable/disable, pair/unpair and safe eject.
@@ -37,8 +51,6 @@ public static class Devices
         ("PortableDevice", "Портативное устройство", ""),
         ("Communication.Phone", "Телефон", ""),
         ("Imaging", "Камера", ""),
-        ("Display.Monitor", "Монитор", ""),
-        ("PrintFax", "Принтер", ""),
     };
 
     public static async Task<List<DeviceItem>> List()

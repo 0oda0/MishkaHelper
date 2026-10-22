@@ -1,1 +1,131 @@
-﻿<UserControl x:Class="MishkaHelper.Pages.SystemPage" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"><TextBlock Text="System"/></UserControl>
+﻿<UserControl x:Class="MishkaHelper.Pages.SystemPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:c="clr-namespace:MishkaHelper.Core">
+    <StackPanel>
+        <TextBlock Text="Система" Style="{StaticResource H1}"/>
+        <TextBlock Text="Состояние компонентов в реальном времени" Style="{StaticResource Dim}" FontSize="13" Margin="0,0,0,18"/>
+
+        <UniformGrid Columns="4" x:Name="Tiles">
+            <Border Style="{StaticResource Card}">
+                <StackPanel>
+                    <TextBlock Text="ПРОЦЕССОР" Style="{StaticResource Dim}" FontWeight="Bold"/>
+                    <TextBlock x:Name="CpuVal" Style="{StaticResource Big}"/>
+                    <TextBlock x:Name="CpuSub" Style="{StaticResource Dim}"/>
+                    <c:Sparkline x:Name="CpuChart" Height="50" Margin="0,8,0,0"/>
+                </StackPanel>
+            </Border>
+            <Border Style="{StaticResource Card}">
+                <StackPanel>
+                    <TextBlock Text="ВИДЕОКАРТА" Style="{StaticResource Dim}" FontWeight="Bold"/>
+                    <TextBlock x:Name="GpuVal" Style="{StaticResource Big}"/>
+                    <TextBlock x:Name="GpuSub" Style="{StaticResource Dim}"/>
+                    <c:Sparkline x:Name="GpuChart" Height="50" Margin="0,8,0,0"/>
+                </StackPanel>
+            </Border>
+            <Border Style="{StaticResource Card}">
+                <StackPanel>
+                    <TextBlock Text="ПАМЯТЬ" Style="{StaticResource Dim}" FontWeight="Bold"/>
+                    <TextBlock x:Name="RamVal" Style="{StaticResource Big}"/>
+                    <TextBlock x:Name="RamSub" Style="{StaticResource Dim}"/>
+                    <c:Sparkline x:Name="RamChart" Height="50" Margin="0,8,0,0"/>
+                </StackPanel>
+            </Border>
+            <Border Style="{StaticResource Card}">
+                <StackPanel>
+                    <TextBlock Text="ТЕМПЕРАТУРА" Style="{StaticResource Dim}" FontWeight="Bold"/>
+                    <TextBlock x:Name="TempVal" Style="{StaticResource Big}"/>
+                    <TextBlock x:Name="TempSub" Style="{StaticResource Dim}"/>
+                    <c:Sparkline x:Name="TempChart" Height="50" Margin="0,8,0,0"/>
+                </StackPanel>
+            </Border>
+            <Border Style="{StaticResource Card}">
+                <StackPanel>
+                    <TextBlock Text="ДИСК" Style="{StaticResource Dim}" FontWeight="Bold"/>
+                    <TextBlock x:Name="DiskVal" Style="{StaticResource Big}"/>
+                    <TextBlock x:Name="DiskSub" Style="{StaticResource Dim}"/>
+                    <c:Sparkline x:Name="DiskChart" Height="50" Margin="0,8,0,0"/>
+                </StackPanel>
+            </Border>
+            <Border Style="{StaticResource Card}">
+                <StackPanel>
+                    <TextBlock Text="СЕТЬ" Style="{StaticResource Dim}" FontWeight="Bold"/>
+                    <TextBlock x:Name="NetVal" Style="{StaticResource Big}" FontSize="20"/>
+                    <TextBlock x:Name="NetSub" Style="{StaticResource Dim}"/>
+                    <c:Sparkline x:Name="NetChart" Height="50" Margin="0,8,0,0" Max="0"/>
+                </StackPanel>
+            </Border>
+            <Border Style="{StaticResource Card}" x:Name="FanCard">
+                <StackPanel>
+                    <TextBlock Text="ВЕНТИЛЯТОРЫ" Style="{StaticResource Dim}" FontWeight="Bold"/>
+                    <TextBlock x:Name="FanVal" Style="{StaticResource Big}" FontSize="20"/>
+                    <TextBlock x:Name="FanSub" Style="{StaticResource Dim}"/>
+                    <c:Sparkline x:Name="FanChart" Height="50" Margin="0,8,0,0" Max="7000"/>
+                </StackPanel>
+            </Border>
+            <Border Style="{StaticResource Card}">
+                <StackPanel>
+                    <TextBlock Text="БАТАРЕЯ" Style="{StaticResource Dim}" FontWeight="Bold"/>
+                    <TextBlock x:Name="BatVal" Style="{StaticResource Big}"/>
+                    <TextBlock x:Name="BatSub" Style="{StaticResource Dim}"/>
+                </StackPanel>
+            </Border>
+        </UniformGrid>
+
+        <Border Style="{StaticResource Card}">
+            <StackPanel>
+                <DockPanel>
+                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                        <RadioButton Style="{StaticResource Segment}" Content="1 час" GroupName="hist" Tag="1" Checked="Hist_Checked"/>
+                        <RadioButton Style="{StaticResource Segment}" Content="24 часа" GroupName="hist" Tag="24" Checked="Hist_Checked" x:Name="H24"/>
+                        <RadioButton Style="{StaticResource Segment}" Content="Неделя" GroupName="hist" Tag="168" Checked="Hist_Checked"/>
+                    </StackPanel>
+                    <TextBlock Text="История" Style="{StaticResource H2}"/>
+                </DockPanel>
+                <TextBlock Text="Загрузка CPU (фиолетовый) и температура CPU (розовый), среднее по минутам" Style="{StaticResource Dim}" Margin="0,0,0,8"/>
+                <Grid Height="140">
+                    <c:Sparkline x:Name="HistCpu"/>
+                    <c:Sparkline x:Name="HistTemp"/>
+                </Grid>
+                <TextBlock x:Name="HistInfo" Style="{StaticResource Dim}" Margin="0,6,0,0"/>
+            </StackPanel>
+        </Border>
+
+        <UniformGrid Columns="2">
+            <Border Style="{StaticResource Card}">
+                <StackPanel>
+                    <TextBlock Text="Компьютер" Style="{StaticResource H2}"/>
+                    <ItemsControl x:Name="Summary">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Grid Margin="0,3">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="150"/>
+                                        <ColumnDefinition/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="{Binding Item1}" Foreground="{DynamicResource DimBrush}"/>
+                                    <TextBlock Grid.Column="1" Text="{Binding Item2}" TextWrapping="Wrap"/>
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </Border>
+            <Border Style="{StaticResource Card}">
+                <StackPanel>
+                    <TextBlock Text="Накопители" Style="{StaticResource H2}"/>
+                    <StackPanel x:Name="Drives"/>
+                    <TextBlock Text="Здоровье дисков" Style="{StaticResource H2}" Margin="0,12,0,8"/>
+                    <StackPanel x:Name="Health"/>
+                </StackPanel>
+            </Border>
+        </UniformGrid>
+
+        <Border Style="{StaticResource Card}">
+            <StackPanel>
+                <TextBlock Text="Что нагружает компьютер" Style="{StaticResource H2}"/>
+                <StackPanel x:Name="Procs"/>
+            </StackPanel>
+        </Border>
+    </StackPanel>
+</UserControl>

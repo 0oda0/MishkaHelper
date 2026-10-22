@@ -1,4 +1,4 @@
-﻿using System.Management;
+using System.Management;
 using System.Text.RegularExpressions;
 
 namespace MishkaHelper.Core;
@@ -9,14 +9,16 @@ public record BatteryInfo(bool Present, int Percent, bool OnAc, bool Charging, T
     public double Wear => DesignMwh > 0 ? Math.Max(0, 100 - FullMwh * 100.0 / DesignMwh) : 0;
 }
 
+public record PowerPlan(Guid Id, string Name, bool Active);
+
 public static class Power
 {
     // Windows 11 "Power mode" overlays
     public static readonly (string Key, string Name, Guid Id)[] Modes =
     {
-        ("Saver", "Р­РєРѕРЅРѕРјРёСЏ", new Guid("961cc777-2547-4f9d-8174-7d86181b8a7a")),
-        ("Balanced", "Р‘Р°Р»Р°РЅСЃ", Guid.Empty),
-        ("Performance", "РџСЂРѕРёР·РІРѕРґРёС‚РµР»СЊРЅРѕСЃС‚СЊ", new Guid("ded574b5-45a0-4f42-8737-46345c09c238")),
+        ("Saver", "Экономия", new Guid("961cc777-2547-4f9d-8174-7d86181b8a7a")),
+        ("Balanced", "Баланс", Guid.Empty),
+        ("Performance", "Производительность", new Guid("ded574b5-45a0-4f42-8737-46345c09c238")),
     };
 
     public static string Mode
@@ -42,11 +44,11 @@ public static class Power
     }
 
     // Classic plans
-    public static List<(Guid Id, string Name, bool Active)> Plans()
+    public static List<PowerPlan> Plans()
     {
-        var res = new List<(Guid, string, bool)>();
+        var res = new List<PowerPlan>();
         foreach (Match m in Regex.Matches(Shell.Run("powercfg", "/l"), @"([0-9a-f\-]{36})\s+\((.+?)\)\s*(\*)?"))
-            res.Add((Guid.Parse(m.Groups[1].Value), m.Groups[2].Value, m.Groups[3].Success));
+            res.Add(new(Guid.Parse(m.Groups[1].Value), m.Groups[2].Value, m.Groups[3].Success));
         return res;
     }
 
@@ -67,7 +69,18 @@ public static class Power
 
     public static bool OnAc => System.Windows.Forms.SystemInformation.PowerStatus.PowerLineStatus != System.Windows.Forms.PowerLineStatus.Offline;
 
+    static BatteryInfo? _bat;
+    static DateTime _batAt;
+
+    /// <summary>Cached for 5 s: four WMI queries are too slow for 1 s UI ticks.</summary>
     public static BatteryInfo Battery()
+    {
+        if (_bat != null && (DateTime.Now - _batAt).TotalSeconds < 5) return _bat;
+        _batAt = DateTime.Now;
+        return _bat = ReadBattery();
+    }
+
+    static BatteryInfo ReadBattery()
     {
         var ps = System.Windows.Forms.SystemInformation.PowerStatus;
         bool present = ps.BatteryChargeStatus != System.Windows.Forms.BatteryChargeStatus.NoSystemBattery;

@@ -1,1 +1,36 @@
-﻿<UserControl x:Class="MishkaHelper.Pages.HotkeysPage" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"><TextBlock Text="Hotkeys"/></UserControl>
+﻿<UserControl x:Class="MishkaHelper.Pages.HotkeysPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <StackPanel>
+        <TextBlock Text="Горячие клавиши" Style="{StaticResource H1}"/>
+        <TextBlock Text="Нажми на сочетание, чтобы записать новое. Работают везде, даже в играх (в оконном режиме)." Style="{StaticResource Dim}" FontSize="13" Margin="0,0,0,18"/>
+
+        <Border Style="{StaticResource Card}">
+            <StackPanel>
+                <TextBlock Text="Действия" Style="{StaticResource H2}"/>
+                <StackPanel x:Name="Rows"/>
+                <Button Content="Сбросить по умолчанию" HorizontalAlignment="Left" Margin="0,12,0,0" Click="Reset_Click"/>
+            </StackPanel>
+        </Border>
+
+        <Border Style="{StaticResource Card}">
+            <StackPanel>
+                <TextBlock Text="Профили" Style="{StaticResource H2}"/>
+                <StackPanel x:Name="ProfileRows"/>
+            </StackPanel>
+        </Border>
+
+        <Border Style="{StaticResource Card}">
+            <StackPanel>
+                <TextBlock Text="Программы в радиальном меню" Style="{StaticResource H2}"/>
+                <TextBlock Style="{StaticResource Dim}" Text="Открывается по Ctrl+Alt+Space (по умолчанию) → «Программы». Можно добавлять exe, ярлыки, папки и ссылки."/>
+                <StackPanel x:Name="Launchers" Margin="0,10,0,0"/>
+                <WrapPanel Margin="0,8,0,0">
+                    <Button Style="{StaticResource AccentButton}" Content="+ Программа…" Click="AddApp_Click"/>
+                    <Button Content="+ Папка…" Click="AddFolder_Click"/>
+                    <Button Content="+ Сайт…" Click="AddUrl_Click"/>
+                </WrapPanel>
+            </StackPanel>
+        </Border>
+    </StackPanel>
+</UserControl>

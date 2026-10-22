@@ -1,1 +1,74 @@
-﻿<UserControl x:Class="MishkaHelper.Pages.NitroPage" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"><TextBlock Text="Nitro"/></UserControl>
+<UserControl x:Class="MishkaHelper.Pages.NitroPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <StackPanel>
+        <TextBlock Text="Nitro" Style="{StaticResource H1}"/>
+        <TextBlock Text="Замена NitroSense: режимы, вентиляторы, подсветка клавиатуры" Style="{StaticResource Dim}" FontSize="13" Margin="0,0,0,18"/>
+
+        <UniformGrid Columns="2">
+            <Border Style="{StaticResource Card}">
+                <StackPanel>
+                    <TextBlock Text="Режим производительности" Style="{StaticResource H2}"/>
+                    <WrapPanel x:Name="Modes"/>
+                    <TextBlock Style="{StaticResource Dim}" Margin="0,6,0,0"
+                               Text="«Турбо» и «Производительность» лучше включать от сети — от батареи ноутбук может ограничить мощность сам."/>
+                </StackPanel>
+            </Border>
+            <Border Style="{StaticResource Card}">
+                <StackPanel>
+                    <TextBlock Text="Датчики" Style="{StaticResource H2}"/>
+                    <TextBlock x:Name="Sensors" FontSize="15" LineHeight="24"/>
+                </StackPanel>
+            </Border>
+        </UniformGrid>
+
+        <Border Style="{StaticResource Card}">
+            <StackPanel>
+                <TextBlock Text="Вентиляторы" Style="{StaticResource H2}"/>
+                <WrapPanel>
+                    <RadioButton x:Name="FanAuto" Style="{StaticResource Segment}" Content="Авто" GroupName="fan" Checked="Fan_Checked"/>
+                    <RadioButton x:Name="FanMax" Style="{StaticResource Segment}" Content="Максимум" GroupName="fan" Checked="Fan_Checked"/>
+                    <RadioButton x:Name="FanCustom" Style="{StaticResource Segment}" Content="Вручную" GroupName="fan" Checked="Fan_Checked"/>
+                </WrapPanel>
+                <StackPanel x:Name="CustomPanel" Margin="0,10,0,0">
+                    <DockPanel Margin="0,0,0,6">
+                        <TextBlock Text="CPU" Width="60" VerticalAlignment="Center"/>
+                        <TextBlock DockPanel.Dock="Right" Text="{Binding Value, ElementName=CpuFan, StringFormat={}{0:0}%}" Width="50" TextAlignment="Right" VerticalAlignment="Center"/>
+                        <Slider x:Name="CpuFan" Maximum="100" IsSnapToTickEnabled="True" TickFrequency="5" ValueChanged="FanSpeed_Changed"/>
+                    </DockPanel>
+                    <DockPanel>
+                        <TextBlock Text="GPU" Width="60" VerticalAlignment="Center"/>
+                        <TextBlock DockPanel.Dock="Right" Text="{Binding Value, ElementName=GpuFan, StringFormat={}{0:0}%}" Width="50" TextAlignment="Right" VerticalAlignment="Center"/>
+                        <Slider x:Name="GpuFan" Maximum="100" IsSnapToTickEnabled="True" TickFrequency="5" ValueChanged="FanSpeed_Changed"/>
+                    </DockPanel>
+                    <TextBlock Style="{StaticResource Dim}" Margin="0,6,0,0" Text="Ниже 30% при нагрузке не опускай — защита от перегрева всё равно сработает, но ноутбук начнёт сбрасывать частоты."/>
+                </StackPanel>
+            </StackPanel>
+        </Border>
+
+        <Border Style="{StaticResource Card}">
+            <StackPanel>
+                <TextBlock Text="Подсветка клавиатуры" Style="{StaticResource H2}"/>
+                <TextBlock Text="Эффект" Style="{StaticResource Dim}" Margin="0,0,0,6"/>
+                <WrapPanel x:Name="Effects"/>
+                <TextBlock Text="Цвет зон (клик — выбрать зону, затем цвет)" Style="{StaticResource Dim}" Margin="0,8,0,6"/>
+                <UniformGrid x:Name="Zones" Columns="4" Height="46" Margin="0,0,0,10"/>
+                <WrapPanel x:Name="Swatches"/>
+                <DockPanel Margin="0,4,0,0">
+                    <Button DockPanel.Dock="Right" Content="Все зоны" Click="AllZones_Click"/>
+                    <Button DockPanel.Dock="Right" Content="Цвет темы" Click="Accent_Click"/>
+                    <TextBox x:Name="Hex" Width="110" HorizontalAlignment="Left" Text="#A259FF" KeyDown="Hex_KeyDown" Margin="0,0,8,8"/>
+                </DockPanel>
+                <DockPanel Margin="0,6,0,0">
+                    <TextBlock Text="Яркость" Width="90" VerticalAlignment="Center"/>
+                    <Slider x:Name="KbBright" Maximum="100" Value="100" IsSnapToTickEnabled="True" TickFrequency="5" ValueChanged="KbSlider_Changed"/>
+                </DockPanel>
+                <DockPanel Margin="0,6,0,0">
+                    <TextBlock Text="Скорость" Width="90" VerticalAlignment="Center"/>
+                    <Slider x:Name="KbSpeed" Minimum="1" Maximum="9" Value="4" IsSnapToTickEnabled="True" TickFrequency="1" ValueChanged="KbSlider_Changed"/>
+                </DockPanel>
+                <CheckBox x:Name="KbReverse" Content="Обратное направление" Margin="0,8,0,0" Click="Kb_Changed"/>
+            </StackPanel>
+        </Border>
+    </StackPanel>
+</UserControl>

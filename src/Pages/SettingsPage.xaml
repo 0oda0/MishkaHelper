@@ -1,1 +1,70 @@
-﻿<UserControl x:Class="MishkaHelper.Pages.SettingsPage" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"><TextBlock Text="Settings"/></UserControl>
+<UserControl x:Class="MishkaHelper.Pages.SettingsPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <StackPanel>
+        <TextBlock Text="Настройки" Style="{StaticResource H1}"/>
+        <TextBlock Text="Внешний вид, запуск, уведомления" Style="{StaticResource Dim}" FontSize="13" Margin="0,0,0,18"/>
+
+        <UniformGrid Columns="2">
+            <Border Style="{StaticResource Card}">
+                <StackPanel>
+                    <TextBlock Text="Оформление" Style="{StaticResource H2}"/>
+                    <TextBlock Text="Цвет неона" Style="{StaticResource Dim}" Margin="0,0,0,8"/>
+                    <WrapPanel x:Name="Accents"/>
+                    <CheckBox x:Name="Glass" Style="{StaticResource Switch}" Content="Стекло (размытие фона, как в iOS)" Margin="0,12,0,0" Click="Glass_Click"/>
+                    <CheckBox x:Name="OsdSwitch" Style="{StaticResource Switch}" Content="Всплывающая подсказка при горячих клавишах" Click="Osd_Click"/>
+                </StackPanel>
+            </Border>
+            <Border Style="{StaticResource Card}">
+                <StackPanel>
+                    <TextBlock Text="Запуск" Style="{StaticResource H2}"/>
+                    <CheckBox x:Name="Autostart" Style="{StaticResource Switch}" Content="Запускать вместе с Windows" Click="Autostart_Click"/>
+                    <CheckBox x:Name="Minimized" Style="{StaticResource Switch}" Content="Сразу сворачивать в трей" Click="Minimized_Click"/>
+                    <CheckBox x:Name="CloseTray" Style="{StaticResource Switch}" Content="Крестик сворачивает в трей, а не закрывает" Click="CloseTray_Click"/>
+                    <TextBlock Style="{StaticResource Dim}" Margin="0,8,0,0" Text="Автозапуск идёт через планировщик задач с правами администратора — окна UAC при входе не будет."/>
+                </StackPanel>
+            </Border>
+            <Border Style="{StaticResource Card}">
+                <StackPanel>
+                    <TextBlock Text="Предупреждения" Style="{StaticResource H2}"/>
+                    <CheckBox x:Name="Alerts" Style="{StaticResource Switch}" Content="Показывать предупреждения" Click="Alerts_Click"/>
+                    <StackPanel x:Name="Thresholds" Margin="0,6,0,0"/>
+                </StackPanel>
+            </Border>
+            <Border Style="{StaticResource Card}">
+                <StackPanel>
+                    <TextBlock Text="Защита" Style="{StaticResource H2}"/>
+                    <TextBlock Text="Ключ VirusTotal (необязательно)" Style="{StaticResource Dim}" Margin="0,0,0,4"/>
+                    <PasswordBox x:Name="VtKey" Background="{DynamicResource ControlBrush}" Foreground="{DynamicResource TextBrush}"
+                                 BorderBrush="{DynamicResource CardBorderBrush}" Padding="8,6" PasswordChanged="VtKey_Changed"/>
+                    <TextBlock Style="{StaticResource Dim}" Margin="0,6,0,0">
+                        Бесплатный ключ: зарегистрируйся на virustotal.com → профиль → API key. Лимит — 4 проверки в минуту.
+                    </TextBlock>
+                    <Button Content="Открыть virustotal.com" HorizontalAlignment="Left" Margin="0,8,0,0" Click="Vt_Click"/>
+                </StackPanel>
+            </Border>
+            <Border Style="{StaticResource Card}">
+                <StackPanel>
+                    <TextBlock Text="Данные" Style="{StaticResource H2}"/>
+                    <TextBlock Text="Хранить историю нагрузки" Style="{StaticResource Dim}" Margin="0,0,0,4"/>
+                    <ComboBox x:Name="History" Width="200" HorizontalAlignment="Left" SelectionChanged="History_Changed"/>
+                    <WrapPanel Margin="0,12,0,0">
+                        <Button Content="Папка с настройками" Click="Folder_Click"/>
+                        <Button Content="Экспорт…" Click="Export_Click"/>
+                        <Button Content="Импорт…" Click="Import_Click"/>
+                    </WrapPanel>
+                </StackPanel>
+            </Border>
+            <Border Style="{StaticResource Card}">
+                <StackPanel>
+                    <TextBlock Text="О программе" Style="{StaticResource H2}"/>
+                    <TextBlock x:Name="About" TextWrapping="Wrap" LineHeight="20"/>
+                    <WrapPanel Margin="0,10,0,0">
+                        <Button Content="GitHub" Click="Github_Click"/>
+                        <Button Content="Лог ошибок" Click="Log_Click"/>
+                    </WrapPanel>
+                </StackPanel>
+            </Border>
+        </UniformGrid>
+    </StackPanel>
+</UserControl>

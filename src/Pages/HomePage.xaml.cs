@@ -53,7 +53,7 @@ public partial class HomePage : UserControl
     {
         void Set(Ring r, double v) { r.Value = v; r.Label = $"{v:0}%"; r.InvalidateVisual(); }
         Set(RCpu, s.Cpu); Set(RGpu, s.Gpu); Set(RRam, s.Ram); Set(RDisk, s.DiskPct);
-        Temps.Text = (s.CpuTemp > 0 ? $"CPU {s.CpuTemp}°C · GPU {s.GpuTemp}°C   " : "") +
+        Temps.Text = (s.CpuTemp > 0 ? $"CPU {s.CpuTemp}°C" + (s.GpuTemp > 0 ? $" · GPU {s.GpuTemp}°C" : "") + "   " : "") +
                      (s.CpuFan > 0 ? $"Вентиляторы {s.CpuFan} / {s.GpuFan} об/мин   " : "") +
                      $"↓ {SysMon.Speed(s.NetDown)}  ↑ {SysMon.Speed(s.NetUp)}";
     });

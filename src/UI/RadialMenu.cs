@@ -151,7 +151,9 @@ public static class RadialMenu
             else if (e.Key == Key.Back) Back();
             else if (e.Key is >= Key.D1 and <= Key.D9) Pick(e.Key - Key.D1);
         };
-        w.Deactivated += (_, _) => w.Close();
+        bool closing = false;
+        w.Closing += (_, _) => closing = true;
+        w.Deactivated += (_, _) => { if (!closing) w.Close(); };
         w.Closed += (_, _) => _w = null;
 
         Render();
