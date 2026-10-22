@@ -66,7 +66,9 @@ public partial class JarvisPage : UserControl
         // Voice
         b.Children.Add(new TextBlock { Text = "Голос", Style = S("H2"), Margin = new Thickness(0, 14, 0, 6) });
         Combo(b, "Движок", new[] { ("edge", "Нейроголоса Microsoft — самые живые (нужен интернет)"), ("piper", "Piper — офлайн"), ("windows", "Голос Windows — роботизированный") }, J.Tts, v => J.Tts = v);
-        Combo(b, "Голос Джарвиса", EdgeTts.Russian.Select(v => (v.Id, v.Name)), J.EdgeVoice, v => J.EdgeVoice = v);
+        Switch(b, "Как в фильме: британский голос, ответы на английском (команды — по-русски)", J.Movie, v => J.Movie = v);
+        Combo(b, "Голос «как в фильме»", EdgeTts.Movie.Select(v => (v.Id, v.Name)), J.MovieVoice, v => J.MovieVoice = v);
+        Combo(b, "Голос Джарвиса (по-русски)", EdgeTts.Russian.Select(v => (v.Id, v.Name)), J.EdgeVoice, v => J.EdgeVoice = v);
         var pitchText = UiKit.Text($"Тон: {J.EdgePitch:+0;-0;0}%", 12, true);
         var pitch = new Slider { Minimum = -20, Maximum = 10, Value = J.EdgePitch, TickFrequency = 1, IsSnapToTickEnabled = true };
         pitch.ValueChanged += (_, e) => { J.EdgePitch = (int)e.NewValue; pitchText.Text = $"Тон: {J.EdgePitch:+0;-0;0}%"; };

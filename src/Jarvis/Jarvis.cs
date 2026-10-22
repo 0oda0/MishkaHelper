@@ -125,8 +125,11 @@ public static class Jarvis
     static Reply Merge(List<Reply> rs, bool partial) =>
         new(string.Join(" ", rs.Select(x => x.Say).Where(s => s.Length > 0)) is { Length: > 0 } s ? s : "Готово." + (partial ? " Остальное не понял." : ""));
 
-    static void Respond(string text, bool speak = true)
+    static async void Respond(string text, bool speak = true)
     {
+        // Film mode: command replies are written in Russian → have them said the JARVIS way, in English.
+        if (Settings.Current.Jarvis.Movie && Brain.Ready && text.Any(c => c is >= 'а' and <= 'я' or >= 'А' and <= 'Я'))
+            text = await Brain.ToEnglish(text);
         ChatHistory.Add(false, text);
         Message?.Invoke(text, false);
         Status?.Invoke(text);

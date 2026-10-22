@@ -57,9 +57,11 @@ public static class Voice
     static async Task<ISampleProvider> Render(string text, JarvisSettings s)
     {
         ISampleProvider? audio = null;
-        if (s.Tts == "edge")
+        if (s.Tts == "edge" || s.Movie)
         {
-            try { audio = Mp3(await EdgeTts.Synthesize(text, s.EdgeVoice, (int)Math.Round((s.Rate - 1) * 100), s.EdgePitch)); }
+            bool cyrillic = text.Any(c => c is >= 'а' and <= 'я' or >= 'А' and <= 'Я');
+            var voice = !s.Movie ? s.EdgeVoice : cyrillic ? EdgeTts.RussianFallback : s.MovieVoice;
+            try { audio = Mp3(await EdgeTts.Synthesize(text, voice, (int)Math.Round((s.Rate - 1) * 100), s.EdgePitch)); }
             catch (Exception e) { Log.Info("edge tts: " + e.Message); }   // offline → fall through
         }
         if (audio == null && (s.Tts is "piper" or "edge") && PiperReady(s.PiperVoice)) audio = await PiperAudio(text, s.PiperVoice, s.Rate);

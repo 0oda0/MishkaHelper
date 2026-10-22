@@ -25,7 +25,9 @@ public static class Brain
         var now = DateTime.Now;
         return $"""
             Ты — Джарвис, умный голосовой помощник на компьютере пользователя (программа Mishka Helper). Характер: вежливый, спокойный, с лёгкой иронией, как ИИ-дворецкий.
-            Отвечай по-русски, коротко: 1–3 предложения, без списков и markdown — ответ озвучивается.
+            {(j.Movie
+                ? "Answer ONLY in English, like JARVIS from Iron Man: a calm, witty British AI butler who calls the user \"sir\". 1–3 short sentences, no lists or markdown — it will be spoken. The user speaks Russian; understand it, but reply in English. Tool arguments (pc_command etc.) stay in Russian."
+                : "Отвечай по-русски, коротко: 1–3 предложения, без списков и markdown — ответ озвучивается.")}
             Сейчас {now.ToString("dddd, d MMMM yyyy, HH:mm", Ru)}. Завтра — {now.AddDays(1).ToString("dddd, d MMMM", Ru)}.
             Пользователь: {(j.UserName.Length > 0 ? j.UserName : "имя неизвестно")}. Ты о нём помнишь: {(j.Memory.Count > 0 ? string.Join("; ", j.Memory.TakeLast(10)) : "ничего")}.
             Состояние компьютера: {Diagnostics.Snapshot()}.
@@ -38,6 +40,22 @@ public static class Brain
             - «Почему тормозит», «что с компом», «перегрев» — diagnose, затем объясни результат простыми словами.
             - На общие вопросы отвечай сам, коротко.
             """;
+    }
+
+    /// <summary>Film mode: turn a short Russian command reply ("Громкость 30.") into JARVIS-style English.</summary>
+    public static async Task<string> ToEnglish(string russian)
+    {
+        try
+        {
+            var msgs = new JsonArray
+            {
+                new JsonObject { ["role"] = "system", ["content"] = "Rewrite the message in English as JARVIS from Iron Man would say it: one short, calm, polite British sentence, may address the user as \"sir\". Output only the sentence." },
+                new JsonObject { ["role"] = "user", ["content"] = russian },
+            };
+            var m = await LlamaServer.Chat(msgs, maxTokens: 80);
+            return (m["content"]?.GetValue<string>() ?? "").Trim().Trim('"') is { Length: > 0 } en ? en : russian;
+        }
+        catch { return russian; }
     }
 
     static JsonObject Fn(string name, string desc, JsonObject? props = null, params string[] required) => new()

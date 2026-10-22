@@ -222,6 +222,18 @@ public static class SelfTest
             Directory.CreateDirectory(dir);
             const string line = "Добрый вечер, сэр. Все системы в норме, температура процессора сорок пять градусов. Напоминаю: завтра в девять у вас пара по физике. Чем могу помочь?";
             j.Tts = "edge";
+            // Film mode samples first.
+            const string en = "Good evening, sir. All systems are online and running at optimal levels. Your physics lecture is tomorrow at nine. Shall I set a reminder?";
+            j.Movie = true;
+            foreach (var (id, _) in EdgeTts.Movie)
+                foreach (var (fx, pitch) in new[] { (false, 0), (true, -3) })
+                {
+                    j.MovieVoice = id; j.VoiceFx = fx; j.EdgePitch = pitch;
+                    var fn = $"00-movie-{id.Split('-')[2].Replace("Neural", "")}{(fx ? "-fx" : "")}.wav";
+                    try { var sec = await Voice.RenderToFile(en, Path.Combine(dir, fn)); L($"voice {fn}: {sec:0.0}s"); }
+                    catch (Exception e) { L($"voice {fn}: FAIL {e.Message}"); }
+                }
+            j.Movie = false;
             int n = 1;
             foreach (var (id, name) in EdgeTts.Russian)
             {

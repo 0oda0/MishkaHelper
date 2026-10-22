@@ -43,6 +43,8 @@ public class JarvisSettings
     public string Tts { get; set; } = "edge";             // edge (online neural) | piper (offline) | windows
     public string EdgeVoice { get; set; } = "ru-RU-DmitryNeural";
     public int EdgePitch { get; set; }                     // percent, e.g. -5
+    public bool Movie { get; set; }                        // "как в фильме": British English voice, answers in English
+    public string MovieVoice { get; set; } = "en-GB-RyanNeural";
     public string PiperVoice { get; set; } = "dmitri";
     public bool VoiceFx { get; set; } = true;              // "AI butler" effect
     public string Voice { get; set; } = "";               // Windows voice name

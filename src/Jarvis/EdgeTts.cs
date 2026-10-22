@@ -28,6 +28,16 @@ public static class EdgeTts
         ("ru-RU-SvetlanaNeural", "Светлана — женский"),
     };
 
+    /// <summary>British voices for the film-style mode (English answers).</summary>
+    public static readonly (string Id, string Name)[] Movie =
+    {
+        ("en-GB-RyanNeural", "Ryan — британский, ближе всего к фильму"),
+        ("en-GB-ThomasNeural", "Thomas — британский, мягче"),
+    };
+
+    /// <summary>Russian text can't be read by an English-only voice → a multilingual one reads it instead.</summary>
+    public const string RussianFallback = "en-US-BrianMultilingualNeural";
+
     /// <summary>Sec-MS-GEC: SHA-256 of the Windows file time rounded down to 5 minutes + the client token.</summary>
     static string Gec()
     {
