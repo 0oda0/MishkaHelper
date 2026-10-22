@@ -1,0 +1,23 @@
+<UserControl x:Class="MishkaHelper.Pages.ScenariosPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <StackPanel>
+        <DockPanel>
+            <Button DockPanel.Dock="Right" Style="{StaticResource AccentButton}" Content="+ Новый сценарий" Click="New_Click" VerticalAlignment="Center"/>
+            <StackPanel>
+                <TextBlock Text="Сценарии" Style="{StaticResource H1}"/>
+                <TextBlock Text="«Когда… → Сделай…». Запуск голосом, горячей клавишей, по времени или по событию." Style="{StaticResource Dim}" FontSize="13" Margin="0,0,0,18"/>
+            </StackPanel>
+        </DockPanel>
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="280"/>
+                <ColumnDefinition/>
+            </Grid.ColumnDefinitions>
+            <Border Style="{StaticResource Card}" VerticalAlignment="Top">
+                <StackPanel x:Name="List"/>
+            </Border>
+            <StackPanel Grid.Column="1" x:Name="Editor"/>
+        </Grid>
+    </StackPanel>
+</UserControl>

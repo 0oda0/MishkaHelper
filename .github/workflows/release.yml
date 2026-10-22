@@ -23,6 +23,9 @@ jobs:
           $v = if ($env:GITHUB_REF_NAME -like 'v*') { $env:GITHUB_REF_NAME.TrimStart('v') } else { '0.0.0' }
           "APP_VERSION=$v" >> $env:GITHUB_ENV
 
+      - name: Unit tests
+        run: dotnet test tests -c Release
+
       # Folders, not single-file: native speech/GPU libraries must sit where their loaders look for them.
       - name: Publish (full + Lite)
         shell: pwsh

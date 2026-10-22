@@ -158,9 +158,10 @@ public static class SelfTest
             {
                 var t0 = DateTime.Now;
                 ChatHistory.Add(true, q);
-                var r = await Brain.Ask(q);
+                double first = 0;
+                var r = await Brain.Ask(q, onSentence: s => { if (first == 0) first = (DateTime.Now - t0).TotalSeconds; L($"   ♪ {s}"); });
                 ChatHistory.Add(false, r.Say);
-                L($"brain {(DateTime.Now - t0).TotalSeconds:0.0}s  Q: {q}  A: {r.Say}{(r.Confirm != null ? " [confirm]" : "")}");
+                L($"brain {(DateTime.Now - t0).TotalSeconds:0.0}s (first sentence {first:0.0}s)  Q: {q}  A: {r.Say}{(r.Confirm != null ? " [confirm]" : "")}");
             }
             Audio.Volume = vol;
         });

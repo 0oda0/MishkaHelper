@@ -163,6 +163,13 @@ public static class Ears
 
         if (text.Length == 0 || IsJunk(text)) { if (_commandNext) Set(EarState.Listening); else Set(EarState.Idle); return; }
 
+        // Barge-in: while Jarvis talks, its own voice reaches the mic too — accept only a stop word.
+        if (Voice.IsSpeaking)
+        {
+            if (System.Text.RegularExpressions.Regex.IsMatch(text, @"\b(стоп|хватит|замолчи|тихо|stop)\b")) { Voice.Stop(); _commandNext = false; Set(EarState.Idle); }
+            return;
+        }
+
         int wake = wakeOn ? WakeIndex(text) : -1;
         if (!_commandNext && wake < 0) { Set(EarState.Idle); return; }
 

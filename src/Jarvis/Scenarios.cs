@@ -63,8 +63,8 @@ public static class Scenarios
         finally { lock (Running) Running.Remove(s.Id); }
     }
 
-    /// <summary>false = stop the scenario (failed "if").</summary>
-    static async Task<bool> RunStep(ScenarioStep st)
+    /// <summary>false = stop the scenario (failed "if"). Public for the editor's "test step" button.</summary>
+    public static async Task<bool> RunStep(ScenarioStep st)
     {
         var v = st.Value.Trim();
         var ui = System.Windows.Application.Current.Dispatcher;

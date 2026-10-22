@@ -12,7 +12,7 @@
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
     <AssemblyName>MishkaHelper</AssemblyName>
     <RootNamespace>MishkaHelper</RootNamespace>
-    <Version>0.4.4</Version>
+    <Version>0.5.0</Version>
     <Product>Mishka Helper</Product>
     <Company>Mishka</Company>
     <!-- WinForms is only used for NotifyIcon; avoid ambiguous usings -->
@@ -48,8 +48,8 @@
 
   <ItemGroup Condition="'$(Flavor)' == 'Lite'">
     <Compile Remove="Jarvis\**" />
-    <Compile Remove="UI\JarvisUi.cs;UI\SelfTest.cs;Pages\JarvisPage.xaml.cs" />
-    <Page Remove="Pages\JarvisPage.xaml" />
+    <Compile Remove="UI\JarvisUi.cs;UI\SelfTest.cs;Pages\JarvisPage.xaml.cs;Pages\ScenariosPage.xaml.cs" />
+    <Page Remove="Pages\JarvisPage.xaml;Pages\ScenariosPage.xaml" />
   </ItemGroup>
 
   <!-- "Что можно сделать": the features landing page ships next to the exe. -->
@@ -59,6 +59,7 @@
 
   <ItemGroup>
     <Resource Include="Assets\app.ico" />
+    <InternalsVisibleTo Include="MishkaHelper.Tests" />
   </ItemGroup>
 
 </Project>

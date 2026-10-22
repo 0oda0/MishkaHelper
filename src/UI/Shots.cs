@@ -12,9 +12,9 @@ public static class Shots
     {
         Directory.CreateDirectory(dir);
         await Task.Delay(1500);
-        foreach (var p in new[] { "Jarvis", "Home", "Controls", "System", "Devices", "Nitro", "Boost", "Security", "Tools", "Profiles", "Hotkeys", "Widgets", "Settings" })
+        foreach (var p in new[] { "Jarvis", "Scenarios", "Home", "Controls", "System", "Devices", "Nitro", "Boost", "Security", "Tools", "Profiles", "Hotkeys", "Widgets", "Settings" })
         {
-            if (p == "Jarvis" && !Edition.HasJarvis) continue;
+            if (p is "Jarvis" or "Scenarios" && !Edition.HasJarvis) continue;
             main.Navigate(p);
             await Task.Delay(p is "Devices" or "Security" or "System" ? 6000 : 2500);
             Save(main, Path.Combine(dir, p + ".png"));

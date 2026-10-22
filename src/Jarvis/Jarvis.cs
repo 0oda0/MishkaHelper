@@ -22,6 +22,7 @@ public static class Jarvis
             _hooked = true;
             Ears.Heard += t => Application.Current.Dispatcher.BeginInvoke(() => _ = Handle(t));
             Ears.Partial += p => Application.Current.Dispatcher.BeginInvoke(() => Status?.Invoke(p));
+            Voice.Finished += OnSpeechFinished;
         }
         if (j.ShowOrb) JarvisOrb.Show();
         Brain.Warmup();
@@ -62,6 +63,7 @@ public static class Jarvis
         Message?.Invoke(text, true);
 
         Reply? r = null;
+        bool streamed = false;
         var clean = Ears.Clean(text);
         if (_pending != null)
         {
@@ -86,7 +88,9 @@ public static class Jarvis
                 {
                     Ears.Thinking(true);
                     Status?.Invoke("Думаю…");
-                    r = await Brain.Ask(text, s => Application.Current.Dispatcher.BeginInvoke(() => Status?.Invoke(s)));
+                    // Streamed: the first sentence is spoken while the rest is still being generated.
+                    r = await Brain.Ask(text, s => Application.Current.Dispatcher.BeginInvoke(() => Status?.Invoke(s)),
+                        sentence => { streamed = true; Voice.Enqueue(sentence); });
                     Ears.Thinking(false);
                 }
                 else r = new("Не понял. Скажи «что ты умеешь», или включи ИИ на странице «Джарвис» — тогда я пойму любые фразы и вопросы.");
@@ -101,7 +105,7 @@ public static class Jarvis
             _ = Task.Delay(300).ContinueWith(_ => Application.Current.Dispatcher.BeginInvoke(() => { if (Ears.State != EarState.Off) Ears.Listen(10); }));
             return;
         }
-        Respond(r.Say.Length > 0 ? r.Say : "Готово.", speak: r.Say.Length > 0);
+        Respond(r.Say.Length > 0 ? r.Say : "Готово.", speak: r.Say.Length > 0 && !streamed, alreadySpoken: streamed);
     }
 
     /// <summary>"сделай погромче и включи ночной свет": run every part if all are known commands; otherwise leave it to the AI.</summary>
@@ -125,8 +129,20 @@ public static class Jarvis
     static Reply Merge(List<Reply> rs, bool partial) =>
         new(string.Join(" ", rs.Select(x => x.Say).Where(s => s.Length > 0)) is { Length: > 0 } s ? s : "Готово." + (partial ? " Остальное не понял." : ""));
 
-    static async void Respond(string text, bool speak = true)
+    static bool _awaitFollowUp;
+
+    /// <summary>Dialog mode: after Jarvis finishes an answer, the next phrase within a few seconds needs no wake word.</summary>
+    static void OnSpeechFinished()
     {
+        if (!_awaitFollowUp) return;
+        _awaitFollowUp = false;
+        if (Settings.Current.Jarvis.FollowUp && Ears.State != EarState.Off)
+            Application.Current.Dispatcher.BeginInvoke(() => { Ears.Listen(6); Status?.Invoke("Слушаю продолжение…"); });
+    }
+
+    static async void Respond(string text, bool speak = true, bool alreadySpoken = false)
+    {
+        if (speak || alreadySpoken) _awaitFollowUp = true;
         // Film mode: command replies are written in Russian → have them said the JARVIS way, in English.
         if (Settings.Current.Jarvis.Movie && Brain.Ready && text.Any(c => c is >= 'а' and <= 'я' or >= 'А' and <= 'Я'))
             text = await Brain.ToEnglish(text);

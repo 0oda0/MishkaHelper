@@ -44,6 +44,9 @@ public class JarvisSettings
     public string EdgeVoice { get; set; } = "ru-RU-DmitryNeural";
     public int EdgePitch { get; set; }                     // percent, e.g. -5
     public bool Movie { get; set; }                        // "как в фильме": British English voice, answers in English
+    public bool FollowUp { get; set; } = true;             // after an answer, listen ~6 s without the wake word
+    public bool BargeIn { get; set; } = true;              // "стоп" interrupts speech (ears stay open while talking)
+    public bool Stream { get; set; } = true;               // speak AI answers sentence by sentence while generating
     public string MovieVoice { get; set; } = "en-GB-RyanNeural";
     public string PiperVoice { get; set; } = "dmitri";
     public bool VoiceFx { get; set; } = true;              // "AI butler" effect
@@ -59,6 +62,7 @@ public class JarvisSettings
     public string UserName { get; set; } = "";
     public List<string> Memory { get; set; } = new();
     public List<WebSource> Sources { get; set; } = new();
+    public List<string> Calendars { get; set; } = new();   // ICS / webcal links
     public int Version { get; set; }   // bumps migrate old defaults
 }
 
@@ -169,6 +173,11 @@ public class AppSettings
     public string DarkAt { get; set; } = "21:00";
     public bool LockKeysOsd { get; set; } = true;
     public bool CheckUpdates { get; set; } = true;
+    public bool RemoteEnabled { get; set; }
+    public int RemotePort { get; set; } = 8770;
+    public string RemotePin { get; set; } = "";
+    public bool ScreenTime { get; set; } = true;
+    public bool ClipboardHistory { get; set; } = true;
     public DateTime LastUpdateCheck { get; set; }
 
     public JarvisSettings Jarvis { get; set; } = new();

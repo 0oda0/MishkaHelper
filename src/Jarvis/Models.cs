@@ -81,6 +81,42 @@ public static class Models
         finally { lock (Busy) Busy.Remove(m.Key); }
     }
 
+    /// <summary>Largest dedicated video memory in GB, from the display adapters' driver keys (WMI caps AdapterRAM at 4 GB).</summary>
+    public static double VramGb()
+    {
+        long best = 0;
+        try
+        {
+            using var cls = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}");
+            foreach (var n in cls?.GetSubKeyNames() ?? [])
+            {
+                try
+                {
+                    using var k = cls!.OpenSubKey(n);
+                    var v = k?.GetValue("HardwareInformation.qwMemorySize") ?? k?.GetValue("HardwareInformation.MemorySize");
+                    long b = v switch { long l => l, int i => (uint)i, byte[] a when a.Length >= 8 => BitConverter.ToInt64(a), byte[] a when a.Length >= 4 => BitConverter.ToUInt32(a), _ => 0 };
+                    best = Math.Max(best, b);
+                }
+                catch { }
+            }
+        }
+        catch (Exception e) { Log.Error(e); }
+        return best / 1073741824.0;
+    }
+
+    public static double RamGb() { var m = new Native.MEMORYSTATUSEX(); Native.GlobalMemoryStatusEx(m); return m.ullTotalPhys / 1073741824.0; }
+
+    /// <summary>What to download for this PC: a ≥4 GB GPU runs Whisper turbo + Qwen3-4B; otherwise light models on the CPU.</summary>
+    public static (string Engine, ModelInfo Stt, ModelInfo Llm, bool Gpu, string Why) Recommend()
+    {
+        double vram = VramGb(), ram = RamGb();
+        bool gpu = vram >= 3.5;
+        var stt = gpu ? Whisper[0] : ram >= 8 ? Whisper[1] : Vosk;
+        var llm = gpu || ram >= 12 ? Llm[0] : Llm[3];
+        return (stt == Vosk ? "vosk" : "whisper", stt, llm, gpu,
+            $"Видеокарта {vram:0.#} ГБ, ОЗУ {ram:0} ГБ → {(gpu ? "всё на видеокарте" : "на процессоре")}: {stt.Name.Split(" (")[0]} + {llm.Name.Split(" —")[0]}");
+    }
+
     public static void Delete(ModelInfo m)
     {
         try { if (m.Zip) Directory.Delete(PathOf(m), true); else File.Delete(PathOf(m)); } catch (Exception e) { Log.Error(e); }

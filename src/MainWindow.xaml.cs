@@ -17,6 +17,7 @@ public partial class MainWindow : Window
         if (Acer.Available) NavNitro.Visibility = Visibility.Visible;
 #if LITE
         NavJarvis.Visibility = Visibility.Collapsed;
+        NavScenarios.Visibility = Visibility.Collapsed;
 #endif
         NavHome.IsChecked = true;
     }
@@ -41,6 +42,7 @@ public partial class MainWindow : Window
             "Tools" => new ToolsPage(),
 #if !LITE
             "Jarvis" => new JarvisPage(),
+            "Scenarios" => new ScenariosPage(),
 #endif
             "Profiles" => new ProfilesPage(),
             "Hotkeys" => new HotkeysPage(),

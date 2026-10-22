@@ -63,3 +63,17 @@ Filename: "{app}\MishkaHelper.exe"; Description: "Запустить {#AppTitle}
 Filename: "schtasks.exe"; Parameters: "/delete /tn MishkaHelper /f"; Flags: runhidden; RunOnceId: "DelTask"
 Filename: "taskkill.exe"; Parameters: "/im MishkaHelper.exe /f"; Flags: runhidden; RunOnceId: "Kill"
 Filename: "taskkill.exe"; Parameters: "/im llama-server.exe /f"; Flags: runhidden; RunOnceId: "KillLlama"
+Filename: "netsh.exe"; Parameters: "advfirewall firewall delete rule name=""Mishka Helper Remote"""; Flags: runhidden; RunOnceId: "DelFw"
+
+[Code]
+// Settings, notes and the multi-GB Jarvis models stay by default (reinstall keeps everything); ask once.
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+begin
+  if (CurUninstallStep = usPostUninstall) and not UninstallSilent then
+    if MsgBox('Удалить также настройки, заметки и скачанные модели Джарвиса?' + #13#10 +
+              '(%AppData%\MishkaHelper и %LocalAppData%\MishkaHelper)', mbConfirmation, MB_YESNO or MB_DEFBUTTON2) = IDYES then
+    begin
+      DelTree(ExpandConstant('{userappdata}\MishkaHelper'), True, True, True);
+      DelTree(ExpandConstant('{localappdata}\MishkaHelper'), True, True, True);
+    end;
+end;

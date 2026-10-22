@@ -18,7 +18,6 @@ public static class Updater
     static readonly HttpClient Http = new() { Timeout = TimeSpan.FromMinutes(30) };
     static Updater() => Http.DefaultRequestHeaders.UserAgent.ParseAdd("MishkaHelper-Updater");
 
-    static string Prefix => Edition.HasJarvis ? "MishkaHelper-" : "MishkaHelper-Lite-";
 
     /// <summary>Installed = lives in Program Files (Inno setup or our local installer); otherwise portable.</summary>
     public static bool IsInstalled =>
@@ -38,6 +37,13 @@ public static class Updater
     }
 
     /// <summary>Latest release newer than us, or null.</summary>
+    /// <summary>"MishkaHelper-Setup-0.4.0.exe" must not match the Lite edition and vice versa.</summary>
+    internal static bool AssetMatches(string n, string kind, string ext, bool full)
+    {
+        bool lite = n.StartsWith("MishkaHelper-Lite-", StringComparison.OrdinalIgnoreCase);
+        return lite == !full && n.StartsWith((full ? "MishkaHelper-" : "MishkaHelper-Lite-") + kind, StringComparison.OrdinalIgnoreCase) && n.EndsWith(ext, StringComparison.OrdinalIgnoreCase);
+    }
+
     public static async Task<UpdateInfo?> Check()
     {
         var json = await Http.GetStringAsync($"https://api.github.com/repos/{Repo}/releases/latest");
@@ -49,10 +55,7 @@ public static class Updater
         {
             foreach (var a in r.GetProperty("assets").EnumerateArray())
             {
-                var n = a.GetProperty("name").GetString()!;
-                // "MishkaHelper-Setup-0.4.0.exe" must not match the Lite prefix check and vice versa.
-                bool lite = n.StartsWith("MishkaHelper-Lite-", StringComparison.OrdinalIgnoreCase);
-                if (lite == !Edition.HasJarvis && n.StartsWith(Prefix + kind, StringComparison.OrdinalIgnoreCase) && n.EndsWith(ext, StringComparison.OrdinalIgnoreCase))
+                if (AssetMatches(a.GetProperty("name").GetString()!, kind, ext, Edition.HasJarvis))
                     return a.GetProperty("browser_download_url").GetString();
             }
             return null;

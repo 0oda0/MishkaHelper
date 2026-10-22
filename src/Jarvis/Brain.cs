@@ -35,7 +35,7 @@ public static class Brain
             - Не обещай действие словами — сразу вызывай инструмент, а потом коротко скажи результат.
             - НИКОГДА не говори «сделал», «включил», «переключил», если не вызвал для этого pc_command в этом ответе. Если только советуешь — так и скажи: «могу переключить, сказать?».
             - Просят что-то сделать на компьютере — pc_command (можно несколько раз подряд, по одной команде).
-            - Вопросы о делах и планах пользователя («что у меня…», «что я записывал», «когда сдавать…») — сначала search_notes; если речь про учёбу, пары, расписание, оценки — ещё и read_site. Отвечай строго по найденному, не выдумывай.
+            - Вопросы о делах и планах пользователя («что у меня…», «что я записывал», «когда сдавать…») — сначала search_notes; если речь про учёбу, пары, расписание, оценки — ещё и calendar и read_site (что есть). Отвечай строго по найденному, не выдумывай.
             - Записать что-то — add_note.
             - «Почему тормозит», «что с компом», «перегрев» — diagnose, затем объясни результат простыми словами.
             - На общие вопросы отвечай сам, коротко.
@@ -92,6 +92,9 @@ public static class Brain
             Fn("search_notes", "Найти заметки пользователя по теме.", new JsonObject { ["query"] = Str("О чём искать") }, "query"),
             Fn("diagnose", "Проверить компьютер: перегрев, нагрузка, память, диски, режим питания, автозагрузка."),
         };
+        if (Calendar.Configured)
+            tools.Add(Fn("calendar", "События из календаря пользователя на день.",
+                new JsonObject { ["days_from_today"] = new JsonObject { ["type"] = "integer", ["description"] = "0 — сегодня, 1 — завтра, -1 — вчера" } }, "days_from_today"));
         if (sources.Count > 0)
             tools.Add(Fn("read_site", "Открыть сайт пользователя (например личный кабинет с расписанием) и получить текст страницы.",
                 new JsonObject { ["name"] = site }, "name"));
@@ -99,7 +102,7 @@ public static class Brain
     }
 
     /// <summary>Agent loop: tool calls until the model answers in text (max 6 rounds).</summary>
-    public static async Task<Reply> Ask(string question, Action<string>? progress = null)
+    public static async Task<Reply> Ask(string question, Action<string>? progress = null, Action<string>? onSentence = null)
     {
         await One.WaitAsync();
         try
@@ -113,7 +116,9 @@ public static class Brain
 
             for (int round = 0; round < 6; round++)
             {
-                var msg = await LlamaServer.Chat(msgs, tools);
+                var msg = onSentence != null && Settings.Current.Jarvis.Stream
+                    ? await LlamaServer.ChatStream(msgs, tools, onSentence)
+                    : await LlamaServer.Chat(msgs, tools);
                 var calls = msg["tool_calls"] as JsonArray;
                 if (calls == null || calls.Count == 0)
                     return new((msg["content"]?.GetValue<string>() ?? "").Trim() is { Length: > 0 } t ? t : "Готово.");
@@ -162,6 +167,7 @@ public static class Brain
                 var found = Notes.Search(arg("query"));
                 return (found.Count == 0 ? "Ничего не найдено." : string.Join("\n", found.Select(n => $"{n.When:dd.MM.yyyy}: {n.Text}")), null);
             case "diagnose": return (Diagnostics.Report(), null);
+            case "calendar": return (await Calendar.Say(DateTime.Today.AddDays(int.TryParse(arg("days_from_today"), out var d) ? d : 0)), null);
             default: return ("Нет такого инструмента.", null);
         }
     }

@@ -55,6 +55,7 @@
                     <StackPanel x:Name="NavPanel">
                         <RadioButton Style="{StaticResource NavItem}" Tag="&#xE80F;" Content="Главная" x:Name="NavHome" Checked="Nav_Checked"/>
                         <RadioButton Style="{StaticResource NavItem}" Tag="&#xE720;" Content="Джарвис" x:Name="NavJarvis" Checked="Nav_Checked"/>
+                        <RadioButton Style="{StaticResource NavItem}" Tag="&#xE8B1;" Content="Сценарии" x:Name="NavScenarios" Checked="Nav_Checked"/>
                         <RadioButton Style="{StaticResource NavItem}" Tag="&#xE9E9;" Content="Управление" x:Name="NavControls" Checked="Nav_Checked"/>
                         <RadioButton Style="{StaticResource NavItem}" Tag="&#xE7F8;" Content="Система" x:Name="NavSystem" Checked="Nav_Checked"/>
                         <RadioButton Style="{StaticResource NavItem}" Tag="&#xE772;" Content="Устройства" x:Name="NavDevices" Checked="Nav_Checked"/>

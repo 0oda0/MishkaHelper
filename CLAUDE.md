@@ -12,6 +12,7 @@ UI language: **Russian**. Repo: `0oda0/MishkaHelper` (public). Owner talks Russi
 | Release folder | `dotnet publish src/MishkaHelper.csproj -c Release -r win-x64 --self-contained [-p:Flavor=Lite] -o publish` |
 | Dev copy without UAC | add `-p:ApplicationManifest=<repo>\tools\app.dev.manifest` (asInvoker) and output to `test-out\dev\bin` |
 | Screenshots of every page | `MishkaHelper.exe --shots <dir>` (dev copy; runs beside the installed copy) |
+| Unit tests | `dotnet test tests` (xunit; Intents/Ears/Hotkeys/Updater/Remote/Calendar). Also run by CI before release |
 | Self-test | `MishkaHelper.exe --selftest <report.txt> [steps]`, steps: `acer modes,fans,keyboard,defender,sweep,cleanup,disk,autostart,brain,ears,voice,update` (comma list; empty = all). Admin-only steps need the real (elevated) exe |
 | Install on this PC | elevated: `tools\install-local.ps1 -Source publish [-SelfTest report] [-Only steps]` |
 | Release | bump `<Version>` in csproj → commit → `git tag -a vX.Y.Z` → push tag → **`gh workflow run release.yml --ref vX.Y.Z`** (tag-push trigger fires 20–60 min late; cancel the late duplicate run if it appears) |
@@ -53,12 +54,14 @@ src/
     Hotkeys.cs         RegisterHotKey, Pretty(), scenario hotkeys
     Profiles.cs        apply profiles, auto by AC/app rules (+process priority)
     Alerts.cs          threshold toasts
+    Remote.cs          phone remote: HttpListener on LAN (port 8770), PIN header, private IPs only, netsh firewall rule (Private)
+    ScreenTime.cs      foreground app seconds per day (idle >3 min skipped), 30 days JSON
     Updater.cs         GitHub releases → silent Inno setup or portable zip swap; per edition
     Services.cs        start/stop everything, periodic jobs (5 s tick), auto theme, Caps/Num OSD; Autostart task
   Jarvis/              (excluded from Lite)
     Jarvis.cs          orchestrator: Handle(text) → scenarios → Intents (+compound "и") → Brain; confirmations; proactive Offer()
     Ears.cs            mic → energy VAD → Whisper (GPU) or Vosk; wake word (fuzzy); hallucination filter
-    Voice.cs           TTS chain: Edge neural (EdgeTts) → Piper (offline) → Windows; ButlerFx; mutes Ears while speaking
+    Voice.cs           TTS chain: Edge neural (EdgeTts) → Piper (offline) → Windows; ButlerFx; sentence queue (Say/Enqueue/Stop), Finished → dialog follow-up
     EdgeTts.cs         Microsoft Edge read-aloud voices over WebSocket (Sec-MS-GEC token); unofficial, online
     Intents.cs         offline Russian command parser, number words, app/site launch, Keys (SendInput)
     Brain.cs           LLM agent with native tool calling (pc_command, read_site, notes, diagnose)
@@ -67,6 +70,7 @@ src/
     Notes.cs           notes store + chat history (jsonl)
     WebReader.cs       WebView2: login window + invisible page text reader for "web sources"
     Diagnostics.cs     "почему тормозит" report, status, snapshot for the LLM
+    Calendar.cs        ICS links → events per day (DAILY/WEEKLY RRULE, EXDATE, COUNT/UNTIL); intent + Brain tool
     Scenarios.cs       scenario engine: steps + triggers (voice/hotkey/time/events)
   Pages/               one UserControl per section (XAML shell + code-built cards)
     Home, Jarvis, Controls, System, Devices, Nitro, Boost, Security, Tools, Profiles, Hotkeys, Widgets, Settings
@@ -78,11 +82,13 @@ src/
     RadialMenu.cs      pie menu (Ctrl+Alt+R); submenus page at 11 items; OpenAt(label) for screenshots
     AppIcon.cs         real program/folder icons (SHGetFileInfo) for the wheel
     CommandPalette.cs  Ctrl+Alt+K search
+    ClipHistory.cs     Ctrl+Alt+V clipboard history (message-only window, AddClipboardFormatListener; only pinned items persist)
     Widgets.cs / WidgetsExtra.cs  20 desktop widgets (partial class)
     JarvisUi.cs        orb + chat window
     Shots.cs / SelfTest.cs  dev tooling
 docs/features/         landing page (index.html + img/*.png) shipped as <app>\docs
-installer/MishkaHelper.iss   Inno Setup, FLAVOR env = ""/Lite, one AppId for both
+installer/MishkaHelper.iss   Inno Setup, FLAVOR env = ""/Lite, one AppId for both; uninstall asks to delete AppData/models
+tests/                 xunit project (InternalsVisibleTo MishkaHelper.Tests)
 tools/                 install-local.ps1, app.dev.manifest, make-icon.ps1
 .github/workflows/release.yml  builds both editions, setup + portable zip, GitHub release
 ROADMAP.md             feature list: done / later / rejected (with reasons)
@@ -98,6 +104,7 @@ STATUS.md              honest audit: not done / not verified live / known issues
 - Ctrl+Alt+Space is taken by Claude's quick entry; Ctrl+Alt+arrows rotate the screen on Intel graphics.
 - Acer keyboard RGB: setters work, getters return stale colours → we persist zone colours in settings.
 - Whisper hallucinates on silence ("Продолжение следует…") → filtered in Ears.IsJunk.
+- A second running copy (installed + dev) shares llama port 18765 → set `MISHKA_LLAMA_PORT` for dev runs.
 - Hotkeys pressed by the owner work; hotkeys injected while an elevated window is in front don't.
 
 ## Conventions

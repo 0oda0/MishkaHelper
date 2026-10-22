@@ -53,7 +53,8 @@ public static class LlamaServer
     public static readonly ModelInfo Runtime = new("llama-server", "llama.cpp (Vulkan, 35 МБ)",
         $"https://github.com/ggml-org/llama.cpp/releases/download/{Tag}/llama-{Tag}-bin-win-vulkan-x64.zip", 35, "llama-cpp", Zip: true);
 
-    const int Port = 18765;
+    // Dev copies set MISHKA_LLAMA_PORT so they don't collide with the installed app's server.
+    static readonly int Port = int.TryParse(Environment.GetEnvironmentVariable("MISHKA_LLAMA_PORT"), out var p) ? p : 18765;
     static Process? _proc;
     static string? _model;
     static readonly HttpClient Http = new() { BaseAddress = new Uri($"http://127.0.0.1:{Port}"), Timeout = TimeSpan.FromMinutes(3) };
@@ -141,6 +142,84 @@ public static class LlamaServer
     {
         try { if (_proc is { HasExited: false }) _proc.Kill(true); } catch { }
         _proc?.Dispose(); _proc = null; _model = null;
+    }
+
+    /// <summary>
+    /// Streaming variant: text arrives token by token; every finished sentence goes to onSentence right away
+    /// (so Jarvis starts talking early). Tool-call deltas are assembled. Returns the full assistant message.
+    /// </summary>
+    public static async Task<JsonObject> ChatStream(JsonArray messages, JsonArray? tools, Action<string> onSentence, int maxTokens = 600)
+    {
+        await EnsureRunning();
+        var body = new JsonObject
+        {
+            ["messages"] = messages.DeepClone(),
+            ["max_tokens"] = maxTokens,
+            ["temperature"] = 0.4,
+            ["stream"] = true,
+            ["chat_template_kwargs"] = new JsonObject { ["enable_thinking"] = false },
+        };
+        if (tools != null) body["tools"] = tools.DeepClone();
+        using var req = new HttpRequestMessage(HttpMethod.Post, "/v1/chat/completions") { Content = new StringContent(body.ToJsonString(), Encoding.UTF8, "application/json") };
+        using var resp = await Http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead);
+        if (!resp.IsSuccessStatusCode) throw new InvalidOperationException("llama.cpp: " + await resp.Content.ReadAsStringAsync());
+
+        var content = new StringBuilder();
+        int spokenUpTo = 0;
+        var calls = new SortedDictionary<int, (string Id, string Name, StringBuilder Args)>();
+        using var reader = new StreamReader(await resp.Content.ReadAsStreamAsync());
+        string? line;
+        while ((line = await reader.ReadLineAsync()) != null)
+        {
+            if (!line.StartsWith("data: ")) continue;
+            var data = line[6..];
+            if (data == "[DONE]") break;
+            JsonNode? delta;
+            try { delta = JsonNode.Parse(data)?["choices"]?[0]?["delta"]; } catch { continue; }
+            if (delta == null) continue;
+
+            if (delta["content"]?.GetValue<string>() is { Length: > 0 } piece)
+            {
+                content.Append(piece);
+                // Speak each complete sentence (not inside a <think> block; skip tiny fragments).
+                var all = content.ToString();
+                if (!all.Contains("<think>") || all.Contains("</think>"))
+                {
+                    int start = Math.Max(spokenUpTo, all.LastIndexOf("</think>") is int t and >= 0 ? t + 8 : 0);
+                    for (int i = start; i < all.Length; i++)
+                    {
+                        if (all[i] is not ('.' or '!' or '?' or '…' or '\n')) continue;
+                        if (i + 1 < all.Length && !char.IsWhiteSpace(all[i + 1])) continue;   // "3.5", "e.g." mid-token
+                        var sentence = all[start..(i + 1)].Trim();
+                        if (sentence.Length >= 12) { onSentence(sentence); spokenUpTo = start = i + 1; }
+                    }
+                }
+            }
+            if (delta["tool_calls"] is JsonArray tc)
+                foreach (var c in tc)
+                {
+                    int idx = c?["index"]?.GetValue<int>() ?? 0;
+                    if (!calls.TryGetValue(idx, out var cur)) cur = ("", "", new StringBuilder());
+                    if (c?["id"]?.GetValue<string>() is { Length: > 0 } id) cur.Id = id;
+                    if (c?["function"]?["name"]?.GetValue<string>() is { Length: > 0 } nm) cur.Name = nm;
+                    if (c?["function"]?["arguments"]?.GetValue<string>() is { } a) cur.Args.Append(a);
+                    calls[idx] = cur;
+                }
+        }
+
+        var text = System.Text.RegularExpressions.Regex.Replace(content.ToString(), @"<think>[\s\S]*?</think>", "").Trim();
+        // Whatever is left after the last full sentence.
+        var rest = content.ToString()[Math.Min(spokenUpTo, content.Length)..].Trim();
+        if (calls.Count == 0 && rest.Length > 0 && !rest.Contains("<think>")) onSentence(rest);
+
+        var msg = new JsonObject { ["role"] = "assistant", ["content"] = text };
+        if (calls.Count > 0)
+            msg["tool_calls"] = new JsonArray(calls.Values.Select(c => (JsonNode)new JsonObject
+            {
+                ["id"] = c.Id.Length > 0 ? c.Id : "call_" + c.Name, ["type"] = "function",
+                ["function"] = new JsonObject { ["name"] = c.Name, ["arguments"] = c.Args.ToString() },
+            }).ToArray());
+        return msg;
     }
 
     /// <summary>OpenAI-style chat completion with native tool calling. Returns the assistant message object.</summary>

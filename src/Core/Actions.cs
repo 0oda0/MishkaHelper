@@ -63,6 +63,7 @@ public static class Actions
                 case "taskmgr": Shell.Open("taskmgr.exe"); break;
                 case "lock": Toolbox.Lock(); break;
                 case "palette": CommandPalette.Toggle(); break;
+                case "clipboard": ClipHistory.Toggle(); break;
                 case "features": Features.Open(); break;
 #if !LITE
                 case "jarvis": Jarvis.Listen(); break;

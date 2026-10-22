@@ -29,7 +29,15 @@ public static class Voice
 
     static readonly SpeechSynthesizer Synth = new();
     static WaveOutEvent? _out;
-    static readonly SemaphoreSlim One = new(1, 1);
+
+    // Speech queue: each phrase starts synthesizing as soon as it's queued and plays in order (no gaps between sentences).
+    static readonly object Q = new();
+    static readonly Queue<(int Gen, Task<ISampleProvider> Audio)> Pending = new();
+    static Task? _player;
+    static int _gen;
+    public static bool IsSpeaking { get; private set; }
+    /// <summary>Raised when the queue has been fully spoken (or stopped).</summary>
+    public static event Action? Finished;
     static readonly HttpClient Http = new();
     public static event Action<bool>? Speaking;
 
@@ -51,7 +59,12 @@ public static class Voice
         SpeechSynthesizer.AllVoices.Where(v => v.Language.StartsWith("ru", StringComparison.OrdinalIgnoreCase)).Select(v => v.DisplayName)
             .Concat(SpeechSynthesizer.AllVoices.Where(v => !v.Language.StartsWith("ru", StringComparison.OrdinalIgnoreCase)).Select(v => v.DisplayName)).ToList();
 
-    public static void Stop() { try { _out?.Stop(); } catch { } }
+    /// <summary>Stop talking and drop everything queued.</summary>
+    public static void Stop()
+    {
+        lock (Q) { _gen++; Pending.Clear(); }
+        try { _out?.Stop(); } catch { }
+    }
 
     /// <summary>Engine chain: Edge neural (online) → Piper (offline) → Windows voice; then the optional butler effect.</summary>
     static async Task<ISampleProvider> Render(string text, JarvisSettings s)
@@ -80,34 +93,58 @@ public static class Voice
         return new FileInfo(path).Length / 2.0 / audio.WaveFormat.SampleRate;
     }
 
-    public static async Task Say(string text)
+    /// <summary>Say this now, replacing whatever is being said.</summary>
+    public static Task Say(string text) { Stop(); return Enqueue(text); }
+
+    /// <summary>Add a phrase after the current ones (used for streamed answers, sentence by sentence).</summary>
+    public static Task Enqueue(string text)
     {
         var s = Settings.Current.Jarvis;
-        if (!s.Speak || string.IsNullOrWhiteSpace(text)) return;
-        Stop();
-        await One.WaitAsync();
+        if (!s.Speak || string.IsNullOrWhiteSpace(text)) return Task.CompletedTask;
+        lock (Q)
+        {
+            Pending.Enqueue((_gen, Render(text, s)));
+            if (_player == null || _player.IsCompleted) _player = Task.Run(PlayLoop);
+            return _player;
+        }
+    }
+
+    static async Task PlayLoop()
+    {
+        var s = Settings.Current.Jarvis;
         try
         {
-            var audio = await Render(text, s);
-
-            Ears.Muted = true;
+            // With barge-in the ears stay open (only "стоп" is accepted while talking); otherwise mute them.
+            Ears.Muted = !s.BargeIn;
+            IsSpeaking = true;
             Speaking?.Invoke(true);
-            using var output = new WaveOutEvent();
-            _out = output;
-            var done = new TaskCompletionSource();
-            output.PlaybackStopped += (_, _) => done.TrySetResult();
-            output.Init(audio);
-            output.Play();
-            await done.Task;
+            while (true)
+            {
+                (int Gen, Task<ISampleProvider> Audio) next;
+                lock (Q) { if (Pending.Count == 0) break; next = Pending.Dequeue(); }
+                ISampleProvider audio;
+                try { audio = await next.Audio; } catch (Exception e) { Log.Error(e); continue; }
+                if (next.Gen != _gen) continue;   // stopped while synthesizing
+
+                using var output = new WaveOutEvent();
+                _out = output;
+                var done = new TaskCompletionSource();
+                output.PlaybackStopped += (_, _) => done.TrySetResult();
+                output.Init(audio);
+                output.Play();
+                await done.Task;
+                _out = null;
+            }
         }
         catch (Exception e) { Log.Error(e); }
         finally
         {
             _out = null;
             await Task.Delay(250);   // room echo tail
+            IsSpeaking = false;
             Ears.Muted = false;
             Speaking?.Invoke(false);
-            One.Release();
+            Finished?.Invoke();
         }
     }
 

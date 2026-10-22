@@ -57,6 +57,16 @@ public static class Intents
             return new(n > 0 ? "Забыл." : "Я такого не помню.");
         }
 
+        // --- calendar (only when connected; otherwise the AI may still answer from notes/sites) ---
+        if (Calendar.Configured && M(t, @"что у меня (?:(?:на|в) )?(сегодня|завтра|послезавтра)|(?:планы|дела|расписание|пары|календарь) на (сегодня|завтра|послезавтра)", out m))
+        {
+            var w = m.Groups[1].Success ? m.Groups[1].Value : m.Groups[2].Value;
+            return new(await Calendar.Say(DateTime.Today.AddDays(w == "сегодня" ? 0 : w == "завтра" ? 1 : 2)));
+        }
+
+        if (Has(t, @"сколько (?:я )?(?:сегодня )?(?:сижу|сидел|просидел|провел|был)? ?за (?:компом|компьютером|ноутом|ноутбуком)|экранное время"))
+            return new(ScreenTime.Summary(Has(t, "недел") ? 7 : 1));
+
         // --- notes ---
         if (M(t, @"^(?:запиши|добавь|сделай|создай|сохрани)(?: в)? замет\w*(?: что)? (.+)", out m) || M(t, @"^запиши(?: что)? (.+)", out m))
         {

@@ -16,6 +16,9 @@ public static class Services
         Try(Hotkeys.Start);
         Try(Profiles.StartAuto);
         Try(Widgets.RestoreAll);
+        Try(Remote.Apply);
+        Try(ScreenTime.Start);
+        Try(ClipHistory.Start);
 #if !LITE
         Try(Scenarios.Start);
         _ = Jarvis.Start();
@@ -68,6 +71,8 @@ public static class Services
         Try(Brain.Unload);
 #endif
         Try(SysMon.Stop);
+        Try(Remote.Stop);
+        Try(ScreenTime.Save);
         Try(Hotkeys.Stop);
         Try(Widgets.SaveAll);
         Try(Settings.Save);

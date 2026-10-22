@@ -27,7 +27,7 @@ public static class CommandPalette
 
     static readonly (string Page, string Name)[] Pages =
     {
-        ("Home", "Главная"), ("Controls", "Управление"), ("System", "Система"), ("Devices", "Устройства"), ("Nitro", "Nitro"),
+        ("Home", "Главная"), ("Jarvis", "Джарвис"), ("Scenarios", "Сценарии"), ("Controls", "Управление"), ("System", "Система"), ("Devices", "Устройства"), ("Nitro", "Nitro"),
         ("Boost", "Ускорение"), ("Security", "Защита"), ("Tools", "Инструменты"), ("Profiles", "Профили"), ("Hotkeys", "Горячие клавиши"),
         ("Widgets", "Виджеты"), ("Settings", "Настройки"),
     };
@@ -37,7 +37,8 @@ public static class CommandPalette
         var hk = Settings.Current.Hotkeys;
         var l = Defaults.HotkeyNames.Where(kv => Defaults.Available(kv.Key)).Select(kv => new Cmd("", kv.Value, kv.Key, Hotkeys.Pretty(hk.GetValueOrDefault(kv.Key, "")))).ToList();
         l.AddRange(Extra.Select(kv => new Cmd("", kv.Value, kv.Key, "")));
-        l.AddRange(Pages.Select(p => new Cmd("", "Открыть: " + p.Name, "page:" + p.Page, "")));
+        l.AddRange(Pages.Where(p => Edition.HasJarvis || p.Page is not ("Jarvis" or "Scenarios"))
+            .Select(p => new Cmd("", "Открыть: " + p.Name, "page:" + p.Page, "")));
         l.AddRange(Settings.Current.Profiles.Select(p => new Cmd(p.Icon, "Профиль: " + p.Name, "profile:" + p.Name, "")));
         l.AddRange(Settings.Current.Launchers.Select((x, i) => new Cmd("", "Запустить: " + x.Name, "launch:" + i, "")));
         l.AddRange(Widgets.Names.Select(kv => new Cmd("", "Виджет: " + kv.Value, "widget:" + kv.Key, "")));

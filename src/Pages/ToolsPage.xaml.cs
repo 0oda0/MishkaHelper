@@ -15,6 +15,10 @@ public partial class ToolsPage : UserControl
     {
         InitializeComponent();
         Cards.Children.Add(WindowsCard());
+        Cards.Children.Add(RemoteCard());
+        Cards.Children.Add(ClipboardCard());
+        Cards.Children.Add(ScreenTimeCard());
+        Cards.Children.Add(BackupCard());
         Cards.Children.Add(PowerCard());
         Cards.Children.Add(NetworkCard());
         Cards.Children.Add(RepairCard());
@@ -76,6 +80,99 @@ public partial class ToolsPage : UserControl
     static string Key(string action) => Settings.Current.Hotkeys.GetValueOrDefault(action, "") is { Length: > 0 } k ? Hotkeys.Pretty(k) : "не задано";
 
     // ---------- cards ----------
+    UIElement RemoteCard()
+    {
+        var s = Settings.Current;
+        var (c, b) = Card("", "Пульт с телефона", "Телефон и ПК в одной Wi-Fi сети → открой адрес в браузере телефона и введи PIN. Громкость, музыка, яркость, профили, блокировка, выключение" + (Edition.HasJarvis ? ", вопросы Джарвису." : "."));
+        var info = UiKit.Text("", 14);
+        void Show() => info.Text = Remote.Running ? $"Адрес: {Remote.Url}\nPIN: {s.RemotePin}" : "Выключен";
+        Switch(b, "Включить пульт", s.RemoteEnabled, v =>
+        {
+            s.RemoteEnabled = v; Settings.Save();
+            if (v) Remote.Apply(); else Remote.Disable();
+            Show();
+        });
+        Show();
+        b.Children.Add(info);
+        var wp = new WrapPanel { Margin = new Thickness(0, 8, 0, 0) };
+        Btn(wp, "Новый PIN", () => { s.RemotePin = ""; Settings.Save(); if (s.RemoteEnabled) Remote.Apply(); Show(); });
+        Btn(wp, "Скопировать адрес", () => { System.Windows.Clipboard.SetText(Remote.Url); Osd.Show("", "Адрес скопирован"); });
+        b.Children.Add(wp);
+        return c;
+    }
+
+    UIElement ScreenTimeCard()
+    {
+        var (c, b) = Card("", "Экранное время", "Сколько времени какая программа была на экране. Время без мыши и клавиатуры дольше 3 минут не считается. Хранится 30 дней только на этом ПК.");
+        Switch(b, "Считать", Settings.Current.ScreenTime, v => { Settings.Current.ScreenTime = v; Settings.Save(); });
+        var list = new StackPanel { Margin = new Thickness(0, 6, 0, 0) };
+        int days = 1;
+        void Render()
+        {
+            list.Children.Clear();
+            var top = ScreenTime.Top(days);
+            list.Children.Add(UiKit.Text($"Всего: {ScreenTime.Format(top.Sum(t => t.Seconds))}", 14, weight: FontWeights.SemiBold));
+            int max = top.Count > 0 ? top[0].Seconds : 1;
+            foreach (var (app, sec) in top.Take(8))
+            {
+                var row = new DockPanel { Margin = new Thickness(0, 3, 0, 0) };
+                var t = UiKit.Text(ScreenTime.Format(sec), 12, true); t.Width = 90; DockPanel.SetDock(t, Dock.Right);
+                var name = UiKit.Text(app, 12); name.Width = 140; DockPanel.SetDock(name, Dock.Left);
+                row.Children.Add(t); row.Children.Add(name);
+                row.Children.Add(new ProgressBar { Maximum = max, Value = sec, Height = 6, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 10, 0) });
+                list.Children.Add(row);
+            }
+        }
+        var wp = new WrapPanel { Margin = new Thickness(0, 6, 0, 0) };
+        Btn(wp, "Сегодня", () => { days = 1; Render(); });
+        Btn(wp, "Неделя", () => { days = 7; Render(); });
+        Btn(wp, "Месяц", () => { days = 30; Render(); });
+        b.Children.Add(wp);
+        b.Children.Add(list);
+        Render();
+        return c;
+    }
+
+    UIElement BackupCard()
+    {
+        var (c, b) = Card("", "Резервная копия", "Настройки, профили, сценарии, заметки и память Джарвиса — в один zip-файл. Удобно для переноса на другой ПК. Модели не входят (их проще скачать заново).");
+        var wp = new WrapPanel();
+        Btn(wp, "Сохранить копию…", () =>
+        {
+            var dlg = new Microsoft.Win32.SaveFileDialog { FileName = $"MishkaHelper-{DateTime.Now:yyyy-MM-dd}.zip", Filter = "Zip|*.zip" };
+            if (dlg.ShowDialog() != true) return;
+            Settings.Save();
+            if (File.Exists(dlg.FileName)) File.Delete(dlg.FileName);
+            System.IO.Compression.ZipFile.CreateFromDirectory(Settings.Dir, dlg.FileName);
+            Osd.Show("", "Копия сохранена");
+        }, accent: true);
+        Btn(wp, "Восстановить…", () =>
+        {
+            var dlg = new Microsoft.Win32.OpenFileDialog { Filter = "Zip|*.zip" };
+            if (dlg.ShowDialog() != true || !UiKit.Confirm("Заменить текущие настройки и заметки данными из копии?")) return;
+            using (var z = System.IO.Compression.ZipFile.OpenRead(dlg.FileName))
+            {
+                if (z.GetEntry("settings.json") == null) { Osd.Show("", "Это не копия Mishka Helper"); return; }
+                System.IO.Compression.ZipFileExtensions.ExtractToDirectory(z, Settings.Dir, true);
+            }
+            Settings.Load();
+            Osd.Show("", "Восстановлено. Перезапусти программу, чтобы всё применилось");
+        });
+        b.Children.Add(wp);
+        return c;
+    }
+
+    UIElement ClipboardCard()
+    {
+        var (c, b) = Card("", "История буфера обмена", $"Последние 100 скопированных текстов, закрепление, поиск. Открыть: {Key("clipboard")}. Пароли из менеджеров паролей не сохраняются.");
+        Switch(b, "Запоминать скопированное", Settings.Current.ClipboardHistory, v => { Settings.Current.ClipboardHistory = v; Settings.Save(); if (!v) ClipHistory.Clear(); });
+        var wp = new WrapPanel { Margin = new Thickness(0, 8, 0, 0) };
+        Btn(wp, "Открыть", ClipHistory.Toggle, accent: true);
+        Btn(wp, "Очистить (кроме закреплённых)", ClipHistory.Clear);
+        b.Children.Add(wp);
+        return c;
+    }
+
     UIElement WindowsCard()
     {
         var (c, b) = Card("", "Окна", "Работают с активным окном по горячим клавишам — даже поверх игр в оконном режиме.");

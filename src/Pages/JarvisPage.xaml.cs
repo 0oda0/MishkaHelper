@@ -16,6 +16,7 @@ public partial class JarvisPage : UserControl
         Cards.Children.Add(MainCard());
         Cards.Children.Add(ModelsCard());
         Cards.Children.Add(SitesCard());
+        Cards.Children.Add(CalendarCard());
         Cards.Children.Add(NotesCard());
     }
 
@@ -56,6 +57,9 @@ public partial class JarvisPage : UserControl
         wake.LostFocus += (_, _) => { J.WakeWord = wake.Text.Trim().ToLowerInvariant(); Settings.Save(); };
         b.Children.Add(wake);
         Switch(b, "Отвечать голосом", J.Speak, v => J.Speak = v);
+        Switch(b, "Диалог: после ответа 6 с слушать без «Джарвис»", J.FollowUp, v => J.FollowUp = v);
+        Switch(b, "Перебивать словом «стоп» (лучше в наушниках)", J.BargeIn, v => J.BargeIn = v);
+        Switch(b, "Начинать говорить, пока ИИ ещё думает", J.Stream, v => J.Stream = v);
         Switch(b, "Неоновый шар на экране", J.ShowOrb, v => { J.ShowOrb = v; if (v) JarvisOrb.Show(); else JarvisOrb.Hide(); });
         Switch(b, "Подсказки по ситуации (перегрев, память, батарея)", J.Proactive, v => J.Proactive = v);
         Combo(b, "Микрофон", new[] { ("", "По умолчанию") }.Concat(Ears.Microphones().Select(m => (m, m))), J.Microphone, async v => { J.Microphone = v; if (J.Enabled) await Jarvis.Restart(); });
@@ -106,6 +110,29 @@ public partial class JarvisPage : UserControl
     UIElement ModelsCard()
     {
         var (c, b) = Card("Модели (скачиваются один раз)", "Всё бесплатно и без регистрации. Хранится в %LocalAppData%\\MishkaHelper\\models.");
+        var rec = Models.Recommend();
+        b.Children.Add(UiKit.Text(rec.Why, 12, true));
+        var auto = new Button { Content = "Настроить Джарвиса под этот ПК", Style = S("AccentButton"), HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 4, 0, 10) };
+        auto.Click += async (_, _) =>
+        {
+            auto.IsEnabled = false;
+            try
+            {
+                // Sequential: parallel multi-GB downloads only slow each other down.
+                foreach (var m in new[] { rec.Stt, LlamaServer.Runtime, rec.Llm }.Where(m => !Models.Has(m)))
+                    await Models.Download(m, f => Dispatcher.BeginInvoke(() => auto.Content = $"{m.Name.Split(" (")[0].Split(" —")[0]}: {f * 100:0}%"));
+                J.Engine = rec.Engine;
+                if (rec.Stt != Models.Vosk) J.WhisperModel = rec.Stt.Key;
+                J.AiModel = rec.Llm.Key; J.AiGpu = rec.Gpu; J.AiEnabled = true; J.Enabled = true;
+                Settings.Save();
+                Ears.ResetWhisper(); Brain.Unload();
+                await Jarvis.Restart();
+                Osd.Show("", "Джарвис готов — скажи «Джарвис»");
+                App.Current.Navigate("Jarvis");   // rebuild the page so switches show the new values
+            }
+            catch (Exception e) { Osd.Show("", e.Message); auto.Content = "Настроить Джарвиса под этот ПК"; auto.IsEnabled = true; }
+        };
+        b.Children.Add(auto);
         Combo(b, "Распознавание речи", new[] { ("whisper", "Whisper — точное (рекомендую)"), ("vosk", "Vosk — лёгкое, для слабых ПК") }, J.Engine, async v => { J.Engine = v; Ears.ResetWhisper(); if (J.Enabled) await Jarvis.Restart(); });
         Combo(b, "Модель Whisper", Models.Whisper.Select(w => (w.Key, w.Name)), J.WhisperModel, async v => { J.WhisperModel = v; Ears.ResetWhisper(); if (J.Enabled) await Jarvis.Restart(); });
         foreach (var w in Models.Whisper) Row(b, w, async () => { if (J.Enabled) await Jarvis.Restart(); });
@@ -199,6 +226,35 @@ public partial class JarvisPage : UserControl
         b.Children.Add(UiKit.Text("Ссылка на страницу", 12, true)); b.Children.Add(url);
         b.Children.Add(UiKit.Text("Слова, по которым понять, что спрашивают про этот сайт", 12, true)); b.Children.Add(keys);
         b.Children.Add(add);
+        return c;
+    }
+
+    UIElement CalendarCard()
+    {
+        var (c, b) = Card("Календарь", "Ссылка iCal (.ics): Google Календарь → Настройки → «Секретный адрес в формате iCal», Outlook → «Опубликовать календарь», или экспорт расписания вуза. Потом: «что у меня завтра?»");
+        var list = new StackPanel();
+        void Render()
+        {
+            list.Children.Clear();
+            foreach (var u in J.Calendars.ToList())
+            {
+                var row = new DockPanel { Margin = new Thickness(0, 3, 0, 3) };
+                var del = new Button { Content = "Удалить", Padding = new Thickness(10, 4, 10, 4) };
+                del.Click += (_, _) => { J.Calendars.Remove(u); Settings.Save(); Render(); };
+                DockPanel.SetDock(del, Dock.Right); row.Children.Add(del);
+                row.Children.Add(UiKit.Text(u.Length > 70 ? u[..70] + "…" : u, 12, true));
+                list.Children.Add(row);
+            }
+        }
+        Render();
+        var url = new TextBox { Margin = new Thickness(0, 2, 0, 6) };
+        var wp = new WrapPanel();
+        var add = new Button { Content = "+ Добавить", Style = S("AccentButton") };
+        add.Click += (_, _) => { var u = url.Text.Trim(); if (u.Length < 8) return; J.Calendars.Add(u); Settings.Save(); url.Text = ""; Render(); };
+        var test = new Button { Content = "Что завтра?" };
+        test.Click += async (_, _) => { test.IsEnabled = false; await Core.Calendar.Load(); MessageBox.Show(await Core.Calendar.Say(DateTime.Today.AddDays(1)), "Календарь"); test.IsEnabled = true; };
+        wp.Children.Add(add); wp.Children.Add(test);
+        b.Children.Add(list); b.Children.Add(url); b.Children.Add(wp);
         return c;
     }
 
