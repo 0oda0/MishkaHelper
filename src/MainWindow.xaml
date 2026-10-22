@@ -1,0 +1,67 @@
+<Window x:Class="MishkaHelper.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Mishka Helper" Width="1180" Height="760" MinWidth="900" MinHeight="560"
+        WindowStartupLocation="CenterScreen" Icon="Assets/app.ico"
+        Background="{DynamicResource BgBrush}" Foreground="{DynamicResource TextBrush}"
+        FontFamily="{StaticResource MainFont}" FontSize="13"
+        UseLayoutRounding="True" TextOptions.TextFormattingMode="Display">
+    <WindowChrome.WindowChrome>
+        <WindowChrome CaptionHeight="40" ResizeBorderThickness="6" GlassFrameThickness="-1"
+                      CornerRadius="0" UseAeroCaptionButtons="False"/>
+    </WindowChrome.WindowChrome>
+
+    <Grid x:Name="Root">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="232"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+
+        <!-- Sidebar -->
+        <Border Background="{DynamicResource SidebarBrush}">
+            <DockPanel>
+                <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="20,18,0,22">
+                    <Image Source="Assets/app.ico" Width="34" Height="34"/>
+                    <StackPanel Margin="10,0,0,0" VerticalAlignment="Center">
+                        <TextBlock Text="MISHKA" FontSize="18" FontWeight="Black" Foreground="{DynamicResource AccentBrush}"
+                                   Effect="{DynamicResource Glow}"/>
+                        <TextBlock Text="helper" FontSize="11" Foreground="{DynamicResource DimBrush}" Margin="1,-3,0,0"/>
+                    </StackPanel>
+                </StackPanel>
+
+                <StackPanel DockPanel.Dock="Bottom" Margin="0,0,0,14">
+                    <RadioButton Style="{StaticResource NavItem}" Tag="&#xE713;" Content="Настройки" x:Name="NavSettings" Checked="Nav_Checked"/>
+                </StackPanel>
+
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel x:Name="NavPanel">
+                        <RadioButton Style="{StaticResource NavItem}" Tag="&#xE80F;" Content="Главная" x:Name="NavHome" Checked="Nav_Checked"/>
+                        <RadioButton Style="{StaticResource NavItem}" Tag="&#xE9E9;" Content="Управление" x:Name="NavControls" Checked="Nav_Checked"/>
+                        <RadioButton Style="{StaticResource NavItem}" Tag="&#xE7F8;" Content="Система" x:Name="NavSystem" Checked="Nav_Checked"/>
+                        <RadioButton Style="{StaticResource NavItem}" Tag="&#xE772;" Content="Устройства" x:Name="NavDevices" Checked="Nav_Checked"/>
+                        <RadioButton Style="{StaticResource NavItem}" Tag="&#xE7FC;" Content="Nitro" x:Name="NavNitro" Checked="Nav_Checked" Visibility="Collapsed"/>
+                        <RadioButton Style="{StaticResource NavItem}" Tag="&#xE945;" Content="Ускорение" x:Name="NavBoost" Checked="Nav_Checked"/>
+                        <RadioButton Style="{StaticResource NavItem}" Tag="&#xEA18;" Content="Защита" x:Name="NavSecurity" Checked="Nav_Checked"/>
+                        <RadioButton Style="{StaticResource NavItem}" Tag="&#xE77B;" Content="Профили" x:Name="NavProfiles" Checked="Nav_Checked"/>
+                        <RadioButton Style="{StaticResource NavItem}" Tag="&#xE765;" Content="Горячие клавиши" x:Name="NavHotkeys" Checked="Nav_Checked"/>
+                        <RadioButton Style="{StaticResource NavItem}" Tag="&#xECA5;" Content="Виджеты" x:Name="NavWidgets" Checked="Nav_Checked"/>
+                    </StackPanel>
+                </ScrollViewer>
+            </DockPanel>
+        </Border>
+
+        <!-- Content -->
+        <Grid Grid.Column="1">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="40"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" WindowChrome.IsHitTestVisibleInChrome="True">
+                <Button Style="{StaticResource TitleButton}" Content="&#xE921;" Click="Min_Click" ToolTip="Свернуть"/>
+                <Button Style="{StaticResource TitleButton}" Content="&#xE922;" Click="Max_Click" ToolTip="Развернуть"/>
+                <Button Style="{StaticResource TitleButton}" Content="&#xE8BB;" Click="Close_Click" ToolTip="Закрыть"/>
+            </StackPanel>
+            <ContentControl x:Name="Page" Grid.Row="1" Margin="28,0,16,0"/>
+        </Grid>
+    </Grid>
+</Window>
