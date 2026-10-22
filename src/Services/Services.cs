@@ -62,6 +62,7 @@ public static class Services
     {
         _jobs?.Stop();
         Try(Jarvis.Stop);
+        Try(Brain.Unload);
         Try(SysMon.Stop);
         Try(Hotkeys.Stop);
         Try(Widgets.SaveAll);

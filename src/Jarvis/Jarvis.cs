@@ -24,6 +24,7 @@ public static class Jarvis
             Ears.Partial += p => Application.Current.Dispatcher.BeginInvoke(() => Status?.Invoke(p));
         }
         if (j.ShowOrb) JarvisOrb.Show();
+        Brain.Warmup();
         try { await Ears.Start(); }
         catch (Exception e) { Status?.Invoke(e.Message); Toast.Show("", "Джарвис", e.Message, () => App.Current.Navigate("Jarvis")); }
         _tips ??= new DispatcherTimer { Interval = TimeSpan.FromMinutes(1) };
@@ -73,7 +74,7 @@ public static class Jarvis
         try
         {
             if (r == null && Scenarios.ByVoice(text) is { } sc) { _ = Scenarios.Run(sc); r = new($"Запускаю «{sc.Name}»."); }
-            r ??= await Intents.Try(text);
+            r ??= await Compound(text);
             if (r == null && !Brain.Ready && WebReader.Match(text) is { } src)
             {
                 Shell.Open(src.Url);
@@ -102,6 +103,27 @@ public static class Jarvis
         }
         Respond(r.Say.Length > 0 ? r.Say : "Готово.", speak: r.Say.Length > 0);
     }
+
+    /// <summary>"сделай погромче и включи ночной свет": run every part if all are known commands; otherwise leave it to the AI.</summary>
+    static async Task<Reply?> Compound(string text)
+    {
+        var parts = System.Text.RegularExpressions.Regex.Split(Ears.Clean(text), @"\s+(?:и|а потом|потом|затем|и еще|а еще|плюс)\s+")
+            .Where(p => p.Length > 1).ToList();
+        if (parts.Count < 2) return await Intents.Try(text);
+        // Only split when the first part alone is a command (avoids breaking "открой блокнот и запиши…" for the AI).
+        var replies = new List<Reply>();
+        foreach (var p in parts)
+        {
+            var r = await Intents.Try(p);
+            if (r == null) return replies.Count == 0 && !Brain.Ready ? await Intents.Try(text) : replies.Count == 0 ? null : Merge(replies, partial: true);
+            if (r.Confirm != null) return r;
+            replies.Add(r);
+        }
+        return Merge(replies, partial: false);
+    }
+
+    static Reply Merge(List<Reply> rs, bool partial) =>
+        new(string.Join(" ", rs.Select(x => x.Say).Where(s => s.Length > 0)) is { Length: > 0 } s ? s : "Готово." + (partial ? " Остальное не понял." : ""));
 
     static void Respond(string text, bool speak = true)
     {

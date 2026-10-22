@@ -23,18 +23,18 @@ jobs:
           $v = if ($env:GITHUB_REF_NAME -like 'v*') { $env:GITHUB_REF_NAME.TrimStart('v') } else { '0.1.0' }
           "APP_VERSION=$v" >> $env:GITHUB_ENV
 
-      - name: Publish portable exe
+      # A folder, not single-file: native speech/GPU libraries must sit where their loaders look for them.
+      - name: Publish
         run: >
           dotnet publish src/MishkaHelper.csproj -c Release -r win-x64 --self-contained
-          -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true
-          -p:EnableCompressionInSingleFile=true -p:Version=${{ env.APP_VERSION }} -o publish
+          -p:Version=${{ env.APP_VERSION }} -o publish
 
-      - name: Installer
+      - name: Installer and portable zip
         shell: pwsh
         run: |
           choco install innosetup -y --no-progress
           & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" installer\MishkaHelper.iss
-          Copy-Item publish\MishkaHelper.exe "dist\MishkaHelper-Portable-$env:APP_VERSION.exe"
+          Get-ChildItem publish -Exclude *.pdb, *.xml | Compress-Archive -DestinationPath "dist\MishkaHelper-Portable-$env:APP_VERSION.zip"
 
       - uses: actions/upload-artifact@v4
         with:

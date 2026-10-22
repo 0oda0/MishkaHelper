@@ -36,22 +36,26 @@ public class JarvisSettings
     public bool Enabled { get; set; }
     public bool WakeWordOn { get; set; } = true;
     public string WakeWord { get; set; } = "джарвис";
-    public string Engine { get; set; } = "vosk";          // vosk | whisper
-    public string WhisperModel { get; set; } = "base";    // base | small
+    public string Engine { get; set; } = "whisper";       // whisper | vosk
+    public string WhisperModel { get; set; } = "turbo";   // turbo | base | small
     public string Microphone { get; set; } = "";          // device name, "" = default
     public bool Speak { get; set; } = true;
-    public string Voice { get; set; } = "";
-    public double Rate { get; set; } = 1.1;
+    public string Tts { get; set; } = "piper";            // piper | windows
+    public string PiperVoice { get; set; } = "dmitri";
+    public bool VoiceFx { get; set; } = true;              // "AI butler" effect
+    public string Voice { get; set; } = "";               // Windows voice name
+    public double Rate { get; set; } = 1.0;
     public bool ShowOrb { get; set; } = true;
     public double OrbLeft { get; set; } = -1;
     public double OrbTop { get; set; } = -1;
     public bool Proactive { get; set; } = true;
     public bool AiEnabled { get; set; }
-    public string AiModel { get; set; } = "qwen3-4b";
+    public string AiModel { get; set; } = "qwen3-4b-2507";
     public bool AiGpu { get; set; } = true;
     public string UserName { get; set; } = "";
     public List<string> Memory { get; set; } = new();
     public List<WebSource> Sources { get; set; } = new();
+    public int Version { get; set; }   // bumps migrate old defaults
 }
 
 /// <summary>A page Jarvis may read to answer questions (e.g. the schedule in a student account).</summary>

@@ -19,7 +19,7 @@ public partial class App : Application
         _single = new Mutex(true, "MishkaHelper.Single", out bool first);
         _showSignal = new EventWaitHandle(false, EventResetMode.AutoReset, "MishkaHelper.Show");
         var quitSignal = new EventWaitHandle(false, EventResetMode.AutoReset, "MishkaHelper.Quit");
-        if (!first && !e.Args.Contains("--shots"))   // dev screenshots may run beside the installed copy
+        if (!first && !e.Args.Contains("--shots") && !e.Args.Contains("--selftest"))   // dev runs may sit beside the installed copy
         {
             // Ask the running copy to show itself, or to exit (used by the installer/updater).
             (e.Args.Contains("--quit") ? quitSignal : _showSignal).Set();

@@ -1,19 +1,22 @@
-# Installs the published exe into Program Files on this PC (run elevated).
-# Usage: install-local.ps1 -Source <publish\MishkaHelper.exe> [-SelfTest <report.txt>]
+# Installs the published app folder into Program Files on this PC (run elevated).
+# Usage: install-local.ps1 -Source <publish folder> [-SelfTest <report.txt>] [-Only steps]
 param([Parameter(Mandatory)] [string]$Source, [string]$SelfTest, [string]$Only = "")
 $ErrorActionPreference = 'Stop'
+if (Test-Path $Source -PathType Leaf) { $Source = Split-Path $Source }   # old callers passed the exe
 $dir = Join-Path $env:ProgramFiles 'Mishka Helper'
 $exe = Join-Path $dir 'MishkaHelper.exe'
-$log = Join-Path (Split-Path $Source) 'install.log'
+$log = Join-Path $Source 'install.log'
 "start $(Get-Date)" | Out-File $log -Encoding utf8
 
-# Stop any running copy (old builds don't know --quit).
-Get-Process MishkaHelper -ErrorAction SilentlyContinue | Stop-Process -Force
+# Stop any running copy and its helper servers.
+Get-Process MishkaHelper, llama-server, piper -ErrorAction SilentlyContinue | Stop-Process -Force
 Start-Sleep -Milliseconds 800
 
+# Clean install of the app folder (models live in %LocalAppData%, settings in %AppData% — untouched).
+if (Test-Path $dir) { Remove-Item $dir -Recurse -Force }
 New-Item -ItemType Directory -Force $dir | Out-Null
-Copy-Item $Source $exe -Force
-"copied to $exe" | Out-File $log -Append -Encoding utf8
+Get-ChildItem $Source -Exclude 'install.log', '*.pdb', '*.xml' | Copy-Item -Destination $dir -Recurse -Force
+"copied to $dir" | Out-File $log -Append -Encoding utf8
 
 # Start menu shortcut
 $lnk = Join-Path ([Environment]::GetFolderPath('CommonPrograms')) 'Mishka Helper.lnk'

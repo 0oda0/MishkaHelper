@@ -29,7 +29,7 @@ Name: "ru"; MessagesFile: "compiler:Languages\Russian.isl"
 Name: "desktopicon"; Description: "Ярлык на рабочем столе"; GroupDescription: "Дополнительно:"
 
 [Files]
-Source: "..\publish\MishkaHelper.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\publish\*"; Excludes: "*.pdb,*.xml"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
 Name: "{group}\Mishka Helper"; Filename: "{app}\MishkaHelper.exe"
@@ -41,3 +41,4 @@ Filename: "{app}\MishkaHelper.exe"; Description: "Запустить Mishka Help
 [UninstallRun]
 Filename: "schtasks.exe"; Parameters: "/delete /tn MishkaHelper /f"; Flags: runhidden; RunOnceId: "DelTask"
 Filename: "taskkill.exe"; Parameters: "/im MishkaHelper.exe /f"; Flags: runhidden; RunOnceId: "Kill"
+Filename: "taskkill.exe"; Parameters: "/im llama-server.exe /f"; Flags: runhidden; RunOnceId: "KillLlama"

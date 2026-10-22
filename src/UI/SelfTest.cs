@@ -144,6 +144,77 @@ public static class SelfTest
             L($"autostart task enabled={Autostart.Enabled} pointsHere={Autostart.PointsHere}");
         });
 
+        await Step("brain", async () =>
+        {
+            if (!Models.Has(LlamaServer.Runtime)) { L("downloading llama.cpp…"); await Models.Download(LlamaServer.Runtime); }
+            Settings.Current.Jarvis.AiModel = "qwen3-4b-2507";
+            if (!Models.Has(Models.LlmModel)) { L("downloading model…"); await Models.Download(Models.LlmModel); }
+            var w0 = DateTime.Now;
+            await LlamaServer.EnsureRunning();
+            L($"llama-server up in {(DateTime.Now - w0).TotalSeconds:0.0}s");
+            // Volume/brightness are restored afterwards so the test doesn't leave the PC changed.
+            int vol = Audio.Volume;
+            foreach (var q in new[] { "привет, как дела у компа?", "сделай немного тише и скажи сколько сейчас времени", "почему ноут может тормозить в играх?", "запиши в заметку сдать лабу по физике в пятницу", "что у меня по физике?", "кто такой Тони Старк в двух словах" })
+            {
+                var t0 = DateTime.Now;
+                ChatHistory.Add(true, q);
+                var r = await Brain.Ask(q);
+                ChatHistory.Add(false, r.Say);
+                L($"brain {(DateTime.Now - t0).TotalSeconds:0.0}s  Q: {q}  A: {r.Say}{(r.Confirm != null ? " [confirm]" : "")}");
+            }
+            Audio.Volume = vol;
+        });
+
+        await Step("ears", async () =>
+        {
+            var phrases = new[] { "Джарвис, включи ночной свет и сделай громкость тридцать.", "Джарвис, что у меня завтра по парам?", "Запиши в заметку купить молоко и хлеб." };
+            var synth = new Windows.Media.SpeechSynthesis.SpeechSynthesizer();
+            synth.Voice = Windows.Media.SpeechSynthesis.SpeechSynthesizer.AllVoices.First(v => v.Language.StartsWith("ru"));
+            var whisperTurbo = Models.Whisper.First(w => w.Key == "turbo");
+            if (!Models.Has(whisperTurbo)) { L("downloading whisper turbo…"); await Models.Download(whisperTurbo); }
+            foreach (var engine in new[] { "whisper", "vosk" })
+            {
+                Settings.Current.Jarvis.Engine = engine;
+                Settings.Current.Jarvis.WhisperModel = "turbo";
+                foreach (var ph in phrases)
+                {
+                    using var st = await synth.SynthesizeTextToStreamAsync(ph);
+                    using var ms = new MemoryStream();
+                    await st.AsStreamForRead().CopyToAsync(ms);
+                    ms.Position = 0;
+                    using var rd = new NAudio.Wave.WaveFileReader(ms);
+                    NAudio.Wave.ISampleProvider src = NAudio.Wave.WaveExtensionMethods.ToSampleProvider(rd);
+                    if (rd.WaveFormat.Channels == 2) src = new NAudio.Wave.SampleProviders.StereoToMonoSampleProvider(src);
+                    var mono = new NAudio.Wave.SampleProviders.WdlResamplingSampleProvider(src, 16000);
+                    var pcm16 = new NAudio.Wave.SampleProviders.SampleToWaveProvider16(mono);
+                    using var outMs = new MemoryStream();
+                    var buf = new byte[4096]; int n;
+                    while ((n = pcm16.Read(buf, 0, buf.Length)) > 0) outMs.Write(buf, 0, n);
+                    var t0 = DateTime.Now;
+                    var text = await Ears.TestTranscribe(outMs.ToArray());
+                    L($"ears[{engine}] {(DateTime.Now - t0).TotalSeconds:0.00}s  said: {ph}  heard: {text}  wake={Ears.WakeIndex(text)}");
+                }
+            }
+        });
+
+        await Step("voice", async () =>
+        {
+            var j = Settings.Current.Jarvis;
+            j.Tts = "piper"; j.PiperVoice = "dmitri"; j.VoiceFx = true;
+            var t0 = DateTime.Now;
+            await Voice.DownloadPiper("dmitri");
+            L($"piper ready={Voice.PiperReady("dmitri")} in {(DateTime.Now - t0).TotalSeconds:0}s");
+            var dir = Path.GetDirectoryName(file)!;
+            foreach (var (fx, name) in new[] { (true, "jarvis-fx.wav"), (false, "jarvis-plain.wav") })
+            {
+                j.VoiceFx = fx;
+                t0 = DateTime.Now;
+                var sec = await Voice.RenderToFile("Добрый вечер, сэр. Все системы в норме. Температура процессора сорок пять градусов. Чем могу помочь?", Path.Combine(dir, name));
+                L($"voice fx={fx}: {sec:0.0}s audio in {(DateTime.Now - t0).TotalSeconds:0.00}s → {name}");
+            }
+        });
+
+        if (filter.Contains("brain") || filter.Contains("ears") || filter.Contains("voice")) { L("DONE"); App.Current.Quit(); return; }
         L("DONE, rendering pages");
         Shots.Run(Path.Combine(Path.GetDirectoryName(file)!, "shots-admin"), main);   // quits when done
     }

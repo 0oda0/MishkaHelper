@@ -58,14 +58,38 @@ public partial class JarvisPage : UserControl
         Switch(b, "Отвечать голосом", J.Speak, v => J.Speak = v);
         Switch(b, "Неоновый шар на экране", J.ShowOrb, v => { J.ShowOrb = v; if (v) JarvisOrb.Show(); else JarvisOrb.Hide(); });
         Switch(b, "Подсказки по ситуации (перегрев, память, батарея)", J.Proactive, v => J.Proactive = v);
-        Combo(b, "Голос", Voice.Voices().Select(v => (v, v)), J.Voice, v => J.Voice = v);
         Combo(b, "Микрофон", new[] { ("", "По умолчанию") }.Concat(Ears.Microphones().Select(m => (m, m))), J.Microphone, async v => { J.Microphone = v; if (J.Enabled) await Jarvis.Restart(); });
-        var wp = new WrapPanel();
-        var test = new Button { Content = "Сказать тест" };
-        test.Click += (_, _) => _ = Voice.Say("Привет! Я Джарвис. Слушаю тебя.");
-        var chat = new Button { Content = "Открыть чат", Style = S("AccentButton") };
+        var chat = new Button { Content = "Открыть чат", Style = S("AccentButton"), HorizontalAlignment = HorizontalAlignment.Left };
         chat.Click += (_, _) => JarvisChat.Open();
-        wp.Children.Add(chat); wp.Children.Add(test);
+        b.Children.Add(chat);
+
+        // Voice
+        b.Children.Add(new TextBlock { Text = "Голос", Style = S("H2"), Margin = new Thickness(0, 14, 0, 6) });
+        Combo(b, "Движок", new[] { ("piper", "Нейроголос Piper — естественный (офлайн)"), ("windows", "Голос Windows — роботизированный") }, J.Tts, v => J.Tts = v);
+        var status = UiKit.Text("", 12, true);
+        void Status() => status.Text = Voice.PiperReady(J.PiperVoice) ? "✅ Голос скачан" : "Голос не скачан (≈80 МБ вместе с Piper)";
+        Combo(b, "Нейроголос", Voice.PiperVoices.Select(v => (v.Key, v.Name)), J.PiperVoice, v => { J.PiperVoice = v; Status(); });
+        Status();
+        b.Children.Add(status);
+        Combo(b, "Голос Windows (запасной)", Voice.WindowsVoices().Select(v => (v, v)), J.Voice, v => J.Voice = v);
+        Switch(b, "Эффект «ИИ-дворецкий» (ниже тон, цифровой оттенок)", J.VoiceFx, v => J.VoiceFx = v);
+        var rateText = UiKit.Text($"Скорость речи: {J.Rate:0.0}×", 12, true);
+        var rate = new Slider { Minimum = 0.7, Maximum = 1.5, Value = J.Rate, TickFrequency = 0.05, IsSnapToTickEnabled = true };
+        rate.ValueChanged += (_, e) => { J.Rate = Math.Round(e.NewValue, 2); rateText.Text = $"Скорость речи: {J.Rate:0.0}×"; };
+        rate.LostMouseCapture += (_, _) => Settings.Save();
+        b.Children.Add(rateText); b.Children.Add(rate);
+        var wp = new WrapPanel();
+        var dl = new Button { Content = "Скачать голос" };
+        dl.Click += async (_, _) =>
+        {
+            dl.IsEnabled = false;
+            try { await Voice.DownloadPiper(J.PiperVoice, f => Dispatcher.BeginInvoke(() => dl.Content = $"{f * 100:0}%")); }
+            catch (Exception e) { Osd.Show("", e.Message); }
+            dl.Content = "Скачать голос"; dl.IsEnabled = true; Status();
+        };
+        var test = new Button { Content = "Послушать" };
+        test.Click += (_, _) => _ = Voice.Say("Добрый вечер, сэр. Все системы в норме. Чем могу помочь?");
+        wp.Children.Add(dl); wp.Children.Add(test);
         b.Children.Add(wp);
         return c;
     }
@@ -73,13 +97,13 @@ public partial class JarvisPage : UserControl
     UIElement ModelsCard()
     {
         var (c, b) = Card("Модели (скачиваются один раз)", "Всё бесплатно и без регистрации. Хранится в %LocalAppData%\\MishkaHelper\\models.");
+        Combo(b, "Распознавание речи", new[] { ("whisper", "Whisper — точное (рекомендую)"), ("vosk", "Vosk — лёгкое, для слабых ПК") }, J.Engine, async v => { J.Engine = v; Ears.ResetWhisper(); if (J.Enabled) await Jarvis.Restart(); });
+        Combo(b, "Модель Whisper", Models.Whisper.Select(w => (w.Key, w.Name)), J.WhisperModel, async v => { J.WhisperModel = v; Ears.ResetWhisper(); if (J.Enabled) await Jarvis.Restart(); });
+        foreach (var w in Models.Whisper) Row(b, w, async () => { if (J.Enabled) await Jarvis.Restart(); });
         Row(b, Models.Vosk, async () => { if (J.Enabled) await Jarvis.Restart(); });
 
-        Combo(b, "Распознавание", new[] { ("vosk", "Vosk — быстро, для команд"), ("whisper", "Whisper — точнее, для свободной речи") }, J.Engine, async v => { J.Engine = v; Ears.ResetWhisper(); if (J.Enabled) await Jarvis.Restart(); });
-        Combo(b, "Модель Whisper", Models.Whisper.Select(w => (w.Key, w.Name)), J.WhisperModel, v => { J.WhisperModel = v; Ears.ResetWhisper(); });
-        foreach (var w in Models.Whisper) Row(b, w, () => Task.CompletedTask);
-
         b.Children.Add(new Border { Height = 8 });
+        Row(b, LlamaServer.Runtime, () => Task.CompletedTask);
         Switch(b, "ИИ: понимать любые фразы и отвечать на вопросы", J.AiEnabled, v => { J.AiEnabled = v; if (!v) Brain.Unload(); });
         Switch(b, "ИИ на видеокарте (быстрее)", J.AiGpu, v => { J.AiGpu = v; Brain.Unload(); });
         Combo(b, "Нейросеть", Models.Llm.Select(m => (m.Key, m.Name)), J.AiModel, v => { J.AiModel = v; Brain.Unload(); });

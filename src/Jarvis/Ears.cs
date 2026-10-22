@@ -9,20 +9,16 @@ namespace MishkaHelper.Core;
 public enum EarState { Off, Idle, Listening, Thinking }
 
 /// <summary>
-/// Microphone → Vosk (always, cheap) for wake word and commands; optionally Whisper re-transcribes
-/// the command utterance for accuracy. Everything runs locally.
+/// Microphone → energy-based voice activity detection cuts whole phrases → Whisper (GPU, accurate) or Vosk (light)
+/// transcribes each phrase → wake word / listening-mode logic. Everything runs locally.
 /// </summary>
 public static class Ears
 {
     static WaveInEvent? _in;
     static Model? _vosk;
-    static VoskRecognizer? _rec;
     static WhisperFactory? _whisper;
-    static readonly SemaphoreSlim WhisperLock = new(1, 1);
-
-    static readonly MemoryStream Utterance = new();   // PCM since the last final result
-    static bool _commandNext;
-    static DateTime _listenUntil;
+    static string? _whisperKey;
+    static readonly SemaphoreSlim Recognize = new(1, 1);
 
     public static EarState State { get; private set; } = EarState.Off;
     public static event Action<EarState>? StateChanged;
@@ -32,27 +28,43 @@ public static class Ears
     /// <summary>Set while Jarvis talks so it doesn't hear itself.</summary>
     public static volatile bool Muted;
 
+    static bool _commandNext;
+    static DateTime _listenUntil;
+
     static void Set(EarState s) { if (State == s) return; State = s; StateChanged?.Invoke(s); }
 
     public static List<string> Microphones() =>
         Enumerable.Range(0, WaveInEvent.DeviceCount).Select(i => WaveInEvent.GetCapabilities(i).ProductName).ToList();
 
+    static bool UseWhisper => Settings.Current.Jarvis.Engine == "whisper" && Models.Has(Models.WhisperModel);
+
     public static async Task Start()
     {
         Stop();
-        if (!Models.Has(Models.Vosk)) throw new InvalidOperationException("Нужна модель Vosk — скачай её на странице «Джарвис»");
+        if (!UseWhisper && !Models.Has(Models.Vosk))
+            throw new InvalidOperationException("Скачай модель распознавания (Whisper или Vosk) на странице «Джарвис»");
         await Task.Run(() =>
         {
-            Vosk.Vosk.SetLogLevel(-1);
-            _vosk ??= new Model(Models.PathOf(Models.Vosk));
-            _rec = new VoskRecognizer(_vosk, 16000f);
-            if (Settings.Current.Jarvis.Engine == "whisper" && Models.Has(Models.WhisperModel))
-                _whisper ??= WhisperFactory.FromPath(Models.PathOf(Models.WhisperModel));
+            if (UseWhisper)
+            {
+                var m = Models.WhisperModel;
+                if (_whisperKey != m.Key)
+                {
+                    _whisper?.Dispose(); _whisper = WhisperFactory.FromPath(Models.PathOf(m)); _whisperKey = m.Key;
+                    // First GPU inference compiles shaders (~15 s); do it now on silence, not on the user's first phrase.
+                    _ = WhisperText(new byte[Rate * 2]);
+                }
+            }
+            else
+            {
+                Vosk.Vosk.SetLogLevel(-1);
+                _vosk ??= new Model(Models.PathOf(Models.Vosk));
+            }
         });
 
         var mic = Settings.Current.Jarvis.Microphone;
         int dev = Microphones().FindIndex(m => m == mic);
-        _in = new WaveInEvent { WaveFormat = new WaveFormat(16000, 16, 1), BufferMilliseconds = 100, DeviceNumber = dev };
+        _in = new WaveInEvent { WaveFormat = new WaveFormat(16000, 16, 1), BufferMilliseconds = 50, DeviceNumber = dev };
         _in.DataAvailable += OnData;
         _in.StartRecording();
         Set(EarState.Idle);
@@ -62,15 +74,13 @@ public static class Ears
     {
         try { _in?.StopRecording(); } catch { }
         _in?.Dispose(); _in = null;
-        _rec?.Dispose(); _rec = null;
         Set(EarState.Off);
     }
 
-    /// <summary>Drop the cached Whisper model (engine/model changed in settings).</summary>
-    public static void ResetWhisper() { _whisper?.Dispose(); _whisper = null; }
+    public static void ResetWhisper() { _whisper?.Dispose(); _whisper = null; _whisperKey = null; }
 
     /// <summary>Push-to-talk / orb click: the next phrase is a command, no wake word needed.</summary>
-    public static void Listen(int seconds = 7)
+    public static void Listen(int seconds = 8)
     {
         if (State == EarState.Off) return;
         _commandNext = true;
@@ -78,97 +88,125 @@ public static class Ears
         Set(EarState.Listening);
     }
 
-    public static void Thinking(bool on) { if (State != EarState.Off) Set(on ? EarState.Thinking : EarState.Idle); }
+    public static void Thinking(bool on) { if (State != EarState.Off) Set(on ? EarState.Thinking : _commandNext ? EarState.Listening : EarState.Idle); }
+
+    // ---------- voice activity detection ----------
+    const int Rate = 16000;
+    static readonly MemoryStream Speech = new();
+    static readonly Queue<byte[]> PreRoll = new();   // ~300 ms before speech starts
+    static bool _inSpeech;
+    static int _loudFrames, _quietMs, _speechMs;
+    static double _floor = 300;
 
     static void OnData(object? s, WaveInEventArgs e)
     {
-        var rec = _rec;
-        if (rec == null) return;
-        if (Muted) { if (Utterance.Length > 0) { rec.Reset(); Utterance.SetLength(0); } return; }
+        if (Muted) { ResetVad(); return; }
+        if (_commandNext && !_inSpeech && DateTime.Now > _listenUntil) { _commandNext = false; Set(EarState.Idle); }
 
-        Utterance.Write(e.Buffer, 0, e.BytesRecorded);
-        if (Utterance.Length > 16000 * 2 * 20) Utterance.SetLength(0);   // safety cap: 20 s
+        var frame = new byte[e.BytesRecorded];
+        Buffer.BlockCopy(e.Buffer, 0, frame, 0, e.BytesRecorded);
+        double rms = Rms(frame);
+        int ms = e.BytesRecorded * 1000 / (Rate * 2);
+        double threshold = Math.Max(_floor * 3.2, 450);
 
-        bool final;
-        try { final = rec.AcceptWaveform(e.Buffer, e.BytesRecorded); } catch { return; }
-        if (final)
+        if (!_inSpeech)
         {
-            var text = Field(rec.Result(), "text");
-            var audio = Utterance.ToArray();
-            Utterance.SetLength(0);
-            if (text.Length > 0) OnFinal(text, audio);
+            _floor = _floor * 0.97 + Math.Min(rms, 4000) * 0.03;   // adapt to fan noise etc.
+            PreRoll.Enqueue(frame);
+            while (PreRoll.Count > 6) PreRoll.Dequeue();
+            _loudFrames = rms > threshold ? _loudFrames + 1 : 0;
+            if (_loudFrames >= 2)
+            {
+                _inSpeech = true; _quietMs = 0; _speechMs = 0;
+                Speech.SetLength(0);
+                foreach (var f in PreRoll) Speech.Write(f);
+                PreRoll.Clear();
+                if (_commandNext) Partial?.Invoke("Слушаю…");
+            }
+            return;
         }
-        else
+
+        Speech.Write(frame);
+        _speechMs += ms;
+        _quietMs = rms < threshold * 0.6 ? _quietMs + ms : 0;
+        if (_quietMs >= 750 || _speechMs >= 15000)
         {
-            var partial = Field(rec.PartialResult(), "partial");
-            if (partial.Length == 0) { CheckTimeout(); return; }
-            if (!_commandNext && Settings.Current.Jarvis.WakeWordOn && WakeIndex(partial) >= 0) { _commandNext = true; _listenUntil = DateTime.Now.AddSeconds(7); Set(EarState.Listening); }
-            if (_commandNext) { _listenUntil = DateTime.Now.AddSeconds(4); Partial?.Invoke(partial); }
+            var pcm = Speech.ToArray();
+            ResetVad();
+            if (_speechMs >= 450) _ = Task.Run(() => OnPhrase(pcm));
         }
     }
 
-    static void CheckTimeout()
+    static void ResetVad() { _inSpeech = false; _loudFrames = 0; _quietMs = 0; Speech.SetLength(0); PreRoll.Clear(); }
+
+    static double Rms(byte[] pcm)
     {
-        if (_commandNext && DateTime.Now > _listenUntil) { _commandNext = false; Set(EarState.Idle); }
+        double sum = 0; int n = pcm.Length / 2;
+        for (int i = 0; i < n; i++) { short v = BitConverter.ToInt16(pcm, i * 2); sum += v * (double)v; }
+        return n == 0 ? 0 : Math.Sqrt(sum / n);
     }
 
-    static void OnFinal(string text, byte[] audio)
+    // ---------- recognition ----------
+    static async Task OnPhrase(byte[] pcm)
     {
-        int wake = Settings.Current.Jarvis.WakeWordOn ? WakeIndex(text) : -1;
-        if (!_commandNext && wake < 0) return;
+        bool wakeOn = Settings.Current.Jarvis.WakeWordOn;
+        if (!_commandNext && !wakeOn) return;
+        await Recognize.WaitAsync();
+        string text;
+        try
+        {
+            if (_commandNext) Set(EarState.Thinking);
+            text = UseWhisper ? await WhisperText(pcm) : VoskText(pcm);
+        }
+        catch (Exception e) { Log.Error(e); text = ""; }
+        finally { Recognize.Release(); }
+
+        if (text.Length == 0 || IsJunk(text)) { if (_commandNext) Set(EarState.Listening); else Set(EarState.Idle); return; }
+
+        int wake = wakeOn ? WakeIndex(text) : -1;
+        if (!_commandNext && wake < 0) { Set(EarState.Idle); return; }
 
         var words = text.Split(' ', StringSplitOptions.RemoveEmptyEntries);
         var cmd = string.Join(' ', wake >= 0 ? words.Skip(wake + 1) : words);
         if (cmd.Length < 2)
         {
             // Just "Джарвис" — wait for the command in the next phrase.
-            _commandNext = true; _listenUntil = DateTime.Now.AddSeconds(7); Set(EarState.Listening);
+            _commandNext = true; _listenUntil = DateTime.Now.AddSeconds(8); Set(EarState.Listening);
             Partial?.Invoke("Слушаю…");
             return;
         }
         _commandNext = false;
-
-        if (_whisper != null)
-        {
-            Set(EarState.Thinking);
-            _ = Task.Run(async () =>
-            {
-                var better = await Transcribe(audio);
-                if (better.Length > 0)
-                {
-                    var bw = better.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-                    int i = WakeIndex(better);
-                    var stripped = string.Join(' ', i >= 0 ? bw.Skip(i + 1) : bw);
-                    if (stripped.Length >= 2) cmd = stripped;
-                }
-                Set(EarState.Idle);
-                Heard?.Invoke(cmd);
-            });
-        }
-        else
-        {
-            Set(EarState.Idle);
-            Heard?.Invoke(cmd);
-        }
+        Set(EarState.Idle);
+        Heard?.Invoke(cmd);
     }
 
-    static async Task<string> Transcribe(byte[] pcm)
+    static async Task<string> WhisperText(byte[] pcm)
     {
-        if (_whisper == null || pcm.Length < 16000) return "";
-        await WhisperLock.WaitAsync();
-        try
-        {
-            using var wav = new MemoryStream();
-            using (var w = new WaveFileWriter(new NonClosing(wav), new WaveFormat(16000, 16, 1))) w.Write(pcm, 0, pcm.Length);
-            wav.Position = 0;
-            using var p = _whisper.CreateBuilder().WithLanguage("ru").Build();
-            var sb = new System.Text.StringBuilder();
-            await foreach (var seg in p.ProcessAsync(wav)) sb.Append(seg.Text);
-            return Clean(sb.ToString());
-        }
-        catch (Exception e) { Log.Error(e); return ""; }
-        finally { WhisperLock.Release(); }
+        if (_whisper == null) return "";
+        using var wav = new MemoryStream();
+        using (var w = new WaveFileWriter(new NonClosing(wav), new WaveFormat(Rate, 16, 1))) w.Write(pcm, 0, pcm.Length);
+        wav.Position = 0;
+        // The prompt nudges spelling of the wake word and keeps Russian.
+        var wake = Settings.Current.Jarvis.WakeWord;
+        using var p = _whisper.CreateBuilder().WithLanguage("ru").WithPrompt($"{char.ToUpper(wake[0])}{wake[1..]}, включи музыку.").Build();
+        var sb = new System.Text.StringBuilder();
+        await foreach (var seg in p.ProcessAsync(wav)) sb.Append(seg.Text);
+        return Clean(sb.ToString());
     }
+
+    static string VoskText(byte[] pcm)
+    {
+        if (_vosk == null) return "";
+        using var rec = new VoskRecognizer(_vosk, Rate);
+        rec.AcceptWaveform(pcm, pcm.Length);
+        try { using var d = JsonDocument.Parse(rec.FinalResult()); return Clean(d.RootElement.GetProperty("text").GetString() ?? ""); }
+        catch { return ""; }
+    }
+
+    /// <summary>Whisper's classic hallucinations on noise/silence (trained on subtitled video).</summary>
+    static bool IsJunk(string t) =>
+        t.Contains("продолжение следует") || t.Contains("субтитр") || t.Contains("спасибо за просмотр") || t.Contains("dimatorzok") ||
+        t.Contains("подписывайтесь") || t.Contains("редактор") && t.Contains("корректор") || t is "ну" or "а" or "м" or "э" or "угу";
 
     sealed class NonClosing(Stream inner) : Stream
     {
@@ -186,21 +224,15 @@ public static class Ears
         new string(s.ToLowerInvariant().Replace('ё', 'е').Select(c => char.IsLetterOrDigit(c) || c == ' ' || c == '%' ? c : ' ').ToArray())
             .Split(' ', StringSplitOptions.RemoveEmptyEntries).Aggregate("", (a, w) => a.Length == 0 ? w : a + " " + w);
 
-    static string Field(string json, string name)
-    {
-        try { using var d = JsonDocument.Parse(json); return Clean(d.RootElement.GetProperty(name).GetString() ?? ""); }
-        catch { return ""; }
-    }
-
-    /// <summary>Index of the word that sounds like the wake word (fuzzy: the small model may hear "джервис").</summary>
+    /// <summary>Index of the word that sounds like the wake word (fuzzy: "джервис", "jarvis"…).</summary>
     public static int WakeIndex(string text)
     {
         var wake = Clean(Settings.Current.Jarvis.WakeWord);
         if (wake.Length == 0) return -1;
         var words = text.Split(' ', StringSplitOptions.RemoveEmptyEntries);
         int tolerance = wake.Length >= 6 ? 2 : wake.Length >= 4 ? 1 : 0;
-        for (int i = 0; i < words.Length; i++)
-            if (Distance(words[i], wake) <= tolerance || (wake == "джарвис" && words[i] is "jarvis" or "жарвис" or "джарвиз"))
+        for (int i = 0; i < Math.Min(words.Length, 4); i++)   // the wake word comes first
+            if (Distance(words[i], wake) <= tolerance || (wake == "джарвис" && words[i] is "jarvis" or "жарвис" or "джарвиз" or "джервис" or "дарвис"))
                 return i;
         return -1;
     }
@@ -214,5 +246,13 @@ public static class Ears
             for (int j = 1; j <= b.Length; j++)
                 d[i, j] = Math.Min(Math.Min(d[i - 1, j] + 1, d[i, j - 1] + 1), d[i - 1, j - 1] + (a[i - 1] == b[j - 1] ? 0 : 1));
         return d[a.Length, b.Length];
+    }
+
+    /// <summary>Self-test hook: transcribe a 16 kHz mono PCM buffer with the current engine.</summary>
+    public static async Task<string> TestTranscribe(byte[] pcm)
+    {
+        if (UseWhisper && _whisper == null) { _whisper = WhisperFactory.FromPath(Models.PathOf(Models.WhisperModel)); _whisperKey = Models.WhisperModel.Key; }
+        if (!UseWhisper && _vosk == null && Models.Has(Models.Vosk)) _vosk = new Model(Models.PathOf(Models.Vosk));
+        return UseWhisper ? await WhisperText(pcm) : VoskText(pcm);
     }
 }

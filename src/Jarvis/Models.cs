@@ -15,13 +15,15 @@ public static class Models
 
     public static readonly ModelInfo[] Whisper =
     {
+        new("turbo", "Whisper large-v3-turbo — лучшее качество (547 МБ, нужна видеокарта)", "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo-q5_0.bin", 547, "ggml-large-v3-turbo-q5_0.bin"),
         new("base", "Whisper base (141 МБ, быстро)", "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin", 141, "ggml-base.bin"),
         new("small", "Whisper small (465 МБ, точнее)", "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin", 465, "ggml-small.bin"),
     };
 
     public static readonly ModelInfo[] Llm =
     {
-        new("qwen3-8b", "Qwen3 8B — самый умный (4,8 ГБ, для видеокарт от 6 ГБ)", "https://huggingface.co/Qwen/Qwen3-8B-GGUF/resolve/main/Qwen3-8B-Q4_K_M.gguf", 4795, "Qwen3-8B-Q4_K_M.gguf"),
+        new("qwen3-4b-2507", "Qwen3 4B Instruct 2507 — рекомендую (2,4 ГБ, быстро и умно)", "https://huggingface.co/unsloth/Qwen3-4B-Instruct-2507-GGUF/resolve/main/Qwen3-4B-Instruct-2507-Q4_K_M.gguf", 2382, "Qwen3-4B-Instruct-2507-Q4_K_M.gguf"),
+        new("qwen3-8b", "Qwen3 8B — умнее, но нужна видеокарта от 8 ГБ (4,8 ГБ)", "https://huggingface.co/Qwen/Qwen3-8B-GGUF/resolve/main/Qwen3-8B-Q4_K_M.gguf", 4795, "Qwen3-8B-Q4_K_M.gguf"),
         new("qwen3-4b", "Qwen3 4B — баланс (2,4 ГБ, нужно ~5 ГБ RAM)", "https://huggingface.co/Qwen/Qwen3-4B-GGUF/resolve/main/Qwen3-4B-Q4_K_M.gguf", 2382, "Qwen3-4B-Q4_K_M.gguf"),
         new("qwen3-1.7b", "Qwen3 1.7B — для слабых ПК (1,7 ГБ)", "https://huggingface.co/Qwen/Qwen3-1.7B-GGUF/resolve/main/Qwen3-1.7B-Q8_0.gguf", 1749, "Qwen3-1.7B-Q8_0.gguf"),
     };
@@ -65,8 +67,12 @@ public static class Models
             }
             if (m.Zip)
             {
-                // Archive contains a single top-level folder named like the model.
-                ZipFile.ExtractToDirectory(part, Dir, true);
+                // Vosk zips have a top-level folder named like the model; llama.cpp zips are flat.
+                using (var z = ZipFile.OpenRead(part))
+                {
+                    bool nested = z.Entries.All(e => e.FullName.StartsWith(m.File + "/", StringComparison.OrdinalIgnoreCase));
+                    z.ExtractToDirectory(nested ? Dir : PathOf(m), true);
+                }
                 File.Delete(part);
             }
             else File.Move(part, PathOf(m), true);

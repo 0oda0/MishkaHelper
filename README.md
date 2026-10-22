@@ -53,10 +53,10 @@
 dotnet build src/MishkaHelper.csproj
 ```
 
-Портативный exe:
+Папка с программой (не single-file: нативным библиотекам распознавания речи и GPU нужна обычная раскладка):
 
 ```bash
-dotnet publish src/MishkaHelper.csproj -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -o publish
+dotnet publish src/MishkaHelper.csproj -c Release -r win-x64 --self-contained -o publish
 ```
 
 Релиз (установщик + портативная версия) собирается в GitHub Actions по тегу `v*`.

@@ -12,7 +12,7 @@
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
     <AssemblyName>MishkaHelper</AssemblyName>
     <RootNamespace>MishkaHelper</RootNamespace>
-    <Version>0.3.0</Version>
+    <Version>0.3.1</Version>
     <Product>Mishka Helper</Product>
     <Company>Mishka</Company>
     <!-- WinForms is only used for NotifyIcon; avoid ambiguous usings -->
@@ -27,13 +27,11 @@
   <ItemGroup>
     <PackageReference Include="NAudio.Wasapi" Version="2.2.1" />
     <PackageReference Include="NAudio.WinMM" Version="2.2.1" />
-    <!-- Jarvis: offline speech (Vosk / Whisper) and a local LLM (llama.cpp via LLamaSharp). Models download on first use. -->
+    <!-- Jarvis: offline speech (Vosk / Whisper, Vulkan GPU). The LLM runs in llama.cpp's own server, downloaded on demand. -->
     <PackageReference Include="Vosk" Version="0.3.38" />
     <PackageReference Include="Whisper.net" Version="1.9.1" />
     <PackageReference Include="Whisper.net.Runtime" Version="1.9.1" />
-    <PackageReference Include="LLamaSharp" Version="0.30.0" />
-    <PackageReference Include="LLamaSharp.Backend.Cpu" Version="0.30.0" />
-    <PackageReference Include="LLamaSharp.Backend.Vulkan" Version="0.30.0" />
+    <PackageReference Include="Whisper.net.Runtime.Vulkan" Version="1.9.1" />
     <!-- Jarvis web sources: reads pages (e.g. a university schedule) with the user's own browser login -->
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4191.47" />
     <PackageReference Include="System.Management" Version="9.0.0" />

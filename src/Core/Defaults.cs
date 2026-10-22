@@ -94,6 +94,15 @@ public static class Defaults
                 new Launcher { Name = "Параметры", Path = "ms-settings:" },
             });
 
+        // v2: Vosk-small/Windows voice/8B proved weak in practice → Whisper turbo, Piper voice, 4B-2507.
+        if (s.Jarvis.Version < 2)
+        {
+            var j = s.Jarvis;
+            j.Engine = "whisper"; j.WhisperModel = "turbo"; j.AiModel = "qwen3-4b-2507";
+            j.Tts = "piper"; j.PiperVoice = "dmitri"; j.VoiceFx = true; j.Rate = 1.0;
+            j.Version = 2;
+        }
+
         if (s.Scenarios.Count == 0)
             s.Scenarios.AddRange(new[]
             {

@@ -1,48 +1,21 @@
-using System.Text;
-using System.Text.Json;
-using System.Text.RegularExpressions;
-using LLama;
-using LLama.Common;
-using LLama.Native;
-using LLama.Sampling;
+using System.Text.Json.Nodes;
 
 namespace MishkaHelper.Core;
 
 /// <summary>
-/// Local LLM (Qwen3 via llama.cpp) used as an agent: it answers in JSON and may call tools —
-/// PC commands (through the same parser as voice), web sources, notes, system status. Fully offline.
+/// Local LLM agent (Qwen3 in llama.cpp) with native tool calling: PC commands (through the same parser as voice),
+/// the user's web pages, notes, diagnostics. Fully offline.
 /// </summary>
 public static class Brain
 {
-    static LLamaWeights? _weights;
-    static ModelParams? _params;
-    static string? _loaded;
     static readonly SemaphoreSlim One = new(1, 1);
 
-    public static bool Ready => Settings.Current.Jarvis.AiEnabled && Models.Has(Models.LlmModel);
-    public static bool Loaded => _weights != null;
+    public static bool Ready => Settings.Current.Jarvis.AiEnabled && Models.Has(Models.LlmModel) && Models.Has(LlamaServer.Runtime);
 
-    public static void Unload()
-    {
-        _weights?.Dispose(); _weights = null; _loaded = null;
-        GC.Collect();
-    }
+    public static void Unload() => LlamaServer.Stop();
 
-    static async Task EnsureLoaded()
-    {
-        var m = Models.LlmModel;
-        if (_weights != null && _loaded == m.Key) return;
-        Unload();
-        // LLamaSharp picks the best installed backend (Vulkan → any GPU, else CPU); GpuLayerCount=0 forces CPU.
-        _params = new ModelParams(Models.PathOf(m))
-        {
-            ContextSize = 8192,
-            GpuLayerCount = Settings.Current.Jarvis.AiGpu ? 99 : 0,
-            Threads = Math.Max(2, Environment.ProcessorCount / 2),
-        };
-        _weights = await Task.Run(() => LLamaWeights.LoadFromFile(_params));
-        _loaded = m.Key;
-    }
+    /// <summary>Start loading the model in the background so the first question is fast.</summary>
+    public static void Warmup() { if (Ready) _ = Task.Run(async () => { try { await LlamaServer.EnsureRunning(); } catch (Exception e) { Log.Error(e); } }); }
 
     static readonly System.Globalization.CultureInfo Ru = new("ru-RU");
 
@@ -50,124 +23,127 @@ public static class Brain
     {
         var j = Settings.Current.Jarvis;
         var now = DateTime.Now;
-        var tomorrow = now.AddDays(1);
-        var sources = j.Sources.Count == 0 ? "нет" : string.Join(", ", j.Sources.Select(s => $"«{s.Name}»"));
-        return $$"""
-            Ты — Джарвис, голосовой помощник в программе Mishka Helper на компьютере пользователя. Отвечай по-русски, коротко (1–3 предложения), дружелюбно, без markdown — ответ будет озвучен.
-            Сейчас {{now.ToString("dddd, d MMMM yyyy, HH:mm", Ru)}}. Завтра — {{tomorrow.ToString("dddd, d MMMM", Ru)}}.
-            Пользователь: {{(j.UserName.Length > 0 ? j.UserName : "имя неизвестно")}}. Помнишь о нём: {{(j.Memory.Count > 0 ? string.Join("; ", j.Memory.TakeLast(10)) : "ничего")}}.
-            Компьютер сейчас: {{Diagnostics.Snapshot()}}.
-
-            Отвечай ТОЛЬКО одним JSON-объектом.
-            Чтобы ответить пользователю: {"say": "текст"}
-            Чтобы использовать инструмент: {"tool": "имя", "arg": "аргумент"}
-            Инструменты:
-            - cmd: команда компьютеру на русском, как сказал бы человек. Примеры: "громкость 30", "включи wi-fi", "режим турбо", "вентиляторы на максимум", "открой discord", "закрой chrome", "профиль Игра", "таймер на 10 минут", "напомни через 20 минут выпить воды", "выключи ночной свет", "следующий трек", "очисти мусор", "найди рецепт блинов".
-            - web: прочитать сайт пользователя по имени источника. Доступные источники: {{sources}}. Вернёт текст страницы.
-            - note_add: записать заметку (arg — текст).
-            - notes: найти в заметках (arg — о чём).
-            - diag: подробная проверка компьютера (почему тормозит, перегрев, место на диске).
-            После результата инструмента дай финальный ответ через "say" или вызови следующий инструмент.
-            Если для ответа нужен сайт (расписание, оценки, задания) — сначала вызови web. Отвечай только по данным из него, не выдумывай.
-            Можно выполнить несколько команд подряд, по одной за шаг.
+        return $"""
+            Ты — Джарвис, умный голосовой помощник на компьютере пользователя (программа Mishka Helper). Характер: вежливый, спокойный, с лёгкой иронией, как ИИ-дворецкий.
+            Отвечай по-русски, коротко: 1–3 предложения, без списков и markdown — ответ озвучивается.
+            Сейчас {now.ToString("dddd, d MMMM yyyy, HH:mm", Ru)}. Завтра — {now.AddDays(1).ToString("dddd, d MMMM", Ru)}.
+            Пользователь: {(j.UserName.Length > 0 ? j.UserName : "имя неизвестно")}. Ты о нём помнишь: {(j.Memory.Count > 0 ? string.Join("; ", j.Memory.TakeLast(10)) : "ничего")}.
+            Состояние компьютера: {Diagnostics.Snapshot()}.
+            Правила:
+            - Не обещай действие словами — сразу вызывай инструмент, а потом коротко скажи результат.
+            - НИКОГДА не говори «сделал», «включил», «переключил», если не вызвал для этого pc_command в этом ответе. Если только советуешь — так и скажи: «могу переключить, сказать?».
+            - Просят что-то сделать на компьютере — pc_command (можно несколько раз подряд, по одной команде).
+            - Вопросы о делах и планах пользователя («что у меня…», «что я записывал», «когда сдавать…») — сначала search_notes; если речь про учёбу, пары, расписание, оценки — ещё и read_site. Отвечай строго по найденному, не выдумывай.
+            - Записать что-то — add_note.
+            - «Почему тормозит», «что с компом», «перегрев» — diagnose, затем объясни результат простыми словами.
+            - На общие вопросы отвечай сам, коротко.
             """;
     }
 
-    public record Turn(string Role, string Text);
+    static JsonObject Fn(string name, string desc, JsonObject? props = null, params string[] required) => new()
+    {
+        ["type"] = "function",
+        ["function"] = new JsonObject
+        {
+            ["name"] = name,
+            ["description"] = desc,
+            ["parameters"] = new JsonObject
+            {
+                ["type"] = "object",
+                ["properties"] = props ?? new JsonObject(),
+                ["required"] = new JsonArray(required.Select(r => (JsonNode)r).ToArray()),
+            },
+        },
+    };
 
-    /// <summary>Agent loop: up to 5 tool calls, then a spoken answer.</summary>
+    static JsonObject Str(string desc) => new() { ["type"] = "string", ["description"] = desc };
+
+    static JsonArray Tools()
+    {
+        var sources = Settings.Current.Jarvis.Sources.Select(s => s.Name).ToList();
+        var site = Str("Название сайта");
+        if (sources.Count > 0) site["enum"] = new JsonArray(sources.Select(s => (JsonNode)s).ToArray());
+        var tools = new JsonArray
+        {
+            Fn("pc_command",
+                "Выполнить одну команду на компьютере, сформулированную по-русски. Примеры: «громкость 30», «громче», «включи ночной свет», «выключи wi-fi», " +
+                "«режим турбо», «вентиляторы на максимум», «открой discord», «закрой chrome», «профиль Игра», «таймер на 10 минут», " +
+                "«напомни через 20 минут выпить воды», «следующий трек», «пауза», «очисти мусор», «найди рецепт блинов», «скриншот», «выключи компьютер».",
+                new JsonObject { ["command"] = Str("Команда") }, "command"),
+            Fn("add_note", "Записать заметку пользователя.", new JsonObject { ["text"] = Str("Текст заметки") }, "text"),
+            Fn("search_notes", "Найти заметки пользователя по теме.", new JsonObject { ["query"] = Str("О чём искать") }, "query"),
+            Fn("diagnose", "Проверить компьютер: перегрев, нагрузка, память, диски, режим питания, автозагрузка."),
+        };
+        if (sources.Count > 0)
+            tools.Add(Fn("read_site", "Открыть сайт пользователя (например личный кабинет с расписанием) и получить текст страницы.",
+                new JsonObject { ["name"] = site }, "name"));
+        return tools;
+    }
+
+    /// <summary>Agent loop: tool calls until the model answers in text (max 6 rounds).</summary>
     public static async Task<Reply> Ask(string question, Action<string>? progress = null)
     {
         await One.WaitAsync();
         try
         {
             progress?.Invoke("Думаю…");
-            await EnsureLoaded();
-            var turns = new List<Turn>();
-            foreach (var l in ChatHistory.Session.TakeLast(8).SkipLast(1))
-                turns.Add(new(l.FromUser ? "user" : "assistant", l.FromUser ? l.Text : JsonSerializer.Serialize(new { say = l.Text })));
-            turns.Add(new("user", question));
+            var msgs = new JsonArray { new JsonObject { ["role"] = "system", ["content"] = SystemPrompt() } };
+            foreach (var l in ChatHistory.Session.TakeLast(9).SkipLast(1))
+                msgs.Add(new JsonObject { ["role"] = l.FromUser ? "user" : "assistant", ["content"] = l.Text });
+            msgs.Add(new JsonObject { ["role"] = "user", ["content"] = question });
+            var tools = Tools();
 
-            for (int step = 0; step < 6; step++)
+            for (int round = 0; round < 6; round++)
             {
-                var raw = await Complete(turns);
-                var (say, tool, arg) = Parse(raw);
-                if (tool == null) return new(say ?? raw.Trim());
+                var msg = await LlamaServer.Chat(msgs, tools);
+                var calls = msg["tool_calls"] as JsonArray;
+                if (calls == null || calls.Count == 0)
+                    return new((msg["content"]?.GetValue<string>() ?? "").Trim() is { Length: > 0 } t ? t : "Готово.");
 
-                turns.Add(new("assistant", raw.Trim()));
-                progress?.Invoke(tool switch { "web" => $"Открываю «{arg}»…", "cmd" => arg ?? "", "notes" => "Ищу в заметках…", _ => "Думаю…" });
-                var (result, confirm) = await Tool(tool, arg ?? "");
-                if (confirm != null) return confirm;
-                turns.Add(new("user", "Результат инструмента: " + result));
+                msgs.Add(msg);
+                foreach (var call in calls)
+                {
+                    var name = call!["function"]!["name"]!.GetValue<string>();
+                    JsonObject args;
+                    try { args = JsonNode.Parse(call["function"]!["arguments"]!.GetValue<string>())!.AsObject(); } catch { args = new(); }
+                    string Arg(string k) => args[k]?.ToString() ?? "";
+                    progress?.Invoke(name switch { "read_site" => $"Открываю «{Arg("name")}»…", "pc_command" => Arg("command"), "search_notes" => "Ищу в заметках…", _ => "Думаю…" });
+
+                    var (result, confirm) = await Tool(name, Arg);
+                    if (confirm != null) return confirm;
+                    msgs.Add(new JsonObject { ["role"] = "tool", ["tool_call_id"] = call["id"]?.ToString() ?? name, ["content"] = result });
+                }
             }
             return new("Что-то я запутался. Попробуй спросить по-другому.");
         }
         catch (Exception e)
         {
             Log.Error(e);
-            return new("Нейросеть не запустилась: " + e.Message);
+            return new("Нейросеть не ответила: " + e.Message);
         }
         finally { One.Release(); }
     }
 
-    static async Task<string> Complete(List<Turn> turns)
+    static async Task<(string Result, Reply? Confirm)> Tool(string name, Func<string, string> arg)
     {
-        var sb = new StringBuilder();
-        sb.Append("<|im_start|>system\n").Append(SystemPrompt()).Append("<|im_end|>\n");
-        foreach (var t in turns) sb.Append($"<|im_start|>{t.Role}\n{t.Text}<|im_end|>\n");
-        sb.Append("<|im_start|>assistant\n<think>\n\n</think>\n\n");   // Qwen3: skip the long "thinking" part
-
-        var ex = new StatelessExecutor(_weights!, _params!);
-        var p = new InferenceParams
+        switch (name)
         {
-            MaxTokens = 400,
-            AntiPrompts = new[] { "<|im_end|>", "<|im_start|>" },
-            SamplingPipeline = new DefaultSamplingPipeline { Temperature = 0.3f },
-        };
-        var outp = new StringBuilder();
-        await foreach (var tok in ex.InferAsync(sb.ToString(), p)) outp.Append(tok);
-        var s = outp.ToString();
-        foreach (var stop in p.AntiPrompts) s = s.Replace(stop, "");
-        return s;
-    }
-
-    static (string? Say, string? Tool, string? Arg) Parse(string raw)
-    {
-        var m = Regex.Match(raw, @"\{[\s\S]*\}");
-        if (!m.Success) return (raw.Trim(), null, null);
-        try
-        {
-            using var d = JsonDocument.Parse(m.Value);
-            var r = d.RootElement;
-            if (r.TryGetProperty("tool", out var t) && t.GetString() is { Length: > 0 } tool)
-                return (null, tool, r.TryGetProperty("arg", out var a) ? a.ValueKind == JsonValueKind.String ? a.GetString() : a.ToString() : "");
-            if (r.TryGetProperty("say", out var s)) return (s.GetString(), null, null);
-        }
-        catch { }
-        return (Regex.Replace(raw, @"[{}""]|say\s*:", "").Trim(), null, null);
-    }
-
-    static async Task<(string Result, Reply? Confirm)> Tool(string tool, string arg)
-    {
-        switch (tool)
-        {
-            case "cmd":
-                var r = await Intents.Try(arg);
-                if (r == null) return ("Такой команды нет. Скажи пользователю, что этого не умеешь.", null);
+            case "pc_command":
+                var r = await Intents.Try(arg("command"));
+                if (r == null) return ("Такой команды нет — скажи пользователю, что этого пока не умеешь.", null);
                 if (r.Confirm != null) return ("", r);
                 return (r.Say.Length > 0 ? r.Say : "Выполнено.", null);
-            case "web":
-                var src = Settings.Current.Jarvis.Sources.FirstOrDefault(s => Ears.Clean(s.Name) == Ears.Clean(arg)) ?? WebReader.Match(arg)
-                          ?? Settings.Current.Jarvis.Sources.FirstOrDefault();
-                if (src == null) return ("Источников не настроено. Скажи пользователю добавить сайт на странице «Джарвис» → «Мои сайты».", null);
-                var text = await System.Windows.Application.Current.Dispatcher.Invoke(() => WebReader.ReadText(src.Url, 5000));
-                if (text == "__LOGIN__") return ($"Сайт «{src.Name}» просит войти. Скажи пользователю нажать «Войти» у этого источника на странице «Джарвис».", null);
+            case "read_site":
+                var src = Settings.Current.Jarvis.Sources.FirstOrDefault(s => s.Name == arg("name")) ?? WebReader.Match(arg("name")) ?? Settings.Current.Jarvis.Sources.FirstOrDefault();
+                if (src == null) return ("Сайтов не настроено: пусть пользователь добавит его на странице «Джарвис» → «Мои сайты».", null);
+                var text = await await System.Windows.Application.Current.Dispatcher.InvokeAsync(() => WebReader.ReadText(src.Url, 6000));
+                if (text == "__LOGIN__") return ($"Сайт «{src.Name}» просит войти. Скажи пользователю нажать «Войти» у этого сайта на странице «Джарвис».", null);
                 return ($"Текст страницы «{src.Name}»:\n{text}", null);
-            case "note_add": Notes.Add(arg); return ("Заметка сохранена.", null);
-            case "notes":
-                var found = Notes.Search(arg);
+            case "add_note": Notes.Add(arg("text")); return ("Заметка сохранена.", null);
+            case "search_notes":
+                var found = Notes.Search(arg("query"));
                 return (found.Count == 0 ? "Ничего не найдено." : string.Join("\n", found.Select(n => $"{n.When:dd.MM.yyyy}: {n.Text}")), null);
-            case "diag": return (Diagnostics.Report(), null);
+            case "diagnose": return (Diagnostics.Report(), null);
             default: return ("Нет такого инструмента.", null);
         }
     }
