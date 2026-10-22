@@ -26,6 +26,17 @@ public static class Updater
 
     public static UpdateInfo? Available { get; private set; }
 
+    /// <summary>Early dev installs wrote their own "MishkaHelper" uninstall entry; the Inno setup has its own → drop the duplicate.</summary>
+    public static void CleanLegacyUninstallEntry()
+    {
+        try
+        {
+            if (!File.Exists(Path.Combine(AppContext.BaseDirectory, "unins000.exe"))) return;
+            Microsoft.Win32.Registry.LocalMachine.DeleteSubKeyTree(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\MishkaHelper", false);
+        }
+        catch { }
+    }
+
     /// <summary>Latest release newer than us, or null.</summary>
     public static async Task<UpdateInfo?> Check()
     {

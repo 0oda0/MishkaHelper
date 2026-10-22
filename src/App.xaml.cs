@@ -46,6 +46,8 @@ public partial class App : Application
 
         Services.Start();
 
+        Task.Run(Updater.CleanLegacyUninstallEntry);
+
         // Keep the logon task pointing at this exe (first run, or the app was moved/updated).
         if (Settings.Current.StartWithWindows)
             Task.Run(() => { if (!Autostart.PointsHere) Autostart.Set(true); });
