@@ -42,7 +42,12 @@
 
 ## Установка
 
-Скачай `MishkaHelper-Setup-x.y.z.exe` (установщик) или `MishkaHelper-Portable-x.y.z.exe` из [Releases](../../releases).
+Из [Releases](../../releases) — две редакции:
+
+- **`MishkaHelper-Setup-x.y.z.exe`** — полная, с голосовым помощником Джарвисом;
+- **`MishkaHelper-Lite-Setup-x.y.z.exe`** — Lite, всё кроме Джарвиса (меньше и легче).
+
+Есть и портативные `…-Portable-x.y.z.zip`. Обновляется прямо из приложения: «Настройки → О программе → Обновить». Все функции со скриншотами — кнопка «Что можно сделать» в приложении ([docs/features](docs/features/index.html)).
 Приложению нужны права администратора (Defender, вентиляторы, системная очистка). Автозапуск идёт через планировщик задач, поэтому UAC при входе в Windows не появляется.
 
 > Exe не подписан цифровой подписью, поэтому SmartScreen может предупредить при первом запуске: «Подробнее» → «Выполнить в любом случае».
@@ -57,6 +62,12 @@ dotnet build src/MishkaHelper.csproj
 
 ```bash
 dotnet publish src/MishkaHelper.csproj -c Release -r win-x64 --self-contained -o publish
+```
+
+Редакция Lite (без Джарвиса):
+
+```bash
+dotnet publish src/MishkaHelper.csproj -c Release -r win-x64 --self-contained -p:Flavor=Lite -o publish-lite
 ```
 
 Релиз (установщик + портативная версия) собирается в GitHub Actions по тегу `v*`.

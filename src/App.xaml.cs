@@ -57,12 +57,14 @@ public partial class App : Application
             return;
         }
 
+#if !LITE
         if (Array.IndexOf(e.Args, "--selftest") is int ti and >= 0 && ti + 1 < e.Args.Length)
         {
             ShowMain();
             SelfTest.Run(e.Args[ti + 1], _main!, ti + 2 < e.Args.Length ? e.Args[ti + 2] : "");
             return;
         }
+#endif
 
         bool tray = e.Args.Contains("--tray") || (e.Args.Contains("--autostart") && Settings.Current.StartMinimized);
         if (!tray) ShowMain();

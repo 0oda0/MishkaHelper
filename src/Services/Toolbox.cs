@@ -367,25 +367,4 @@ public static class Toolbox
         Walk(root);
         return res;
     }
-
-    // ---------- updates ----------
-    public static async Task CheckForUpdate(bool silent)
-    {
-        try
-        {
-            using var req = new HttpRequestMessage(HttpMethod.Get, "https://api.github.com/repos/0oda0/MishkaHelper/releases/latest");
-            req.Headers.UserAgent.ParseAdd("MishkaHelper");
-            using var resp = await Http.SendAsync(req);
-            if (!resp.IsSuccessStatusCode) { if (!silent) Osd.Show("\uE895", "Релизов пока нет"); return; }
-            using var doc = System.Text.Json.JsonDocument.Parse(await resp.Content.ReadAsStringAsync());
-            var tag = doc.RootElement.GetProperty("tag_name").GetString()!.TrimStart('v');
-            var url = doc.RootElement.GetProperty("html_url").GetString()!;
-            var cur = typeof(App).Assembly.GetName().Version!;
-            if (Version.TryParse(tag, out var latest) && latest > new Version(cur.Major, cur.Minor, cur.Build))
-                Toast.Show("\uE895", $"Доступна версия {tag}", "Нажми, чтобы открыть страницу загрузки", () => Shell.Open(url));
-            else if (!silent) Osd.Show("\uE73E", "Последняя версия");
-        }
-        catch { if (!silent) Osd.Show("\uE7BA", "Не удалось проверить обновления"); }
-        Settings.Current.LastUpdateCheck = DateTime.Now;
-    }
 }

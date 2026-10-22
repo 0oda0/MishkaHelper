@@ -19,7 +19,7 @@ public partial class HotkeysPage : UserControl
     void Render()
     {
         Rows.Children.Clear();
-        foreach (var (key, name) in Defaults.HotkeyNames) Rows.Children.Add(Row(key, name));
+        foreach (var (key, name) in Defaults.HotkeyNames.Where(k => Defaults.Available(k.Key))) Rows.Children.Add(Row(key, name));
         ProfileRows.Children.Clear();
         foreach (var p in Settings.Current.Profiles) ProfileRows.Children.Add(Row("profile:" + p.Name, "Профиль «" + p.Name + "»"));
         RenderLaunchers();

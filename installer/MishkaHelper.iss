@@ -1,18 +1,31 @@
-; Inno Setup script. Built by CI (.github/workflows/release.yml) from the published single-file exe.
+; Inno Setup script. Built by CI (.github/workflows/release.yml) for both editions:
+;   FLAVOR=""     → Mishka Helper (with Jarvis), from ..\publish
+;   FLAVOR="Lite" → Mishka Helper Lite, from ..\publish-lite
+; Both share one AppId, so switching editions upgrades in place.
 #define AppVersion GetEnv("APP_VERSION")
 #if AppVersion == ""
-  #define AppVersion "0.1.0"
+  #define AppVersion "0.0.0"
+#endif
+#define Flavor GetEnv("FLAVOR")
+#if Flavor == "Lite"
+  #define AppTitle "Mishka Helper Lite"
+  #define PubDir "..\publish-lite"
+  #define OutName "MishkaHelper-Lite-Setup-" + AppVersion
+#else
+  #define AppTitle "Mishka Helper"
+  #define PubDir "..\publish"
+  #define OutName "MishkaHelper-Setup-" + AppVersion
 #endif
 
 [Setup]
 AppId={{7C1E5F3A-4B2D-4E8A-9F61-3D2A8B6C9E10}
-AppName=Mishka Helper
+AppName={#AppTitle}
 AppVersion={#AppVersion}
 AppPublisher=Mishka
 DefaultDirName={autopf}\Mishka Helper
 DefaultGroupName=Mishka Helper
 OutputDir=..\dist
-OutputBaseFilename=MishkaHelper-Setup-{#AppVersion}
+OutputBaseFilename={#OutName}
 SetupIconFile=..\src\Assets\app.ico
 UninstallDisplayIcon={app}\MishkaHelper.exe
 Compression=lzma2/max
@@ -21,6 +34,8 @@ PrivilegesRequired=admin
 ArchitecturesInstallIn64BitMode=x64compatible
 ArchitecturesAllowed=x64compatible
 WizardStyle=modern
+CloseApplications=force
+DisableDirPage=auto
 
 [Languages]
 Name: "ru"; MessagesFile: "compiler:Languages\Russian.isl"
@@ -28,15 +43,21 @@ Name: "ru"; MessagesFile: "compiler:Languages\Russian.isl"
 [Tasks]
 Name: "desktopicon"; Description: "Ярлык на рабочем столе"; GroupDescription: "Дополнительно:"
 
+[InstallDelete]
+; Clean old binaries (e.g. Jarvis libraries after switching to Lite); settings/models live in AppData.
+Type: filesandordirs; Name: "{app}\runtimes"
+Type: files; Name: "{app}\*.dll"
+
 [Files]
-Source: "..\publish\*"; Excludes: "*.pdb,*.xml"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#PubDir}\*"; Excludes: "*.pdb,*.xml"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{group}\Mishka Helper"; Filename: "{app}\MishkaHelper.exe"
-Name: "{autodesktop}\Mishka Helper"; Filename: "{app}\MishkaHelper.exe"; Tasks: desktopicon
+Name: "{group}\{#AppTitle}"; Filename: "{app}\MishkaHelper.exe"
+Name: "{autodesktop}\{#AppTitle}"; Filename: "{app}\MishkaHelper.exe"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\MishkaHelper.exe"; Description: "Запустить Mishka Helper"; Flags: nowait postinstall skipifsilent shellexec
+; No skipifsilent: the in-app updater runs setup with /VERYSILENT and relies on this to restart the app.
+Filename: "{app}\MishkaHelper.exe"; Description: "Запустить {#AppTitle}"; Flags: nowait postinstall shellexec
 
 [UninstallRun]
 Filename: "schtasks.exe"; Parameters: "/delete /tn MishkaHelper /f"; Flags: runhidden; RunOnceId: "DelTask"

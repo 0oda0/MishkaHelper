@@ -214,7 +214,16 @@ public static class SelfTest
             }
         });
 
-        if (filter.Contains("brain") || filter.Contains("ears") || filter.Contains("voice")) { L("DONE"); App.Current.Quit(); return; }
+        // Real end-to-end update: check GitHub, download this edition's package, apply (the app quits and restarts).
+        await Step("update", async () =>
+        {
+            L($"edition={Edition.Name} version={Edition.Version} installed={Updater.IsInstalled}");
+            var u = await Updater.Check();
+            L(u == null ? "no newer release" : $"found {u.Version}: setup={u.SetupUrl} portable={u.PortableUrl}");
+            if (u != null) { L("installing…"); await Updater.Install(u, f => { if ((int)(f * 100) % 25 == 0) L($"  {f:P0}"); }); }
+        });
+
+        if (filter.Contains("brain") || filter.Contains("ears") || filter.Contains("voice") || filter.Contains("update")) { L("DONE"); App.Current.Quit(); return; }
         L("DONE, rendering pages");
         Shots.Run(Path.Combine(Path.GetDirectoryName(file)!, "shots-admin"), main);   // quits when done
     }

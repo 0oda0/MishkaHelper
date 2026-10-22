@@ -16,8 +16,10 @@ public static class Services
         Try(Hotkeys.Start);
         Try(Profiles.StartAuto);
         Try(Widgets.RestoreAll);
+#if !LITE
         Try(Scenarios.Start);
         _ = Jarvis.Start();
+#endif
 
         _jobs = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
         _jobs.Tick += async (_, _) =>
@@ -61,8 +63,10 @@ public static class Services
     public static void Stop()
     {
         _jobs?.Stop();
+#if !LITE
         Try(Jarvis.Stop);
         Try(Brain.Unload);
+#endif
         Try(SysMon.Stop);
         Try(Hotkeys.Stop);
         Try(Widgets.SaveAll);
@@ -72,7 +76,7 @@ public static class Services
     static async Task Scheduled()
     {
         var s = Settings.Current;
-        if (s.CheckUpdates && (DateTime.Now - s.LastUpdateCheck).TotalDays >= 1) await Toolbox.CheckForUpdate(silent: true);
+        if (s.CheckUpdates && (DateTime.Now - s.LastUpdateCheck).TotalDays >= 1) await Updater.CheckInBackground(silent: true);
         if (s.ScanIntervalDays > 0 && (DateTime.Now - s.LastScan).TotalDays >= s.ScanIntervalDays)
         {
             Toast.Show("", "Плановая проверка", "Быстрая проверка Defender запущена");

@@ -1,0 +1,327 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mishka Helper — что можно сделать</title>
+<style>
+  :root {
+    --bg: #0a0a12; --bg2: #0e0e19; --card: #141422; --line: #24243a; --text: #eeeef6; --dim: #8c8ca6;
+    --accent: #a259ff; --accent2: #ff2e97; --good: #39ff9c;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.6 "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif; }
+  a { color: var(--accent); }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 0 24px; }
+
+  header { position: relative; overflow: hidden; padding: 72px 0 56px; background:
+      radial-gradient(800px 380px at 15% -10%, #a259ff33, transparent 70%),
+      radial-gradient(700px 380px at 95% 10%, #ff2e9726, transparent 70%); }
+  .brand { display: flex; align-items: center; gap: 14px; }
+  .logo { width: 54px; height: 54px; border-radius: 16px; background: linear-gradient(135deg, var(--accent), var(--accent2)); box-shadow: 0 0 30px #a259ff88;
+          display: grid; place-items: center; font-weight: 900; font-size: 26px; color: #0a0a12; }
+  h1 { margin: 22px 0 10px; font-size: clamp(34px, 6vw, 60px); line-height: 1.05; letter-spacing: -0.02em; }
+  h1 span { background: linear-gradient(90deg, var(--accent), var(--accent2)); -webkit-background-clip: text; background-clip: text; color: transparent;
+            filter: drop-shadow(0 0 18px #a259ff66); }
+  .lead { color: var(--dim); font-size: 19px; max-width: 760px; }
+  .cta { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 26px; }
+  .btn { display: inline-block; padding: 12px 20px; border-radius: 12px; text-decoration: none; font-weight: 600; border: 1px solid var(--line); color: var(--text); background: var(--card); }
+  .btn.primary { background: linear-gradient(90deg, var(--accent), var(--accent2)); color: #0a0a12; border: 0; box-shadow: 0 0 22px #a259ff66; }
+  .stats { display: flex; flex-wrap: wrap; gap: 26px; margin-top: 34px; color: var(--dim); }
+  .stats b { display: block; font-size: 28px; color: var(--text); }
+
+  nav { position: sticky; top: 0; z-index: 5; background: #0a0a12e6; backdrop-filter: blur(10px); border-bottom: 1px solid var(--line); }
+  nav .wrap { display: flex; gap: 6px; overflow-x: auto; padding-top: 10px; padding-bottom: 10px; scrollbar-width: none; }
+  nav a { white-space: nowrap; text-decoration: none; color: var(--dim); padding: 6px 12px; border-radius: 10px; font-size: 14px; }
+  nav a:hover { color: var(--text); background: #a259ff22; }
+
+  section { padding: 64px 0 8px; }
+  .row { display: grid; grid-template-columns: 1fr 1.25fr; gap: 40px; align-items: center; }
+  .row.flip { grid-template-columns: 1.25fr 1fr; }
+  .row.flip .text { order: 2; }
+  @media (max-width: 900px) { .row, .row.flip { grid-template-columns: 1fr; } .row.flip .text { order: 0; } }
+  .kicker { color: var(--accent); font-weight: 700; letter-spacing: .12em; text-transform: uppercase; font-size: 13px; }
+  h2 { margin: 6px 0 12px; font-size: clamp(26px, 3.4vw, 38px); line-height: 1.15; }
+  .text p { color: var(--dim); margin: 0 0 14px; }
+  ul.f { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
+  ul.f li { padding-left: 26px; position: relative; }
+  ul.f li::before { content: ""; position: absolute; left: 4px; top: 10px; width: 9px; height: 9px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 10px var(--accent); }
+  .shot { border-radius: 16px; border: 1px solid var(--line); overflow: hidden; background: var(--card); box-shadow: 0 20px 60px #0008, 0 0 0 1px #ffffff05; cursor: zoom-in; transition: transform .2s, box-shadow .2s; }
+  .shot:hover { transform: translateY(-3px); box-shadow: 0 26px 70px #000a, 0 0 30px #a259ff33; }
+  .shot img { display: block; width: 100%; height: auto; }
+  .tag { display: inline-block; margin-left: 8px; padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; vertical-align: middle;
+         background: #a259ff26; color: var(--accent); border: 1px solid #a259ff55; }
+  .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 24px; }
+  @media (max-width: 900px) { .grid3 { grid-template-columns: 1fr; } }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 18px; }
+  .card h3 { margin: 0 0 8px; font-size: 18px; }
+  .card p { margin: 0; color: var(--dim); font-size: 15px; }
+  .card .shot { margin-top: 14px; }
+
+  table { width: 100%; border-collapse: collapse; margin-top: 18px; background: var(--card); border-radius: 16px; overflow: hidden; border: 1px solid var(--line); }
+  th, td { padding: 11px 16px; text-align: left; border-bottom: 1px solid var(--line); }
+  th { color: var(--dim); font-weight: 600; font-size: 14px; }
+  tr:last-child td { border-bottom: 0; }
+  kbd { font: 600 13px Consolas, monospace; padding: 3px 8px; border-radius: 7px; background: #0a0a12; border: 1px solid var(--line); color: var(--accent); white-space: nowrap; }
+  .yes { color: var(--good); font-weight: 700; } .no { color: var(--dim); }
+
+  footer { margin-top: 70px; padding: 30px 0 50px; border-top: 1px solid var(--line); color: var(--dim); font-size: 14px; }
+
+  #lb { position: fixed; inset: 0; background: #000d; display: none; place-items: center; z-index: 10; padding: 24px; cursor: zoom-out; }
+  #lb.on { display: grid; }
+  #lb img { max-width: 100%; max-height: 100%; border-radius: 12px; box-shadow: 0 0 60px #a259ff55; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <div class="brand"><div class="logo">M</div><strong style="font-size:18px;letter-spacing:.08em">MISHKA HELPER</strong></div>
+    <h1>Весь компьютер — <span>в одном неоновом окне</span></h1>
+    <p class="lead">Регуляторы, мониторинг железа, устройства и заряд наушников, очистка, антивирус, инструменты, горячие клавиши, радиальное меню, 20 виджетов — и голосовой помощник Джарвис, который работает без интернета.</p>
+    <div class="cta">
+      <a class="btn primary" href="#jarvis">Посмотреть Джарвиса</a>
+      <a class="btn" href="#hotkeys">Горячие клавиши</a>
+      <a class="btn" href="https://github.com/0oda0/MishkaHelper/releases/latest">Скачать / обновить</a>
+    </div>
+    <div class="stats">
+      <div><b>14</b>разделов</div><div><b>20</b>виджетов</div><div><b>45+</b>инструментов</div><div><b>30+</b>горячих клавиш</div><div><b>0</b>ключей и подписок</div>
+    </div>
+  </div>
+</header>
+
+<nav><div class="wrap">
+  <a href="#home">Главная</a><a href="#jarvis">Джарвис</a><a href="#controls">Управление</a><a href="#system">Система</a><a href="#devices">Устройства</a>
+  <a href="#nitro">Nitro</a><a href="#boost">Ускорение</a><a href="#security">Защита</a><a href="#tools">Инструменты</a><a href="#profiles">Профили</a>
+  <a href="#hotkeys">Клавиши и меню</a><a href="#widgets">Виджеты</a><a href="#settings">Настройки</a><a href="#editions">Редакции</a>
+</div></nav>
+
+<main class="wrap">
+
+<section id="home"><div class="row">
+  <div class="text">
+    <div class="kicker">Главная</div>
+    <h2>Всё важное — на первом экране</h2>
+    <p>Открыл — и сразу видно, как дела у компьютера, а частые действия в одном клике.</p>
+    <ul class="f">
+      <li>Кольца нагрузки CPU, GPU, RAM и диска, температуры и обороты вентиляторов</li>
+      <li>Плитки: Wi-Fi, Bluetooth, «в самолёте», «не беспокоить», ночной свет, микрофон</li>
+      <li>Режим работы ноутбука и профили одной кнопкой</li>
+      <li>Кнопка «Ускорить всё» и статус защиты</li>
+    </ul>
+  </div>
+  <div class="shot"><img src="img/home.png" alt="Главная"></div>
+</div></section>
+
+<section id="jarvis"><div class="row flip">
+  <div class="text">
+    <div class="kicker">Джарвис <span class="tag">полная редакция</span></div>
+    <h2>Голосовой помощник, который живёт в твоём ПК</h2>
+    <p>Скажи «Джарвис, …», нажми <kbd>Ctrl+Alt+J</kbd> или кликни по неоновому шару. Распознавание, нейросеть и голос — локально, без интернета, ключей и подписок.</p>
+    <ul class="f">
+      <li>Точное распознавание русской речи (Whisper на видеокарте) и живой нейроголос с эффектом «ИИ-дворецкий»</li>
+      <li>Локальная нейросеть Qwen3 сама вызывает действия: «сделай потише и включи ночной свет»</li>
+      <li>Читает твои сайты: «что у меня завтра по парам?» — откроет личный кабинет и расскажет</li>
+      <li>Заметки и память: «запиши в заметку…», «что я записывал про…», «меня зовут…»</li>
+      <li>Диагностика «почему тормозит», таймеры, напоминания, музыка, программы и сайты</li>
+      <li>Сценарии: «режим кино», «я ухожу», по времени, по событиям (зарядка, наушники, запуск игры)</li>
+      <li>Подсказки сам: перегрев, нехватка памяти, «Экономия» на зарядке, долгая игровая сессия</li>
+    </ul>
+  </div>
+  <div class="shot"><img src="img/jarvis.png" alt="Джарвис"></div>
+</div>
+<div class="grid3">
+  <div class="card"><h3>Чат</h3><p>Пиши или говори. История — по кнопке, а не всегда на экране.</p><div class="shot"><img src="img/jarvischat.png" alt="Чат"></div></div>
+  <div class="card"><h3>Опасное — только после «да»</h3><p>Выключение, перезагрузка, сон: Джарвис переспросит и выполнит по голосовому «да».</p></div>
+  <div class="card"><h3>Без облака</h3><p>Модели скачиваются один раз (~3 ГБ) и работают офлайн. Пароли от сайтов Джарвис не видит — вход ты делаешь сам во встроенном браузере.</p></div>
+</div></section>
+
+<section id="controls"><div class="row">
+  <div class="text">
+    <div class="kicker">Управление</div>
+    <h2>Все крутилки Windows — на одной странице</h2>
+    <ul class="f">
+      <li>Громкость, микрофон, микшер приложений, выбор вывода и ввода звука</li>
+      <li>Автопереключение на наушники при подключении, лимит громкости для ушей</li>
+      <li>Яркость, частота обновления, разрешение, ночной свет</li>
+      <li>Режим питания Windows, схемы, тайм-ауты экрана и сна, износ батареи и циклы</li>
+      <li>Тёмная тема, прозрачность, игровой режим, расширения и скрытые файлы, анимации</li>
+      <li>Скорость и ускорение мыши, «залипание» Shift, тачпад вкл/выкл</li>
+    </ul>
+  </div>
+  <div class="shot"><img src="img/controls.png" alt="Управление"></div>
+</div></section>
+
+<section id="system"><div class="row flip">
+  <div class="text">
+    <div class="kicker">Система</div>
+    <h2>Что с железом — в реальном времени</h2>
+    <ul class="f">
+      <li>Живые графики CPU, GPU, памяти, температуры, диска, сети и вентиляторов</li>
+      <li>История нагрузки и температур за час, сутки, неделю</li>
+      <li>Здоровье дисков (SMART): температура, часы работы, состояние</li>
+      <li>«Что нагружает компьютер» — топ процессов с кнопкой «Завершить»</li>
+      <li>Предупреждения: перегрев, мало памяти или места, разряженные наушники</li>
+    </ul>
+  </div>
+  <div class="shot"><img src="img/system.png" alt="Система"></div>
+</div></section>
+
+<section id="devices"><div class="row">
+  <div class="text">
+    <div class="kicker">Устройства</div>
+    <h2>Наушники, мыши, геймпады, флешки</h2>
+    <ul class="f">
+      <li>Заряд Bluetooth-наушников, мышей и клавиатур</li>
+      <li>Что по умолчанию: динамики или наушники — переключение в один клик</li>
+      <li>Временно отключить устройство, безопасно извлечь флешку</li>
+      <li>Поиск и подключение новых Bluetooth-устройств, «забыть» старые</li>
+    </ul>
+  </div>
+  <div class="shot"><img src="img/devices.png" alt="Устройства"></div>
+</div></section>
+
+<section id="nitro"><div class="row flip">
+  <div class="text">
+    <div class="kicker">Acer Nitro / Predator</div>
+    <h2>Замена NitroSense</h2>
+    <ul class="f">
+      <li>Режимы: Тихий, Баланс, Производительность, Турбо</li>
+      <li>Вентиляторы: авто, максимум или вручную в процентах</li>
+      <li>Датчики CPU, GPU и корпуса без драйверов</li>
+      <li>RGB-клавиатура: 4 зоны, 8 эффектов, яркость, скорость</li>
+    </ul>
+    <p>Раздел появляется только на ноутбуках Acer с поддержкой этих функций.</p>
+  </div>
+  <div class="shot"><img src="img/nitro.png" alt="Nitro"></div>
+</div></section>
+
+<section id="boost"><div class="row">
+  <div class="text">
+    <div class="kicker">Ускорение</div>
+    <h2>Чистка без вреда</h2>
+    <ul class="f">
+      <li>%TEMP%, Windows\Temp, корзина, кэш браузеров, миниатюры, дампы, логи, обновления, шейдеры</li>
+      <li>Старые драйверы и хранилище компонентов (DISM)</li>
+      <li>Сначала анализ и подтверждение — потом удаление; занятые файлы пропускаются</li>
+      <li>Автозагрузка, большие файлы, дубликаты, удаление программ, очистка по расписанию</li>
+    </ul>
+  </div>
+  <div class="shot"><img src="img/boost.png" alt="Ускорение"></div>
+</div></section>
+
+<section id="security"><div class="row flip">
+  <div class="text">
+    <div class="kicker">Защита</div>
+    <h2>Defender + VirusTotal + поиск подозрительного</h2>
+    <ul class="f">
+      <li>Быстрая, полная и выборочная проверка Microsoft Defender, обновление баз</li>
+      <li>Угрозы и карантин с восстановлением</li>
+      <li>Проверка файла 70+ антивирусами VirusTotal — по отпечатку, файл не уходит</li>
+      <li>Поиск подозрительного в автозагрузке, задачах, службах и процессах в трее</li>
+      <li>Проверка по расписанию</li>
+    </ul>
+  </div>
+  <div class="shot"><img src="img/security.png" alt="Защита"></div>
+</div></section>
+
+<section id="tools"><div class="row">
+  <div class="text">
+    <div class="kicker">Инструменты</div>
+    <h2>45+ мелочей, которые экономят время</h2>
+    <ul class="f">
+      <li>Окно поверх всех, прозрачность окна, убить зависшую игру, пипетка цвета</li>
+      <li>Таймер выключения или сна, «не засыпать», гибернация, отчёт о батарее</li>
+      <li>Пинг, тест скорости, внешний IP, пароли сохранённых Wi-Fi, сброс сети</li>
+      <li>Точка восстановления, SFC, DISM, оптимизация дисков, история синих экранов</li>
+      <li>Кто сейчас использует камеру и микрофон</li>
+      <li>Генератор паролей, контрольные суммы, пустые папки, авто-тема по времени</li>
+    </ul>
+  </div>
+  <div class="shot"><img src="img/tools.png" alt="Инструменты"></div>
+</div></section>
+
+<section id="profiles"><div class="row flip">
+  <div class="text">
+    <div class="kicker">Профили</div>
+    <h2>Игра, учёба, батарея, ночь — одной кнопкой</h2>
+    <ul class="f">
+      <li>Громкость, яркость, режимы, частота экрана, «не беспокоить», ночной свет, устройство звука</li>
+      <li>Автопереключение по зарядке и при запуске игры</li>
+      <li>Высокий приоритет процесса для игр</li>
+    </ul>
+  </div>
+  <div class="shot"><img src="img/profiles.png" alt="Профили"></div>
+</div></section>
+
+<section id="hotkeys">
+  <div class="kicker">Горячие клавиши и меню</div>
+  <h2>Всё — не открывая окно</h2>
+  <div class="grid3">
+    <div class="card"><h3>Радиальное меню</h3><p><kbd>Ctrl+Alt+R</kbd> — как в BeamNG: веди мышью и кликай. Профили, звук, программы, режимы, инструменты.</p><div class="shot"><img src="img/radial.png" alt="Радиальное меню"></div></div>
+    <div class="card"><h3>Быстрая панель</h3><p><kbd>Ctrl+Alt+Q</kbd> или клик по значку в трее — как центр уведомлений, только мощнее.</p><div class="shot"><img src="img/quickpanel.png" alt="Быстрая панель"></div></div>
+    <div class="card"><h3>Палитра команд</h3><p><kbd>Ctrl+Alt+K</kbd> — набери слово и жми Enter: любое действие, страница, профиль, программа.</p><div class="shot"><img src="img/palette.png" alt="Палитра"></div></div>
+  </div>
+  <table>
+    <tr><th>Сочетание</th><th>Действие</th><th>Сочетание</th><th>Действие</th></tr>
+    <tr><td><kbd>Ctrl+Alt+J</kbd></td><td>Джарвис, слушай</td><td><kbd>Ctrl+Alt+I</kbd></td><td>Чат с Джарвисом</td></tr>
+    <tr><td><kbd>Ctrl+Alt+A</kbd></td><td>Следующее аудиоустройство</td><td><kbd>Ctrl+Alt+M</kbd></td><td>Микрофон вкл/выкл</td></tr>
+    <tr><td><kbd>Ctrl+Alt+PgUp/PgDn</kbd></td><td>Громкость</td><td><kbd>Ctrl+Alt+= / −</kbd></td><td>Яркость</td></tr>
+    <tr><td><kbd>Ctrl+Alt+P</kbd></td><td>Следующий профиль</td><td><kbd>Ctrl+Alt+O</kbd></td><td>Режим питания</td></tr>
+    <tr><td><kbd>Ctrl+Alt+B</kbd></td><td>Ускорить всё</td><td><kbd>Ctrl+Alt+F</kbd></td><td>Вентиляторы на максимум</td></tr>
+    <tr><td><kbd>Ctrl+Alt+T</kbd></td><td>Окно поверх всех</td><td><kbd>Ctrl+Alt+Y</kbd></td><td>Прозрачность окна</td></tr>
+    <tr><td><kbd>Ctrl+Alt+F4</kbd></td><td>Убить зависшее окно</td><td><kbd>Ctrl+Alt+C</kbd></td><td>Пипетка</td></tr>
+    <tr><td><kbd>Ctrl+Alt+N</kbd></td><td>Ночной свет</td><td><kbd>Ctrl+Alt+W</kbd></td><td>Виджеты</td></tr>
+  </table>
+  <p style="color:var(--dim)">Все сочетания переназначаются в разделе «Горячие клавиши». На каждое действие — красивая всплывающая подсказка.</p>
+</section>
+
+<section id="widgets">
+  <div class="kicker">Виджеты</div>
+  <h2>20 виджетов для рабочего стола</h2>
+  <p style="color:var(--dim);max-width:820px">Система, заряд устройств, часы и погода, сеть, звук, профили, программы, заметки, дела, помодоро, «сейчас играет», пинг, индикатор микрофона, диски, календарь, курсы ЦБ, процессы, вентиляторы, мировое время, обратный отсчёт. Перетаскиваются мышью, могут быть поверх окон, прозрачность настраивается.</p>
+  <div class="shot" style="margin-top:20px"><img src="img/widgets-all.png" alt="Виджеты"></div>
+</section>
+
+<section id="settings"><div class="row">
+  <div class="text">
+    <div class="kicker">Настройки</div>
+    <h2>Под себя</h2>
+    <ul class="f">
+      <li>Пять цветов неона и режим «стекло» с размытием фона</li>
+      <li>Автозапуск без окна UAC, сворачивание в трей</li>
+      <li>Пороги предупреждений, история нагрузки, экспорт и импорт настроек</li>
+      <li>Обновление прямо из приложения — одна кнопка, настройки сохраняются</li>
+    </ul>
+  </div>
+  <div class="shot"><img src="img/settings.png" alt="Настройки"></div>
+</div></section>
+
+<section id="editions">
+  <div class="kicker">Редакции</div>
+  <h2>Полная или Lite</h2>
+  <table>
+    <tr><th></th><th>Mishka Helper</th><th>Mishka Helper Lite</th></tr>
+    <tr><td>Все разделы, инструменты, виджеты, горячие клавиши</td><td class="yes">✓</td><td class="yes">✓</td></tr>
+    <tr><td>Обновление изнутри приложения</td><td class="yes">✓</td><td class="yes">✓</td></tr>
+    <tr><td>Джарвис: голос, нейросеть, заметки, сайты, сценарии</td><td class="yes">✓</td><td class="no">—</td></tr>
+    <tr><td>Размер установки</td><td>~360 МБ + модели по желанию</td><td>~200 МБ</td></tr>
+    <tr><td>Кому</td><td>Мощные ПК, видеокарта от 4 ГБ — для Джарвиса</td><td>Любой ПК, слабые ноутбуки</td></tr>
+  </table>
+  <div class="cta"><a class="btn primary" href="https://github.com/0oda0/MishkaHelper/releases/latest">Скачать последнюю версию</a></div>
+</section>
+
+</main>
+
+<footer><div class="wrap">Mishka Helper · открытый код на <a href="https://github.com/0oda0/MishkaHelper">GitHub</a> · работает на Windows 10/11</div></footer>
+
+<div id="lb"><img alt=""></div>
+<script>
+  const lb = document.getElementById('lb'), big = lb.querySelector('img');
+  document.querySelectorAll('.shot img').forEach(i => i.addEventListener('click', () => { big.src = i.src; lb.classList.add('on'); }));
+  lb.addEventListener('click', () => lb.classList.remove('on'));
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') lb.classList.remove('on'); });
+</script>
+</body>
+</html>

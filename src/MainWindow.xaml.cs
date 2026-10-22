@@ -15,6 +15,7 @@ public partial class MainWindow : Window
         // Maximized WindowChrome windows overhang the screen by the resize border.
         StateChanged += (_, _) => Root.Margin = WindowState == WindowState.Maximized ? new Thickness(7) : new Thickness(0);
         if (Acer.Available) NavNitro.Visibility = Visibility.Visible;
+        if (!Edition.HasJarvis) NavJarvis.Visibility = Visibility.Collapsed;
         NavHome.IsChecked = true;
     }
 
@@ -36,7 +37,9 @@ public partial class MainWindow : Window
             "Boost" => new BoostPage(),
             "Security" => new SecurityPage(),
             "Tools" => new ToolsPage(),
+#if !LITE
             "Jarvis" => new JarvisPage(),
+#endif
             "Profiles" => new ProfilesPage(),
             "Hotkeys" => new HotkeysPage(),
             "Widgets" => new WidgetsPage(),
@@ -51,6 +54,7 @@ public partial class MainWindow : Window
         };
     }
 
+    void Features_Click(object s, RoutedEventArgs e) => Features.Open();
     void Min_Click(object s, RoutedEventArgs e) => WindowState = WindowState.Minimized;
     void Max_Click(object s, RoutedEventArgs e) => WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
     void Close_Click(object s, RoutedEventArgs e) => Close();

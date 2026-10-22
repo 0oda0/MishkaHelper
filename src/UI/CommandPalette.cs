@@ -22,6 +22,7 @@ public static class CommandPalette
         ["password"] = "Сгенерировать пароль в буфер",
         ["screenshot"] = "Снимок экрана",
         ["taskmgr"] = "Диспетчер задач",
+        ["features"] = "Что можно сделать (все функции)",
     };
 
     static readonly (string Page, string Name)[] Pages =
@@ -34,7 +35,7 @@ public static class CommandPalette
     static List<Cmd> All()
     {
         var hk = Settings.Current.Hotkeys;
-        var l = Defaults.HotkeyNames.Select(kv => new Cmd("", kv.Value, kv.Key, Hotkeys.Pretty(hk.GetValueOrDefault(kv.Key, "")))).ToList();
+        var l = Defaults.HotkeyNames.Where(kv => Defaults.Available(kv.Key)).Select(kv => new Cmd("", kv.Value, kv.Key, Hotkeys.Pretty(hk.GetValueOrDefault(kv.Key, "")))).ToList();
         l.AddRange(Extra.Select(kv => new Cmd("", kv.Value, kv.Key, "")));
         l.AddRange(Pages.Select(p => new Cmd("", "Открыть: " + p.Name, "page:" + p.Page, "")));
         l.AddRange(Settings.Current.Profiles.Select(p => new Cmd(p.Icon, "Профиль: " + p.Name, "profile:" + p.Name, "")));

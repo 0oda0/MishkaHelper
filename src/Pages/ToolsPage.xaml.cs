@@ -190,7 +190,7 @@ public partial class ToolsPage : UserControl
         Btn(wp, "Оптимизировать диски", () => Toolbox.RunVisible("defrag /C /O /U /V"));
         Btn(wp, "Перезапустить Проводник", Toolbox.RestartExplorer);
         Btn(wp, "Сведения о ПК → буфер", () => Actions.Run("sysinfo"));
-        BtnAsync(wp, "Проверить обновления Mishka", _ => Toolbox.CheckForUpdate(silent: false));
+        BtnAsync(wp, "Проверить обновления Mishka", _ => Updater.CheckInBackground(silent: false));
         b.Children.Add(wp);
         b.Children.Add(res);
         var boot = Toolbox.BootTimes();

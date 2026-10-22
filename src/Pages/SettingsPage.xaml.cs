@@ -47,10 +47,45 @@ public partial class SettingsPage : UserControl
         Thresholds.Children.Add(Threshold("На диске меньше", a.DiskFreeGb, 2, 100, "ГБ", v => a.DiskFreeGb = v));
         Thresholds.Children.Add(Threshold("Наушники/мышь ниже", a.HeadsetBattery, 5, 50, "%", v => a.HeadsetBattery = v));
 
-        var ver = typeof(App).Assembly.GetName().Version;
-        About.Text = $"Mishka Helper {ver?.ToString(3)}\nСистемный помощник: регуляторы, мониторинг, устройства, очистка, защита.\nДанные: {Settings.Dir}";
+        About.Text = $"{Edition.Display} {Edition.Version} · {(Updater.IsInstalled ? "установлена" : "портативная")}\n" +
+                     (Edition.HasJarvis ? "Полная редакция с Джарвисом." : "Редакция Lite — без Джарвиса (голоса и ИИ). Полная — на GitHub.") +
+                     $"\nДанные: {Settings.Dir}";
+        if (Updater.Available is { } u) ShowUpdate(u);
         Loaded += async (_, _) => { Autostart.IsChecked = await Task.Run(() => Core.Autostart.Enabled); _loading = false; };
     }
+
+    void ShowUpdate(UpdateInfo u)
+    {
+        UpdateStatus.Text = $"Доступна версия {u.Version}." + (u.Notes.Length > 0 ? "\n" + string.Join("\n", u.Notes.Split('\n').Take(6)) : "");
+        UpdateBtn.Content = $"Обновить до {u.Version}";
+        UpdateBtn.Visibility = Visibility.Visible;
+    }
+
+    async void Check_Click(object s, RoutedEventArgs e)
+    {
+        CheckBtn.IsEnabled = false;
+        UpdateStatus.Text = "Проверяю…";
+        try
+        {
+            var u = await Updater.Check();
+            if (u == null) UpdateStatus.Text = $"У тебя последняя версия ({Edition.Version}).";
+            else ShowUpdate(u);
+        }
+        catch (Exception ex) { UpdateStatus.Text = "Не удалось проверить: " + ex.Message; }
+        CheckBtn.IsEnabled = true;
+    }
+
+    async void Update_Click(object s, RoutedEventArgs e)
+    {
+        if (Updater.Available is not { } u) return;
+        UpdateBtn.IsEnabled = CheckBtn.IsEnabled = false;
+        UpdateBar.Visibility = Visibility.Visible;
+        UpdateStatus.Text = $"Скачиваю {u.Version}… Приложение перезапустится само.";
+        try { await Updater.Install(u, f => Dispatcher.BeginInvoke(() => UpdateBar.Value = f)); }
+        catch (Exception ex) { UpdateStatus.Text = "Ошибка: " + ex.Message; UpdateBtn.IsEnabled = CheckBtn.IsEnabled = true; }
+    }
+
+    void Features_Click(object s, RoutedEventArgs e) => Features.Open();
 
     UIElement Threshold(string label, int value, int min, int max, string unit, Action<int> set)
     {

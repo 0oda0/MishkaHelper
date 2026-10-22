@@ -38,6 +38,9 @@ public static class Defaults
         ["explorer"] = "Перезапустить Проводник",
     };
 
+    /// <summary>Jarvis actions don't exist in the Lite edition.</summary>
+    public static bool Available(string action) => Edition.HasJarvis || !action.StartsWith("jarvis");
+
     public static void Fill(AppSettings s)
     {
         var hk = new Dictionary<string, string>

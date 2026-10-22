@@ -7,14 +7,16 @@ $dir = Join-Path $env:ProgramFiles 'Mishka Helper'
 $exe = Join-Path $dir 'MishkaHelper.exe'
 $log = Join-Path $Source 'install.log'
 "start $(Get-Date)" | Out-File $log -Encoding utf8
+trap { "ERROR: $_ at line $($_.InvocationInfo.ScriptLineNumber)" | Out-File $log -Append -Encoding utf8; break }
 
 # Stop any running copy and its helper servers.
 Get-Process MishkaHelper, llama-server, piper -ErrorAction SilentlyContinue | Stop-Process -Force
 Start-Sleep -Milliseconds 800
 
 # Clean install of the app folder (models live in %LocalAppData%, settings in %AppData% — untouched).
-if (Test-Path $dir) { Remove-Item $dir -Recurse -Force }
+# Empty the folder rather than deleting it: Explorer windows often hold a handle on the folder itself.
 New-Item -ItemType Directory -Force $dir | Out-Null
+Get-ChildItem $dir -Force | Remove-Item -Recurse -Force -ErrorAction Continue
 Get-ChildItem $Source -Exclude 'install.log', '*.pdb', '*.xml' | Copy-Item -Destination $dir -Recurse -Force
 "copied to $dir" | Out-File $log -Append -Encoding utf8
 

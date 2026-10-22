@@ -31,7 +31,7 @@ public static class Hotkeys
         int next = 1;
         foreach (var (action, combo) in Settings.Current.Hotkeys)
         {
-            if (!TryParse(combo, out var mods, out var vk)) continue;
+            if (!Defaults.Available(action) || !TryParse(combo, out var mods, out var vk)) continue;
             int id = next++;
             // Volume/brightness repeat while held; everything else fires once.
             uint repeat = action is "volUp" or "volDown" or "brightUp" or "brightDown" ? 0 : Native.MOD_NOREPEAT;

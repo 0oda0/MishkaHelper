@@ -14,17 +14,19 @@ public static class Shots
         await Task.Delay(1500);
         foreach (var p in new[] { "Jarvis", "Home", "Controls", "System", "Devices", "Nitro", "Boost", "Security", "Tools", "Profiles", "Hotkeys", "Widgets", "Settings" })
         {
+            if (p == "Jarvis" && !Edition.HasJarvis) continue;
             main.Navigate(p);
             await Task.Delay(p is "Devices" or "Security" or "System" ? 6000 : 2500);
             Save(main, Path.Combine(dir, p + ".png"));
         }
+#if !LITE
         JarvisChat.Open();
-        await Jarvis.Handle("громкость 30");
-        await Jarvis.Handle("запиши в заметку купить молоко");
-        await Jarvis.Handle("что я записывал про молоко");
+        foreach (var q in new[] { "привет", "что ты умеешь", "сколько времени" })
+            await Jarvis.Handle(q);
         await Task.Delay(800);
         foreach (Window w in Application.Current.Windows)
             if (w.Title == "Джарвис") { Save(w, Path.Combine(dir, "JarvisChat.png")); w.Close(); }
+#endif
 
         QuickPanel.Toggle();
         await Task.Delay(1500);

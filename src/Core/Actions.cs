@@ -63,8 +63,11 @@ public static class Actions
                 case "taskmgr": Shell.Open("taskmgr.exe"); break;
                 case "lock": Toolbox.Lock(); break;
                 case "palette": CommandPalette.Toggle(); break;
+                case "features": Features.Open(); break;
+#if !LITE
                 case "jarvis": Jarvis.Listen(); break;
                 case "jarvisChat": JarvisChat.Open(); break;
+#endif
                 case "topmost": Osd.Show("", Toolbox.ToggleTopmost()); break;
                 case "opacity": Osd.Show("", "Прозрачность окна", Toolbox.CycleOpacity()); break;
                 case "killFg": Osd.Show("", Toolbox.KillForeground()); break;
@@ -100,7 +103,9 @@ public static class Actions
                     }
                     else if (action.StartsWith("audio:")) { Audio.SetDefault(action[6..]); Osd.Show("", Audio.DefaultName(DataFlow.Render)); }
                     else if (action.StartsWith("page:")) App.Current.Navigate(action[5..]);
+#if !LITE
                     else if (action.StartsWith("scenario:") && Settings.Current.Scenarios.FirstOrDefault(s => s.Id == action[9..]) is { } sc) _ = Scenarios.Run(sc);
+#endif
                     break;
             }
         }
