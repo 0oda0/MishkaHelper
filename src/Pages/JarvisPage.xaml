@@ -1,0 +1,9 @@
+<UserControl x:Class="MishkaHelper.Pages.JarvisPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <StackPanel>
+        <TextBlock Text="Джарвис" Style="{StaticResource H1}"/>
+        <TextBlock Text="Голосовой помощник. Работает без интернета и ключей: распознавание и нейросеть — на твоём компьютере." Style="{StaticResource Dim}" FontSize="13" Margin="0,0,0,18"/>
+        <UniformGrid x:Name="Cards" Columns="2"/>
+    </StackPanel>
+</UserControl>

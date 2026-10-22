@@ -16,6 +16,8 @@ public static class Services
         Try(Hotkeys.Start);
         Try(Profiles.StartAuto);
         Try(Widgets.RestoreAll);
+        Try(Scenarios.Start);
+        _ = Jarvis.Start();
 
         _jobs = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
         _jobs.Tick += async (_, _) =>
@@ -59,6 +61,7 @@ public static class Services
     public static void Stop()
     {
         _jobs?.Stop();
+        Try(Jarvis.Stop);
         Try(SysMon.Stop);
         Try(Hotkeys.Stop);
         Try(Widgets.SaveAll);

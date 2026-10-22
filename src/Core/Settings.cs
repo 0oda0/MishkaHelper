@@ -31,6 +31,61 @@ public class TodoItem
     public bool Done { get; set; }
 }
 
+public class JarvisSettings
+{
+    public bool Enabled { get; set; }
+    public bool WakeWordOn { get; set; } = true;
+    public string WakeWord { get; set; } = "джарвис";
+    public string Engine { get; set; } = "vosk";          // vosk | whisper
+    public string WhisperModel { get; set; } = "base";    // base | small
+    public string Microphone { get; set; } = "";          // device name, "" = default
+    public bool Speak { get; set; } = true;
+    public string Voice { get; set; } = "";
+    public double Rate { get; set; } = 1.1;
+    public bool ShowOrb { get; set; } = true;
+    public double OrbLeft { get; set; } = -1;
+    public double OrbTop { get; set; } = -1;
+    public bool Proactive { get; set; } = true;
+    public bool AiEnabled { get; set; }
+    public string AiModel { get; set; } = "qwen3-4b";
+    public bool AiGpu { get; set; } = true;
+    public string UserName { get; set; } = "";
+    public List<string> Memory { get; set; } = new();
+    public List<WebSource> Sources { get; set; } = new();
+}
+
+/// <summary>A page Jarvis may read to answer questions (e.g. the schedule in a student account).</summary>
+public class WebSource
+{
+    public string Name { get; set; } = "";
+    public string Url { get; set; } = "";
+    public string Keywords { get; set; } = "";   // comma-separated: "пары, расписание, занятия"
+}
+
+/// <summary>"When [trigger] → do [steps]". Steps run top to bottom; an "if" step that fails stops the run.</summary>
+public class Scenario
+{
+    public string Id { get; set; } = Guid.NewGuid().ToString("N")[..8];
+    public string Name { get; set; } = "Новый сценарий";
+    public bool Enabled { get; set; } = true;
+    public List<ScenarioTrigger> Triggers { get; set; } = new();
+    public List<ScenarioStep> Steps { get; set; } = new();
+}
+
+public class ScenarioTrigger
+{
+    public string Kind { get; set; } = "voice";   // voice | hotkey | time | event
+    public string Value { get; set; } = "";        // phrase | combo | "HH:mm" | event name
+    public string Arg { get; set; } = "";          // days "1234567" | process name | battery % ...
+}
+
+public class ScenarioStep
+{
+    public string Kind { get; set; } = "action";
+    public string Value { get; set; } = "";
+    public string Arg { get; set; } = "";
+}
+
 public class Launcher
 {
     public string Name { get; set; } = "";
@@ -107,6 +162,9 @@ public class AppSettings
     public bool LockKeysOsd { get; set; } = true;
     public bool CheckUpdates { get; set; } = true;
     public DateTime LastUpdateCheck { get; set; }
+
+    public JarvisSettings Jarvis { get; set; } = new();
+    public List<Scenario> Scenarios { get; set; } = new();
 }
 
 public static class Settings

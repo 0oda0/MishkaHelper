@@ -303,6 +303,13 @@ public static partial class Widgets
         });
     }
 
+    /// <summary>Current weather as one sentence (used by Jarvis).</summary>
+    public static async Task<string> WeatherNow()
+    {
+        if ((DateTime.Now - _weatherAt).TotalMinutes > 20 || _weather.Length == 0) { _weatherAt = DateTime.Now; await LoadWeather(); }
+        return _weather.Length == 0 ? "" : "Сейчас " + _weather.Replace("  ·  ", ", ").Replace("·", ",");
+    }
+
     static async Task LoadWeather()
     {
         try

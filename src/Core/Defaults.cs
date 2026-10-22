@@ -21,6 +21,8 @@ public static class Defaults
         ["dnd"] = "Не беспокоить",
         ["widgets"] = "Показать/скрыть виджеты",
         ["fanMax"] = "Вентиляторы на максимум",
+        ["jarvis"] = "Джарвис: слушать команду",
+        ["jarvisChat"] = "Джарвис: чат",
         ["palette"] = "Палитра команд (поиск по всем функциям)",
         ["topmost"] = "Активное окно поверх всех",
         ["opacity"] = "Прозрачность активного окна",
@@ -57,6 +59,8 @@ public static class Defaults
             ["widgets"] = "Ctrl+Alt+W",
             ["fanMax"] = "Ctrl+Alt+F",
             ["palette"] = "Ctrl+Alt+K",
+            ["jarvis"] = "Ctrl+Alt+J",
+            ["jarvisChat"] = "Ctrl+Alt+I",
             ["topmost"] = "Ctrl+Alt+T",
             ["opacity"] = "Ctrl+Alt+Y",
             ["killFg"] = "Ctrl+Alt+F4",
@@ -88,6 +92,30 @@ public static class Defaults
                 new Launcher { Name = "Диспетчер задач", Path = "taskmgr.exe" },
                 new Launcher { Name = "Загрузки", Path = "explorer.exe", Args = "shell:Downloads" },
                 new Launcher { Name = "Параметры", Path = "ms-settings:" },
+            });
+
+        if (s.Scenarios.Count == 0)
+            s.Scenarios.AddRange(new[]
+            {
+                new Scenario
+                {
+                    Name = "Режим кино",
+                    Triggers = { new() { Kind = "voice", Value = "режим кино" } },
+                    Steps = { new() { Kind = "action", Value = "dnd" }, new() { Kind = "brightness", Value = "40" }, new() { Kind = "volume", Value = "60" }, new() { Kind = "say", Value = "Приятного просмотра" } },
+                },
+                new Scenario
+                {
+                    Name = "Ухожу",
+                    Triggers = { new() { Kind = "voice", Value = "я ухожу" } },
+                    Steps = { new() { Kind = "say", Value = "Пока! Блокирую компьютер" }, new() { Kind = "wait", Value = "2" }, new() { Kind = "action", Value = "lock" } },
+                },
+                new Scenario
+                {
+                    Name = "Наушники",
+                    Triggers = { new() { Kind = "event", Value = "audio_new" } },
+                    Steps = { new() { Kind = "notify", Value = "Подключено новое аудиоустройство" } },
+                    Enabled = false,
+                },
             });
 
         if (s.CleanTargets.Count == 0)

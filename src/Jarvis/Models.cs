@@ -1,0 +1,82 @@
+using System.IO;
+using System.IO.Compression;
+using System.Net.Http;
+
+namespace MishkaHelper.Core;
+
+public record ModelInfo(string Key, string Name, string Url, long ApproxMb, string File, bool Zip = false);
+
+/// <summary>Downloads speech/LLM models on demand into %LocalAppData%\MishkaHelper\models. No keys, no accounts.</summary>
+public static class Models
+{
+    public static readonly string Dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MishkaHelper", "models");
+
+    public static readonly ModelInfo Vosk = new("vosk", "Vosk RU (команды, 44 МБ)", "https://alphacephei.com/vosk/models/vosk-model-small-ru-0.22.zip", 44, "vosk-model-small-ru-0.22", Zip: true);
+
+    public static readonly ModelInfo[] Whisper =
+    {
+        new("base", "Whisper base (141 МБ, быстро)", "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin", 141, "ggml-base.bin"),
+        new("small", "Whisper small (465 МБ, точнее)", "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin", 465, "ggml-small.bin"),
+    };
+
+    public static readonly ModelInfo[] Llm =
+    {
+        new("qwen3-8b", "Qwen3 8B — самый умный (4,8 ГБ, для видеокарт от 6 ГБ)", "https://huggingface.co/Qwen/Qwen3-8B-GGUF/resolve/main/Qwen3-8B-Q4_K_M.gguf", 4795, "Qwen3-8B-Q4_K_M.gguf"),
+        new("qwen3-4b", "Qwen3 4B — баланс (2,4 ГБ, нужно ~5 ГБ RAM)", "https://huggingface.co/Qwen/Qwen3-4B-GGUF/resolve/main/Qwen3-4B-Q4_K_M.gguf", 2382, "Qwen3-4B-Q4_K_M.gguf"),
+        new("qwen3-1.7b", "Qwen3 1.7B — для слабых ПК (1,7 ГБ)", "https://huggingface.co/Qwen/Qwen3-1.7B-GGUF/resolve/main/Qwen3-1.7B-Q8_0.gguf", 1749, "Qwen3-1.7B-Q8_0.gguf"),
+    };
+
+    public static string PathOf(ModelInfo m) => Path.Combine(Dir, m.File);
+    public static bool Has(ModelInfo m) => m.Zip ? Directory.Exists(PathOf(m)) : File.Exists(PathOf(m));
+
+    public static ModelInfo WhisperModel => Whisper.FirstOrDefault(w => w.Key == Settings.Current.Jarvis.WhisperModel) ?? Whisper[0];
+    public static ModelInfo LlmModel => Llm.FirstOrDefault(w => w.Key == Settings.Current.Jarvis.AiModel) ?? Llm[0];
+
+    static readonly HttpClient Http = new() { Timeout = Timeout.InfiniteTimeSpan };
+    static readonly HashSet<string> Busy = new();
+
+    /// <summary>Download (resumable via .part) and unpack if needed. progress: 0..1.</summary>
+    public static async Task Download(ModelInfo m, Action<double>? progress = null, CancellationToken ct = default)
+    {
+        lock (Busy) { if (!Busy.Add(m.Key)) throw new InvalidOperationException("Уже скачивается"); }
+        try
+        {
+            Directory.CreateDirectory(Dir);
+            var part = PathOf(m) + (m.Zip ? ".zip" : "") + ".part";
+            long have = File.Exists(part) ? new FileInfo(part).Length : 0;
+            using var req = new HttpRequestMessage(HttpMethod.Get, m.Url);
+            if (have > 0) req.Headers.Range = new System.Net.Http.Headers.RangeHeaderValue(have, null);
+            using var resp = await Http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct);
+            resp.EnsureSuccessStatusCode();
+            if (resp.StatusCode != System.Net.HttpStatusCode.PartialContent) have = 0;   // server ignored Range
+            long total = have + (resp.Content.Headers.ContentLength ?? m.ApproxMb << 20);
+            await using (var src = await resp.Content.ReadAsStreamAsync(ct))
+            await using (var dst = new FileStream(part, have > 0 ? FileMode.Append : FileMode.Create))
+            {
+                var buf = new byte[1 << 16];
+                long done = have, lastReport = 0;
+                int n;
+                while ((n = await src.ReadAsync(buf, ct)) > 0)
+                {
+                    await dst.WriteAsync(buf.AsMemory(0, n), ct);
+                    done += n;
+                    if (done - lastReport > (1 << 20)) { lastReport = done; progress?.Invoke((double)done / total); }
+                }
+            }
+            if (m.Zip)
+            {
+                // Archive contains a single top-level folder named like the model.
+                ZipFile.ExtractToDirectory(part, Dir, true);
+                File.Delete(part);
+            }
+            else File.Move(part, PathOf(m), true);
+            progress?.Invoke(1);
+        }
+        finally { lock (Busy) Busy.Remove(m.Key); }
+    }
+
+    public static void Delete(ModelInfo m)
+    {
+        try { if (m.Zip) Directory.Delete(PathOf(m), true); else File.Delete(PathOf(m)); } catch (Exception e) { Log.Error(e); }
+    }
+}

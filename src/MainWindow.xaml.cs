@@ -36,6 +36,7 @@ public partial class MainWindow : Window
             "Boost" => new BoostPage(),
             "Security" => new SecurityPage(),
             "Tools" => new ToolsPage(),
+            "Jarvis" => new JarvisPage(),
             "Profiles" => new ProfilesPage(),
             "Hotkeys" => new HotkeysPage(),
             "Widgets" => new WidgetsPage(),
