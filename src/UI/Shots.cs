@@ -62,7 +62,27 @@ public static class Shots
             if (w.IsVisible && w.Content is System.Windows.Controls.Border { Child: System.Windows.Controls.StackPanel { Children.Count: 2 } } && w != main)
                 Save(w, Path.Combine(dir, "Palette.png"));
         CommandPalette.Toggle();
-        foreach (var k in kinds.Except(was)) Widgets.Set(k, false);
+
+        // Column layout check: open a few, hide the second, log where everything ended up.
+        foreach (var k in kinds) Widgets.Set(k, false);
+        var few = new[] { "system", "clock", "battery", "audio", "ping" };
+        foreach (var k in few) { Settings.Current.Widgets.First(c => c.Kind == k).Manual = false; Widgets.Set(k, true); }
+        await Task.Delay(1500);
+        var log = new System.Text.StringBuilder($"work area {SystemParameters.WorkArea}\n");
+        void Dump(string title)
+        {
+            log.AppendLine(title);
+            foreach (Window w in Application.Current.Windows)
+                if (w.Content is System.Windows.Controls.Border && w != main && w.IsVisible)
+                    log.AppendLine($"  {w.Left:0},{w.Top:0}  {w.ActualWidth:0}x{w.ActualHeight:0}");
+        }
+        Dump("five open:");
+        Widgets.Set("clock", false);
+        await Task.Delay(800);
+        Dump("clock hidden:");
+        File.WriteAllText(Path.Combine(dir, "widget-layout.txt"), log.ToString());
+        foreach (var k in few) Widgets.Set(k, false);
+        foreach (var k in was) Widgets.Set(k, true);
 
         Osd.Show("", "Громкость", 55);
         await Task.Delay(300);

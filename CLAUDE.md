@@ -13,7 +13,7 @@ UI language: **Russian**. Repo: `0oda0/MishkaHelper` (public). Owner talks Russi
 | Dev copy without UAC | add `-p:ApplicationManifest=<repo>\tools\app.dev.manifest` (asInvoker) and output to `test-out\dev\bin` |
 | Screenshots of every page | `MishkaHelper.exe --shots <dir>` (dev copy; runs beside the installed copy) |
 | Unit tests | `dotnet test tests` (xunit; Intents/Ears/Hotkeys/Updater/Remote/Calendar). Also run by CI before release |
-| Self-test | `MishkaHelper.exe --selftest <report.txt> [steps]`, steps: `acer modes,fans,keyboard,defender,sweep,cleanup,disk,autostart,brain,ears,voice,update` (comma list; empty = all). Admin-only steps need the real (elevated) exe |
+| Self-test | `MishkaHelper.exe --selftest <report.txt> [steps]`, steps: `remote,fullclean,acer modes,fans,keyboard,defender,sweep,cleanup,disk,autostart,brain,ears,voice,update` (comma list; empty = all). Admin-only steps need the real (elevated) exe |
 | Install on this PC | elevated: `tools\install-local.ps1 -Source publish [-SelfTest report] [-Only steps]` |
 | Release | bump `<Version>` in csproj → commit → `git tag -a vX.Y.Z` → push tag → **`gh workflow run release.yml --ref vX.Y.Z`** (tag-push trigger fires 20–60 min late; cancel the late duplicate run if it appears) |
 
@@ -55,6 +55,10 @@ src/
     Profiles.cs        apply profiles, auto by AC/app rules (+process priority)
     Alerts.cs          threshold toasts
     Remote.cs          phone remote: HttpListener on LAN (port 8770), PIN header, private IPs only, netsh firewall rule (Private)
+    BleRemote.cs       Bluetooth LE GATT server (no pairing) for docs/remote page via Web Bluetooth; PIN per device; turns BT radio on
+    InputSim.cs        SendInput mouse/keys/unicode text + JPEG screenshot (remotes)
+    RustDesk.cs        find/download official signed RustDesk for access from anywhere
+    FullClean.cs       full-cleanup wizard logic: Junk/Ask/Keep classification (regex), background processes
     ScreenTime.cs      foreground app seconds per day (idle >3 min skipped), 30 days JSON
     Updater.cs         GitHub releases → silent Inno setup or portable zip swap; per edition
     Services.cs        start/stop everything, periodic jobs (5 s tick), auto theme, Caps/Num OSD; Autostart task
@@ -86,6 +90,7 @@ src/
     Widgets.cs / WidgetsExtra.cs  20 desktop widgets (partial class)
     JarvisUi.cs        orb + chat window
     Shots.cs / SelfTest.cs  dev tooling
+docs/remote/           phone remote page: served by Remote.cs (embedded) over Wi-Fi, and by GitHub Pages (HTTPS → Web Bluetooth)
 docs/features/         landing page (index.html + img/*.png) shipped as <app>\docs
 installer/MishkaHelper.iss   Inno Setup, FLAVOR env = ""/Lite, one AppId for both; uninstall asks to delete AppData/models
 tests/                 xunit project (InternalsVisibleTo MishkaHelper.Tests)

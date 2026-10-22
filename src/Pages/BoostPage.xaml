@@ -5,7 +5,8 @@
         <TextBlock Text="Ускорение" Style="{StaticResource H1}"/>
         <TextBlock Text="Очистка мусора, автозагрузка, большие файлы и лишние программы" Style="{StaticResource Dim}" FontSize="13" Margin="0,0,0,14"/>
         <WrapPanel Margin="0,0,0,10">
-            <RadioButton Style="{StaticResource Segment}" Content="Очистка" GroupName="tab" Tag="clean" Checked="Tab_Checked" x:Name="TabClean"/>
+            <RadioButton Style="{StaticResource Segment}" Content="Полная очистка" GroupName="tab" Tag="full" Checked="Tab_Checked" x:Name="TabFull"/>
+            <RadioButton Style="{StaticResource Segment}" Content="Мусор" GroupName="tab" Tag="clean" Checked="Tab_Checked"/>
             <RadioButton Style="{StaticResource Segment}" Content="Автозагрузка" GroupName="tab" Tag="startup" Checked="Tab_Checked"/>
             <RadioButton Style="{StaticResource Segment}" Content="Большие файлы" GroupName="tab" Tag="large" Checked="Tab_Checked"/>
             <RadioButton Style="{StaticResource Segment}" Content="Дубликаты" GroupName="tab" Tag="dups" Checked="Tab_Checked"/>

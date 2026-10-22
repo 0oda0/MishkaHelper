@@ -59,6 +59,26 @@ public class ParsingTests
     public void RemotePrivateOnly(string ip, bool ok) => Assert.Equal(ok, Remote.IsPrivate(IPAddress.Parse(ip)));
 }
 
+public class FullCleanTests
+{
+    [Theory]
+    [InlineData("Steam", @"""C:\Program Files (x86)\Steam\steam.exe"" -silent", FullClean.Verdict.Junk)]
+    [InlineData("EpicGamesLauncher", @"""C:\Program Files (x86)\Epic Games\Launcher\Portal\Binaries\Win64\EpicGamesLauncher.exe"" -silent", FullClean.Verdict.Junk)]
+    [InlineData("SunJavaUpdateSched", @"""C:\Program Files (x86)\Common Files\Java\Java Update\jusched.exe""", FullClean.Verdict.Junk)]
+    [InlineData("MicrosoftEdgeAutoLaunch_58E8", @"""C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"" --no-startup-window --win-session-start", FullClean.Verdict.Junk)]
+    [InlineData("Opera GX Browser Assistant", @"C:\Users\u\AppData\Local\Programs\Opera GX\assistant\browser_assistant.exe", FullClean.Verdict.Junk)]
+    [InlineData("SecurityHealth", @"%windir%\system32\SecurityHealthSystray.exe", FullClean.Verdict.Keep)]
+    [InlineData("RtkAudUService", @"""C:\WINDOWS\System32\DriverStore\FileRepository\realtekservice.inf_amd64\RtkAudUService64.exe"" -background", FullClean.Verdict.Keep)]
+    [InlineData("PenTablet", @"C:\Program Files\Pentablet\PenTablet.exe /mini", FullClean.Verdict.Keep)]
+    [InlineData("OneDrive", @"""C:\Program Files\Microsoft OneDrive\OneDrive.exe"" /background", FullClean.Verdict.Keep)]
+    [InlineData("Discord", @"C:\Users\u\AppData\Local\Discord\Update.exe --processStart Discord.exe", FullClean.Verdict.Junk)]
+    [InlineData("Rainmeter.lnk", @"C:\Users\u\Start Menu\Programs\Startup\Rainmeter.lnk", FullClean.Verdict.Ask)]
+    [InlineData("browser", @"C:\Users\u\AppData\Local\Yandex\YandexBrowser\Application\browser.exe", FullClean.Verdict.Ask)]
+    [InlineData("chrome", @"C:\Program Files\Google\Chrome\Application\chrome.exe", FullClean.Verdict.Ask)]
+    [InlineData("MishkaHelper", @"C:\Program Files\Mishka Helper\MishkaHelper.exe", FullClean.Verdict.Keep)]
+    public void Classify(string name, string cmd, FullClean.Verdict expected) => Assert.Equal(expected, FullClean.Classify(name, cmd));
+}
+
 public class CalendarTests
 {
     const string Ics = """

@@ -90,8 +90,11 @@ public static partial class Widgets
     {
         if (kind == "clock") _weatherAt = default;
         if (!Open.TryGetValue(kind, out var w)) return;
+        int at = Order.IndexOf(kind);
         w.Close();
         Show(kind);
+        Order.Remove(kind); Order.Insert(Math.Min(at, Order.Count), kind);   // keep its place in the column
+        Layout();
     }
 
     static void Show(string kind)
@@ -113,8 +116,16 @@ public static partial class Widgets
         w.Left = cfg.Left; w.Top = cfg.Top;
         EnsureOnScreen(w);
 
-        border.MouseLeftButtonDown += (_, e) => { if (e.ButtonState == MouseButtonState.Pressed && !IsInteractive(e.OriginalSource as DependencyObject)) try { w.DragMove(); } catch { } };
+        border.MouseLeftButtonDown += (_, e) =>
+        {
+            if (e.ButtonState != MouseButtonState.Pressed || IsInteractive(e.OriginalSource as DependencyObject)) return;
+            var from = new Point(w.Left, w.Top);
+            try { w.DragMove(); } catch { }
+            // A real drag takes the widget out of the column; the rest close the gap.
+            if (Math.Abs(w.Left - from.X) + Math.Abs(w.Top - from.Y) > 6 && !cfg.Manual) { cfg.Manual = true; Settings.Save(); Layout(); }
+        };
         w.LocationChanged += (_, _) => { cfg.Left = w.Left; cfg.Top = w.Top; };
+        w.SizeChanged += (_, _) => Layout();
         border.ContextMenu = Menu(kind, w, cfg);
 
         Action<Sample>? handler = null;
@@ -144,6 +155,8 @@ public static partial class Widgets
         w.Closed += (_, _) =>
         {
             Open.Remove(kind);
+            Order.Remove(kind);
+            Layout();
             t?.Stop();
             if (handler != null) SysMon.Updated -= handler;
             if (Open.Values.All(x => x.Tag is not true)) { _live?.Dispose(); _live = null; }
@@ -152,9 +165,34 @@ public static partial class Widgets
         if (!cfg.Topmost)
             w.Activated += (_, _) => PinBottom(w);
         Open[kind] = w;
+        Order.Add(kind);
         w.Show();
         if (!cfg.Topmost) PinBottom(w);
+        Layout();
     }
+
+    /// <summary>Opening order = order in the column.</summary>
+    static readonly List<string> Order = new();
+    const double Glow = 14;   // transparent margin around each card (for the glow)
+
+    /// <summary>Stack non-dragged widgets from the top-right corner downwards; a full column continues to its left.</summary>
+    public static void Layout()
+    {
+        var wa = SystemParameters.WorkArea;
+        double right = wa.Right + Glow - 8, y = wa.Top - Glow + 8, colWidth = 0;
+        foreach (var kind in Order)
+        {
+            if (!Open.TryGetValue(kind, out var w) || Config(kind).Manual || w.ActualHeight == 0) continue;
+            if (y + w.ActualHeight > wa.Bottom + Glow && y > wa.Top) { right -= colWidth - Glow; y = wa.Top - Glow + 8; colWidth = 0; }
+            double left = right - w.ActualWidth, top = y;
+            if (Math.Abs(w.Left - left) > 0.5) w.Left = left;
+            if (Math.Abs(w.Top - top) > 0.5) w.Top = top;
+            y += w.ActualHeight - Glow;
+            colWidth = Math.Max(colWidth, w.ActualWidth);
+        }
+    }
+
+    public static void ToColumn(string kind) { Config(kind).Manual = false; Settings.Save(); Layout(); }
 
     static void PinBottom(Window w) =>
         Native.SetWindowPos(new WindowInteropHelper(w).Handle, Native.HWND_BOTTOM, 0, 0, 0, 0, Native.SWP_NOMOVE | Native.SWP_NOSIZE | Native.SWP_NOACTIVATE);
@@ -179,6 +217,10 @@ public static partial class Widgets
             op.Items.Add(i);
         }
         m.Items.Add(op);
+        var col = new MenuItem { Header = "Вернуть в колонку справа" };
+        col.Click += (_, _) => ToColumn(kind);
+        m.Opened += (_, _) => col.Visibility = cfg.Manual ? Visibility.Visible : Visibility.Collapsed;
+        m.Items.Add(col);
         var hide = new MenuItem { Header = "Скрыть виджет" };
         hide.Click += (_, _) => Set(kind, false);
         m.Items.Add(hide);

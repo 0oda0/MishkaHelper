@@ -17,6 +17,7 @@ public static class Services
         Try(Profiles.StartAuto);
         Try(Widgets.RestoreAll);
         Try(Remote.Apply);
+        if (Settings.Current.BleRemoteEnabled) _ = BleRemote.Start().ContinueWith(t => { if (t.Result != null) Log.Info("BLE remote: " + t.Result); });
         Try(ScreenTime.Start);
         Try(ClipHistory.Start);
 #if !LITE
@@ -72,6 +73,7 @@ public static class Services
 #endif
         Try(SysMon.Stop);
         Try(Remote.Stop);
+        Try(BleRemote.Stop);
         Try(ScreenTime.Save);
         Try(Hotkeys.Stop);
         Try(Widgets.SaveAll);

@@ -84,20 +84,48 @@ public partial class ToolsPage : UserControl
     {
         var s = Settings.Current;
         var (c, b) = Card("", "Пульт с телефона", "Телефон и ПК в одной Wi-Fi сети → открой адрес в браузере телефона и введи PIN. Громкость, музыка, яркость, профили, блокировка, выключение" + (Edition.HasJarvis ? ", вопросы Джарвису." : "."));
+        b.Children.Add(UiKit.Text("Есть тачпад, клавиатура и (по Wi-Fi) экран ПК с кликами по нему.", 12, true));
         var info = UiKit.Text("", 14);
-        void Show() => info.Text = Remote.Running ? $"Адрес: {Remote.Url}\nPIN: {s.RemotePin}" : "Выключен";
-        Switch(b, "Включить пульт", s.RemoteEnabled, v =>
+        var bleInfo = UiKit.Text("", 13, true);
+        void Show()
+        {
+            info.Text = (Remote.Running ? $"Wi-Fi: {Remote.Url}" : "Wi-Fi: выключен") + $"\nPIN: {(s.RemotePin.Length > 0 ? s.RemotePin : "появится при включении")}";
+            bleInfo.Text = BleRemote.Running ? $"Bluetooth: открой на телефоне {BleRemote.PageUrl} → «Подключиться». Android — Chrome, iPhone — Bluefy." : "Bluetooth: выключен";
+        }
+        Switch(b, "Пульт по Wi-Fi (та же домашняя сеть)", s.RemoteEnabled, v =>
         {
             s.RemoteEnabled = v; Settings.Save();
             if (v) Remote.Apply(); else Remote.Disable();
             Show();
         });
+        CheckBox? ble = null;
+        ble = Switch(b, "Пульт по Bluetooth (рядом, без сопряжения)", s.BleRemoteEnabled, async v =>
+        {
+            s.BleRemoteEnabled = v; Settings.Save();
+            if (v && await BleRemote.Start() is { } err) { s.BleRemoteEnabled = false; Settings.Save(); ble!.IsChecked = false; Osd.Show("", err); }
+            if (!v) BleRemote.Stop();
+            Show();
+        });
         Show();
         b.Children.Add(info);
+        b.Children.Add(bleInfo);
         var wp = new WrapPanel { Margin = new Thickness(0, 8, 0, 0) };
-        Btn(wp, "Новый PIN", () => { s.RemotePin = ""; Settings.Save(); if (s.RemoteEnabled) Remote.Apply(); Show(); });
-        Btn(wp, "Скопировать адрес", () => { System.Windows.Clipboard.SetText(Remote.Url); Osd.Show("", "Адрес скопирован"); });
+        Btn(wp, "Новый PIN", () => { s.RemotePin = ""; Settings.Save(); if (s.RemoteEnabled) Remote.Apply(); if (s.RemotePin.Length == 0) s.RemotePin = Random.Shared.Next(1000, 10000).ToString(); Settings.Save(); Show(); });
+        Btn(wp, "Скопировать Wi-Fi адрес", () => { System.Windows.Clipboard.SetText(Remote.Url); Osd.Show("", "Адрес скопирован"); });
+        Btn(wp, "Скопировать ссылку Bluetooth", () => { System.Windows.Clipboard.SetText(BleRemote.PageUrl); Osd.Show("", "Ссылка скопирована"); });
         b.Children.Add(wp);
+
+        // From anywhere: an established tool instead of exposing the PC ourselves.
+        b.Children.Add(new TextBlock { Text = "Из любого места (через интернет)", Style = S("H2"), Margin = new Thickness(0, 14, 0, 4) });
+        b.Children.Add(UiKit.Text("RustDesk — бесплатный, с шифрованием, видно экран и можно всё. Открой его, запомни ID и задай постоянный пароль в его настройках, " +
+            "на телефон поставь приложение RustDesk и введи ID и пароль. Пароль никому не сообщай.", 12, true));
+        var rd = new WrapPanel { Margin = new Thickness(0, 6, 0, 0) };
+        BtnAsync(rd, RustDesk.Present ? "Открыть RustDesk" : "Скачать и открыть RustDesk", async btn =>
+        {
+            await RustDesk.Open(f => Dispatcher.BeginInvoke(() => btn.Content = $"Скачиваю… {f * 100:0}%"));
+            btn.Content = "Открыть RustDesk";
+        });
+        b.Children.Add(rd);
         return c;
     }
 

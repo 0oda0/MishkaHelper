@@ -113,6 +113,8 @@ public class WidgetConfig
     public double Opacity { get; set; } = 0.92;
     public bool Topmost { get; set; }
     public bool Visible { get; set; }
+    /// <summary>Dragged by the user → stays where put; otherwise stacked in the top-right column.</summary>
+    public bool Manual { get; set; }
 }
 
 public class AlertSettings
@@ -174,6 +176,7 @@ public class AppSettings
     public bool LockKeysOsd { get; set; } = true;
     public bool CheckUpdates { get; set; } = true;
     public bool RemoteEnabled { get; set; }
+    public bool BleRemoteEnabled { get; set; }
     public int RemotePort { get; set; } = 8770;
     public string RemotePin { get; set; } = "";
     public bool ScreenTime { get; set; } = true;

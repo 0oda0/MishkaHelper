@@ -13,7 +13,7 @@ public partial class BoostPage : UserControl
     public BoostPage()
     {
         InitializeComponent();
-        Loaded += (_, _) => TabClean.IsChecked = true;
+        Loaded += (_, _) => TabFull.IsChecked = true;
         Unloaded += (_, _) => _cts?.Cancel();
     }
 
@@ -23,6 +23,7 @@ public partial class BoostPage : UserControl
         _cts = new CancellationTokenSource();
         Body.Content = (string)((FrameworkElement)sender).Tag switch
         {
+            "full" => FullTab(_cts.Token),
             "clean" => CleanTab(_cts.Token),
             "startup" => StartupTab(),
             "large" => LargeTab(_cts.Token),

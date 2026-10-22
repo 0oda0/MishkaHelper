@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#0b0b14">
+<title>Mishka Remote</title>
+<style>
+:root{--bg:#0b0b14;--card:#151527;--a:#ff3da8;--b:#3dc8ff;--t:#eef;--m:#99a}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--bg);color:var(--t);font:15px system-ui,sans-serif;padding:12px 12px 70px;overscroll-behavior:none}
+h1{font-size:19px;margin:2px 0 10px;background:linear-gradient(90deg,var(--a),var(--b));-webkit-background-clip:text;background-clip:text;color:transparent}
+.c{background:var(--card);border-radius:16px;padding:14px;margin-bottom:12px;box-shadow:0 0 18px #ff3da822}
+.r{display:flex;gap:8px;flex-wrap:wrap}
+button{flex:1;min-width:28%;padding:13px 6px;border:0;border-radius:12px;background:#22223a;color:var(--t);font-size:15px}
+button:active,button.on{background:var(--a)}button.d{background:#4a1530}
+input[type=range]{width:100%;accent-color:var(--a)}
+input,textarea{width:100%;padding:12px;border-radius:10px;border:1px solid #334;background:#0e0e1c;color:var(--t);font-size:16px}
+.m{color:var(--m);font-size:13px}#st{display:flex;justify-content:space-between}
+nav{position:fixed;left:0;right:0;bottom:0;display:flex;background:#10101e;border-top:1px solid #223}
+nav button{border-radius:0;background:none;padding:14px 4px;font-size:13px}nav button.on{color:var(--a);background:none}
+#pad{height:52vh;border-radius:16px;background:radial-gradient(circle at 50% 40%,#1d1d36,#121222);position:relative;touch-action:none;border:1px solid #2a2a48}
+#wheel{position:absolute;right:0;top:0;bottom:0;width:44px;border-left:1px dashed #334;touch-action:none}
+#scr{width:100%;border-radius:10px;display:block;touch-action:none;background:#000;min-height:120px}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<h1>Mishka Remote <span id="pc" class="m"></span></h1>
+
+<div id="login" class="c" hidden>
+  <div id="bleBox" hidden>
+    <div class="m">Bluetooth: телефон рядом с ПК (до ~10 м), в Mishka Helper включён «Пульт по Bluetooth». Сопряжение не нужно.
+      Android — Chrome; iPhone — браузер Bluefy (Safari не умеет Bluetooth).</div><br>
+  </div>
+  <div class="m">PIN из Mishka Helper → Инструменты → «Пульт с телефона»</div><br>
+  <input id="pin" type="password" inputmode="numeric" autocomplete="off"><br><br>
+  <button id="go" onclick="login()">Войти</button>
+  <p id="err" class="m"></p>
+</div>
+
+<div id="app" hidden>
+  <section id="t-main">
+    <div class="c" id="st"><span id="cpu"></span><span id="ram"></span><span id="bat"></span></div>
+    <div class="c"><div class="m">Громкость <span id="vv"></span></div><input id="vol" type="range" min="0" max="100" onchange="api('volume',this.value)">
+      <div class="r"><button onclick="api('prev')">⏮</button><button onclick="api('play')">⏯</button><button onclick="api('next')">⏭</button><button onclick="api('mute')">🔇</button></div></div>
+    <div class="c"><div class="m">Яркость <span id="bv"></span></div><input id="bri" type="range" min="0" max="100" onchange="api('brightness',this.value)"></div>
+    <div class="c"><div class="m">Профили</div><div class="r" id="prof"></div><br><div class="r"><button onclick="api('boost')">🚀 Ускорить</button></div></div>
+    <div class="c" id="jv" hidden><div class="m">Сказать Джарвису</div><input id="q" type="text" placeholder="что у меня завтра?">
+      <br><br><button onclick="say()">Отправить</button><p id="ans" class="m"></p></div>
+    <div class="c"><div class="r"><button onclick="api('lock')">🔒 Блок</button><button onclick="api('screenOff')">🌙 Экран</button><button onclick="if(confirm('Усыпить ПК?'))api('sleep')">💤 Сон</button></div><br>
+      <div class="r"><button class="d" onclick="if(confirm('Выключить ПК через 30 секунд?'))api('shutdown')">⏻ Выключить</button><button onclick="api('cancelShutdown')">Отмена</button></div></div>
+  </section>
+
+  <section id="t-pad" hidden>
+    <div id="pad"><div id="wheel"></div></div><br>
+    <div class="r"><button id="lb">ЛКМ</button><button onclick="api('click','double')">Двойной</button><button id="rb">ПКМ</button></div>
+    <p class="m">Води пальцем — курсор, тап — клик, полоса справа — прокрутка.</p>
+  </section>
+
+  <section id="t-kb" hidden>
+    <div class="c"><textarea id="txt" rows="3" placeholder="Текст для ПК (любой язык)"></textarea><br><br>
+      <div class="r"><button onclick="typeText()">Напечатать</button><button onclick="typeText(true)">Напечатать + Enter</button></div></div>
+    <div class="c"><div class="r">
+      <button onclick="key('enter')">Enter</button><button onclick="key('backspace')">⌫</button><button onclick="key('esc')">Esc</button>
+      <button onclick="key('tab')">Tab</button><button onclick="key('up')">↑</button><button onclick="key('space')">Пробел</button>
+      <button onclick="key('left')">←</button><button onclick="key('down')">↓</button><button onclick="key('right')">→</button>
+      <button onclick="key('alt+tab')">Alt+Tab</button><button onclick="key('win')">Win</button><button onclick="key('win+d')">Рабочий стол</button>
+      <button onclick="key('ctrl+c')">Копировать</button><button onclick="key('ctrl+v')">Вставить</button><button onclick="key('ctrl+z')">Отменить</button>
+      <button onclick="key('f5')">F5</button><button onclick="key('f11')">F11</button><button onclick="key('alt+f4')">Alt+F4</button>
+    </div></div>
+  </section>
+
+  <section id="t-scr" hidden>
+    <div id="scrNet"><img id="scr" alt=""><p class="m">Тап по картинке — клик в это место, долгое нажатие — правый клик. Обновляется ~2 раза в секунду.</p>
+      <div class="r"><button onclick="api('scroll','3')">Прокрутка ↑</button><button onclick="api('scroll','-3')">Прокрутка ↓</button><button onclick="key('backspace')">⌫</button></div></div>
+    <div id="scrBle" class="c m" hidden>Экран по Bluetooth не показать — он в сотни раз медленнее Wi-Fi. Открой пульт по Wi-Fi-адресу
+      или для доступа из любого места включи RustDesk в Mishka Helper → Инструменты.</div>
+  </section>
+</div>
+
+<nav id="nav" hidden>
+  <button data-t="main" class="on">Пульт</button><button data-t="pad">Тачпад</button><button data-t="kb">Клавиатура</button><button data-t="scr">Экран</button>
+</nav>
+
+<script>
+// Two transports, one page: served by the PC itself (Wi-Fi, HTTP + PIN header) or from GitHub Pages (HTTPS → Web Bluetooth).
+const BLE = location.protocol === 'https:';
+const SVC = '6d697368-6b61-4865-6c70-657200000001', CMD = '6d697368-6b61-4865-6c70-657200000002', EVT = '6d697368-6b61-4865-6c70-657200000003';
+const $ = id => document.getElementById(id);
+let pin = localStorage.pin || '', cmdChar = null, bleQueue = Promise.resolve();
+const enc = new TextEncoder(), dec = new TextDecoder();
+
+function show(ok) { $('login').hidden = ok; $('app').hidden = !ok; $('nav').hidden = !ok; }
+
+async function api(c, v) {
+  v = v ?? '';
+  if (BLE) {
+    if (!cmdChar) return null;
+    // Writes must not overlap; long text goes in 180-byte pieces.
+    const data = enc.encode(c + '\t' + v);
+    bleQueue = bleQueue.then(async () => {
+      for (let i = 0; i < data.length; i += 180) {
+        const part = data.slice(i, i + 180), more = i + 180 < data.length;
+        const chunk = new Uint8Array(part.length + 1); chunk[0] = more ? 1 : 0; chunk.set(part, 1);
+        await cmdChar.writeValueWithResponse(chunk);
+      }
+    }).catch(e => { $('err').textContent = e.message; });
+    return null;
+  }
+  const r = await fetch('/api/' + c, { method: 'POST', headers: { 'X-Pin': pin }, body: v });
+  if (r.status === 401) { show(false); $('err').textContent = 'Неверный PIN'; return null; }
+  if (!r.ok) return null;
+  const j = await r.json(); handle(j); return j;
+}
+
+function handle(j) {
+  if (j.auth === false) { show(false); $('err').textContent = 'Неверный PIN'; return; }
+  if (j.auth === true) { show(true); api('status'); return; }
+  if (j.say) { if (!$('t-main').hidden && $('ans')) $('ans').textContent = j.say; else alert(j.say); }
+  if (j.volume !== undefined) render(j);
+}
+
+function render(s) {
+  show(true); $('pc').textContent = s.pc; $('vol').value = s.volume; $('vv').textContent = s.volume + '%';
+  $('bri').value = s.brightness; $('bv').textContent = s.brightness + '%';
+  $('cpu').textContent = 'CPU ' + s.cpu + '°'; $('ram').textContent = 'RAM ' + s.ram + '%';
+  $('bat').textContent = s.battery >= 0 ? (s.ac ? '⚡' : '🔋') + s.battery + '%' : '';
+  $('jv').hidden = !s.jarvis;
+  if (!$('prof').childElementCount) for (const p of s.profiles) { const b = document.createElement('button'); b.textContent = p; b.onclick = () => api('profile', p); $('prof').append(b); }
+}
+
+async function login() {
+  pin = $('pin').value.trim(); localStorage.pin = pin; $('err').textContent = '';
+  if (!BLE) { api('status'); return; }
+  try {
+    const dev = await navigator.bluetooth.requestDevice({ filters: [{ services: [SVC] }] });
+    dev.addEventListener('gattserverdisconnected', () => { cmdChar = null; show(false); $('err').textContent = 'Связь потеряна — подключись снова'; });
+    const srv = await (await dev.gatt.connect()).getPrimaryService(SVC);
+    cmdChar = await srv.getCharacteristic(CMD);
+    const evt = await srv.getCharacteristic(EVT);
+    await evt.startNotifications();
+    evt.addEventListener('characteristicvaluechanged', e => { try { handle(JSON.parse(dec.decode(e.target.value))); } catch {} });
+    api('pin', pin);
+  } catch (e) { $('err').textContent = e.message; }
+}
+
+async function say() { $('ans').textContent = '…'; const j = await api('say', $('q').value); if (j && j.say) $('ans').textContent = j.say; $('q').value = ''; }
+function key(k) { api('key', k); }
+function typeText(enter) { const t = $('txt').value; if (t) api('type', t); if (enter) setTimeout(() => key('enter'), 150); $('txt').value = ''; }
+
+// ---- tabs ----
+for (const b of document.querySelectorAll('nav button')) b.onclick = () => {
+  for (const x of document.querySelectorAll('nav button')) x.classList.toggle('on', x === b);
+  for (const t of ['main', 'pad', 'kb', 'scr']) $('t-' + t).hidden = t !== b.dataset.t;
+  if (b.dataset.t === 'scr' && !BLE) refreshScreen();
+};
+
+// ---- touchpad ----
+let acc = [0, 0], last = null, downAt = 0, moved = 0, wheelY = null, wheelAcc = 0;
+const pad = $('pad');
+pad.onpointerdown = e => { if (e.target.id === 'wheel') return; last = [e.clientX, e.clientY]; downAt = Date.now(); moved = 0; pad.setPointerCapture(e.pointerId); };
+pad.onpointermove = e => {
+  if (!last) return;
+  const dx = e.clientX - last[0], dy = e.clientY - last[1]; last = [e.clientX, e.clientY];
+  moved += Math.abs(dx) + Math.abs(dy);
+  const k = 1.8 + Math.min(2, Math.hypot(dx, dy) / 12);   // faster swipe → bigger jump
+  acc[0] += dx * k; acc[1] += dy * k;
+};
+pad.onpointerup = () => { if (last && moved < 8 && Date.now() - downAt < 250) api('click', 'left'); last = null; };
+setInterval(() => { if (Math.abs(acc[0]) >= 1 || Math.abs(acc[1]) >= 1) { api('mouse', Math.round(acc[0]) + ',' + Math.round(acc[1])); acc = [0, 0]; } }, BLE ? 60 : 35);
+const wheel = $('wheel');
+wheel.onpointerdown = e => { wheelY = e.clientY; wheelAcc = 0; wheel.setPointerCapture(e.pointerId); };
+wheel.onpointermove = e => { if (wheelY === null) return; wheelAcc += wheelY - e.clientY; wheelY = e.clientY; const n = Math.trunc(wheelAcc / 25); if (n) { api('scroll', String(n)); wheelAcc -= n * 25; } };
+wheel.onpointerup = () => wheelY = null;
+$('lb').onclick = () => api('click', 'left'); $('rb').onclick = () => api('click', 'right');
+
+// ---- screen (Wi-Fi only) ----
+let scrUrl = null, pressT = 0;
+async function refreshScreen() {
+  if ($('t-scr').hidden || document.hidden) return;
+  try {
+    const r = await fetch('/api/screen?w=' + Math.min(1600, Math.round(innerWidth * devicePixelRatio)), { method: 'POST', headers: { 'X-Pin': pin } });
+    if (r.ok) { const u = URL.createObjectURL(await r.blob()); $('scr').src = u; if (scrUrl) URL.revokeObjectURL(scrUrl); scrUrl = u; }
+  } catch {}
+  setTimeout(refreshScreen, 450);
+}
+const scr = $('scr');
+scr.onpointerdown = () => pressT = Date.now();
+scr.onpointerup = e => {
+  const r = scr.getBoundingClientRect(), x = (e.clientX - r.left) / r.width, y = (e.clientY - r.top) / r.height;
+  api('tap', x.toFixed(4) + ',' + y.toFixed(4) + (Date.now() - pressT > 500 ? ',right' : ''));
+  setTimeout(refreshScreen, 150);
+};
+
+// ---- start ----
+if (BLE) {
+  $('bleBox').hidden = false; $('go').textContent = 'Подключиться по Bluetooth';
+  $('scrNet').hidden = true; $('scrBle').hidden = false;
+  if (!navigator.bluetooth) $('err').textContent = 'Этот браузер не умеет Bluetooth. Android — Chrome, iPhone — Bluefy.';
+  $('pin').value = pin; show(false);
+} else {
+  pin ? api('status') : show(false);
+  setInterval(() => { if (pin && !document.hidden && !$('t-main').hidden) api('status'); }, 5000);
+}
+</script>
+</body>
+</html>

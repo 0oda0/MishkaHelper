@@ -26,6 +26,36 @@ public static class SelfTest
             await Task.CompletedTask;
         });
 
+        await Step("fullclean", async () =>   // analysis only, changes nothing
+        {
+            foreach (var (it, v, _) in FullClean.Startup()) L($"startup {v,-4} {it.Name} | {it.Command}");
+            foreach (var b in await Task.Run(FullClean.Background)) L($"bg      {b.Verdict,-4} {b.Name} x{b.Count} {Cleaner.Size(b.Bytes)}");
+        });
+
+        await Step("remote", async () =>   // no input injection — only status, screen, auth
+        {
+            var pin = Settings.Current.RemotePin;
+            if (pin.Length < 4) Settings.Current.RemotePin = "4321";
+            Remote.StartLocal();
+            using var http = new System.Net.Http.HttpClient { BaseAddress = new Uri($"http://localhost:{Settings.Current.RemotePort}") };
+            L($"remote page {(await http.GetStringAsync("/")).Length} chars");
+            async Task<System.Net.Http.HttpResponseMessage> Post(string p, string pinTry) { var r = new System.Net.Http.HttpRequestMessage(System.Net.Http.HttpMethod.Post, p); r.Headers.Add("X-Pin", pinTry); return await http.SendAsync(r); }
+            L($"remote wrong pin -> {(int)(await Post("/api/status", "0000")).StatusCode}");
+            var st = await Post("/api/status", Settings.Current.RemotePin);
+            L($"remote status {(int)st.StatusCode}: {await st.Content.ReadAsStringAsync()}");
+            var scr = await Post("/api/screen?w=800", Settings.Current.RemotePin);
+            L($"remote screen {(int)scr.StatusCode} {scr.Content.Headers.ContentType} {(await scr.Content.ReadAsByteArrayAsync()).Length} bytes");
+            Remote.Stop();
+            Settings.Current.RemotePin = pin;
+
+            var btWas = await Radios.Get(Windows.Devices.Radios.RadioKind.Bluetooth);
+            var err = await BleRemote.Start();
+            L($"ble start (radio was {btWas}): {err ?? "advertising OK"}");
+            await Task.Delay(1500);
+            BleRemote.Stop();
+            if (btWas == false) await Radios.Set(Windows.Devices.Radios.RadioKind.Bluetooth, false);   // leave it as it was
+        });
+
         await Step("acer modes", async () =>
         {
             int orig = Acer.Mode;

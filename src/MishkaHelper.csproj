@@ -12,7 +12,7 @@
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
     <AssemblyName>MishkaHelper</AssemblyName>
     <RootNamespace>MishkaHelper</RootNamespace>
-    <Version>0.5.0</Version>
+    <Version>0.6.0</Version>
     <Product>Mishka Helper</Product>
     <Company>Mishka</Company>
     <!-- WinForms is only used for NotifyIcon; avoid ambiguous usings -->
@@ -59,6 +59,7 @@
 
   <ItemGroup>
     <Resource Include="Assets\app.ico" />
+    <EmbeddedResource Include="..\docs\remote\index.html" LogicalName="remote.html" />
     <InternalsVisibleTo Include="MishkaHelper.Tests" />
   </ItemGroup>
 

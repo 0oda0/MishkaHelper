@@ -46,4 +46,11 @@ public partial class WidgetsPage : UserControl
         Settings.Save();
         Widgets.Refresh("clock");
     }
+
+    void Arrange_Click(object s, RoutedEventArgs e)
+    {
+        foreach (var w in Settings.Current.Widgets) w.Manual = false;
+        Settings.Save();
+        Widgets.Layout();
+    }
 }

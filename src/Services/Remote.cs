@@ -24,6 +24,16 @@ public static class Remote
 
     public static string Url => $"http://{LocalIp()}:{Settings.Current.RemotePort}";
 
+    /// <summary>Self-test hook: serve on localhost only (works without admin, no firewall rule).</summary>
+    internal static void StartLocal()
+    {
+        Stop();
+        _http = new HttpListener();
+        _http.Prefixes.Add($"http://localhost:{Settings.Current.RemotePort}/");
+        _http.Start();
+        _ = Task.Run(Loop);
+    }
+
     public static void Apply()
     {
         Stop();
@@ -102,6 +112,13 @@ public static class Remote
             if (!CryptographicEquals(pin, Settings.Current.RemotePin)) { _fails++; resp.StatusCode = 401; return; }
 
             var cmd = path[5..];
+            if (cmd == "screen")
+            {
+                var jpg = await Task.Run(() => InputSim.Screenshot(int.TryParse(req.QueryString["w"], out var w) ? Math.Clamp(w, 320, 1920) : 1280));
+                resp.ContentType = "image/jpeg"; resp.ContentLength64 = jpg.Length; resp.Headers["Cache-Control"] = "no-store";
+                await resp.OutputStream.WriteAsync(jpg);
+                return;
+            }
             string body = "";
             if (req.HasEntityBody) { using var r = new StreamReader(req.InputStream, Encoding.UTF8); body = await r.ReadToEndAsync(); }
             var result = await Application.Current.Dispatcher.InvokeAsync(() => Do(cmd, body)).Task.Unwrap();
@@ -122,20 +139,31 @@ public static class Remote
         await r.OutputStream.WriteAsync(bytes);
     }
 
-    [DllImport("user32.dll")] static extern void keybd_event(byte vk, byte scan, uint flags, UIntPtr extra);
-    static void Key(byte vk) { keybd_event(vk, 0, 0, UIntPtr.Zero); keybd_event(vk, 0, 2, UIntPtr.Zero); }
+    static (double, double) Pair(string s)
+    {
+        var p = s.Split(',');
+        double Num(int i) => p.Length > i && double.TryParse(p[i], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var v) ? v : 0;
+        return (Num(0), Num(1));
+    }
 
-    static async Task<object> Do(string cmd, string arg)
+    /// <summary>One command from any remote (Wi-Fi page or Bluetooth). Runs on the UI thread.</summary>
+    public static async Task<object> Do(string cmd, string arg)
     {
         switch (cmd)
         {
             case "status": break;
+            case "mouse": { var (dx, dy) = Pair(arg); InputSim.Move((int)dx, (int)dy); return new { }; }
+            case "click": InputSim.Click(arg == "double" ? "left" : arg is "right" or "middle" ? arg : "left", arg == "double"); return new { };
+            case "scroll": InputSim.Scroll(int.TryParse(arg, out var n) ? Math.Clamp(n, -20, 20) : 0); return new { };
+            case "tap": { var (x, y) = Pair(arg); InputSim.TapAt(x, y, arg.EndsWith(",right") ? "right" : "left"); return new { }; }
+            case "type": InputSim.Type(arg.Length > 2000 ? arg[..2000] : arg); return new { };
+            case "key": return new { ok = InputSim.Key(arg) };
             case "volume": if (int.TryParse(arg, out var v)) Audio.Volume = v; break;
             case "mute": Audio.Muted = !Audio.Muted; break;
             case "brightness": if (int.TryParse(arg, out var br)) Display.Brightness = br; break;
-            case "play": Key(0xB3); break;
-            case "next": Key(0xB0); break;
-            case "prev": Key(0xB1); break;
+            case "play": InputSim.Key("play"); break;
+            case "next": InputSim.Key("next"); break;
+            case "prev": InputSim.Key("prev"); break;
             case "profile": Profiles.Apply(arg); break;
             case "boost": await Cleaner.BoostAll(); break;
             case "lock": Toolbox.Lock(); break;
@@ -162,43 +190,6 @@ public static class Remote
         };
     }
 
-    const string Page = """
-<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Mishka Remote</title><style>
-:root{--bg:#0b0b14;--card:#151527;--a:#ff3da8;--b:#3dc8ff;--t:#eef;--m:#99a}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--t);font:15px system-ui,sans-serif;padding:16px}
-h1{font-size:20px;margin:4px 0 12px;background:linear-gradient(90deg,var(--a),var(--b));-webkit-background-clip:text;color:transparent}
-.c{background:var(--card);border-radius:16px;padding:14px;margin-bottom:12px;box-shadow:0 0 18px #ff3da822}
-.r{display:flex;gap:8px;flex-wrap:wrap}button{flex:1;min-width:30%;padding:14px 8px;border:0;border-radius:12px;background:#22223a;color:var(--t);font-size:15px}
-button:active{background:var(--a)}button.d{background:#4a1530}input[type=range]{width:100%;accent-color:var(--a)}
-input[type=text],input[type=password]{width:100%;padding:12px;border-radius:10px;border:1px solid #334;background:#0e0e1c;color:var(--t);font-size:16px}
-.m{color:var(--m);font-size:13px}#st{display:flex;justify-content:space-between}
-</style></head><body>
-<h1>Mishka Remote <span id="pc" class="m"></span></h1>
-<div id="login" class="c" hidden><div class="m">PIN из Mishka Helper → Инструменты → «Пульт с телефона»</div><br>
-<input id="pin" type="password" inputmode="numeric"><br><br><button onclick="savePin()">Войти</button></div>
-<div id="app" hidden>
-<div class="c" id="st"><span id="cpu"></span><span id="ram"></span><span id="bat"></span></div>
-<div class="c"><div class="m">Громкость <span id="vv"></span></div><input id="vol" type="range" min="0" max="100" onchange="api('volume',this.value)">
-<div class="r"><button onclick="api('prev')">⏮</button><button onclick="api('play')">⏯</button><button onclick="api('next')">⏭</button><button onclick="api('mute')">🔇</button></div></div>
-<div class="c"><div class="m">Яркость <span id="bv"></span></div><input id="bri" type="range" min="0" max="100" onchange="api('brightness',this.value)"></div>
-<div class="c"><div class="m">Профили</div><div class="r" id="prof"></div><br><div class="r"><button onclick="api('boost')">🚀 Ускорить</button></div></div>
-<div class="c" id="jv" hidden><div class="m">Сказать Джарвису</div><input id="q" type="text" placeholder="что у меня завтра?">
-<br><br><button onclick="say()">Отправить</button><p id="ans" class="m"></p></div>
-<div class="c"><div class="r"><button onclick="api('lock')">🔒 Блок</button><button onclick="api('screenOff')">🌙 Экран</button><button onclick="if(confirm('Сон?'))api('sleep')">💤 Сон</button></div><br>
-<div class="r"><button class="d" onclick="if(confirm('Выключить ПК через 30 секунд?'))api('shutdown')">⏻ Выключить</button><button onclick="api('cancelShutdown')">Отмена</button></div></div>
-</div><script>
-let pin=localStorage.pin||'';
-function savePin(){pin=document.getElementById('pin').value;localStorage.pin=pin;load()}
-async function api(c,v){const r=await fetch('/api/'+c,{method:'POST',headers:{'X-Pin':pin},body:v??''});
-if(r.status==401){show(false);return null}if(!r.ok)return null;const j=await r.json();if(j.say)alert(j.say);if(j.volume!==undefined)render(j);return j}
-function show(ok){document.getElementById('login').hidden=ok;document.getElementById('app').hidden=!ok}
-function render(s){show(true);pc.textContent=s.pc;vol.value=s.volume;vv.textContent=s.volume+'%';bri.value=s.brightness;bv.textContent=s.brightness+'%';
-cpu.textContent='CPU '+s.cpu+'°';ram.textContent='RAM '+s.ram+'%';bat.textContent=s.battery>=0?(s.ac?'⚡':'🔋')+s.battery+'%':'';
-jv.hidden=!s.jarvis;if(!prof.childElementCount)for(const p of s.profiles){const b=document.createElement('button');b.textContent=p;b.onclick=()=>api('profile',p);prof.append(b)}}
-async function say(){ans.textContent='…';const r=await fetch('/api/say',{method:'POST',headers:{'X-Pin':pin},body:q.value});const j=await r.json();ans.textContent=j.say||'';q.value=''}
-function load(){api('status')}
-pin?load():show(false);setInterval(()=>{if(pin&&!document.hidden)api('status')},5000);
-</script></body></html>
-""";
+    // Same page as docs/remote (GitHub Pages serves it for Bluetooth); embedded so Wi-Fi works offline.
+    static readonly string Page = new StreamReader(typeof(Remote).Assembly.GetManifestResourceStream("remote.html")!).ReadToEnd();
 }

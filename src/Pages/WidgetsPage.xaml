@@ -3,7 +3,8 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <StackPanel>
         <TextBlock Text="Виджеты" Style="{StaticResource H1}"/>
-        <TextBlock Text="Живут на рабочем столе. Перетаскивай мышью, правый клик — «поверх окон», прозрачность, скрыть." Style="{StaticResource Dim}" FontSize="13" Margin="0,0,0,18"/>
+        <TextBlock Text="Сами встают колонкой в правом верхнем углу и подтягиваются, когда какой-то скрыт. Перетащенный мышью остаётся, где поставил. Правый клик — «поверх окон», прозрачность, вернуть в колонку, скрыть." Style="{StaticResource Dim}" FontSize="13" Margin="0,0,0,8" TextWrapping="Wrap"/>
+        <Button Content="Выстроить все в колонку" Click="Arrange_Click" HorizontalAlignment="Left" Margin="0,0,0,18"/>
         <WrapPanel x:Name="List"/>
         <Border Style="{StaticResource Card}">
             <StackPanel>
