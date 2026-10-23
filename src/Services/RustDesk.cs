@@ -11,7 +11,7 @@ namespace MishkaHelper.Core;
 /// </summary>
 public static class RustDesk
 {
-    static readonly string Mine = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MishkaHelper", "rustdesk", "rustdesk.exe");
+    static readonly string Mine = Path.Combine(AppPaths.Shared, "rustdesk", "rustdesk.exe");
 
     static string? Installed()
     {

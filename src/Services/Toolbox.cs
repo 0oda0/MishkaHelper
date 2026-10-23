@@ -183,7 +183,7 @@ public static class Toolbox
 
     /// <summary>Visible console so the user sees SFC/DISM/defrag progress.</summary>
     public static void RunVisible(string cmd) =>
-        Process.Start(new ProcessStartInfo("cmd.exe", $"/k title Mishka Helper && {cmd}") { UseShellExecute = true });
+        Process.Start(new ProcessStartInfo(Shell.Sys("cmd.exe"), $"/k title Mishka Helper && {cmd}") { UseShellExecute = true });
 
     public static async Task<string> CreateRestorePoint()
     {

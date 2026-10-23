@@ -23,7 +23,6 @@ public static class BleRemote
     static GattLocalCharacteristic? _evt;
     static readonly HashSet<string> Authed = new();
     static readonly Dictionary<string, List<byte>> Pieces = new();
-    static readonly Dictionary<string, (int Fails, DateTime Since)> Fails = new();
 
     public static bool Running => _prov != null;
 
@@ -40,7 +39,7 @@ public static class BleRemote
             await Task.Delay(1500);
         }
         if (!ad.IsLowEnergySupported || !ad.IsPeripheralRoleSupported) return "Этот Bluetooth-адаптер не умеет быть «пультом» (нет режима BLE peripheral)";
-        if (Settings.Current.RemotePin.Length < 4) { Settings.Current.RemotePin = Random.Shared.Next(1000, 10000).ToString(); Settings.Save(); }
+        Remote.EnsurePin();
 
         var res = await GattServiceProvider.CreateAsync(Svc);
         if (res.Error != BluetoothError.Success) return "Bluetooth: " + res.Error;
@@ -95,16 +94,12 @@ public static class BleRemote
         {
             if (cmd == "pin")
             {
-                // Same guard as Wi-Fi: 5 wrong PINs → that phone is ignored for a minute.
-                var f = Fails.GetValueOrDefault(id);
-                if (f.Fails >= 5 && DateTime.Now - f.Since < TimeSpan.FromMinutes(1)) return;
-                bool ok = System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(arg), Encoding.UTF8.GetBytes(Settings.Current.RemotePin));
+                // Same guard as Wi-Fi (shared counter: a phone can change its Bluetooth address, so per-device limits are easy to dodge).
+                bool ok = Remote.CheckPin(arg, "Bluetooth " + id.Split('-').Last());
                 lock (Authed) { if (ok) Authed.Add(id); }
-                Fails[id] = ok ? default : (f.Fails + 1, f.Fails == 0 ? DateTime.Now : f.Since);
                 await Notify(new { auth = ok });
                 return;
-            }
-            lock (Authed) { if (!Authed.Contains(id)) return; }
+            }            lock (Authed) { if (!Authed.Contains(id)) return; }
             var result = await Application.Current.Dispatcher.InvokeAsync(() => Remote.Do(cmd, arg)).Task.Unwrap();
             if (cmd is "status" or "say" or "shutdown" or "cancelShutdown" || cmd is "volume" or "mute" or "brightness" or "profile") await Notify(result);
         }

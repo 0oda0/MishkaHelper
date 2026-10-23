@@ -180,6 +180,8 @@ public class AppSettings
     public int RemotePort { get; set; } = 8770;
     public string RemotePin { get; set; } = "";
     public bool ScreenTime { get; set; } = true;
+    /// <summary>Process name → minutes per day; a toast warns 5 min before and at the limit.</summary>
+    public Dictionary<string, int> AppLimits { get; set; } = new();
     public bool ClipboardHistory { get; set; } = true;
     public DateTime LastUpdateCheck { get; set; }
 
@@ -189,8 +191,7 @@ public class AppSettings
 
 public static class Settings
 {
-    public static readonly string Dir = System.IO.Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "MishkaHelper");
+    public static readonly string Dir = AppPaths.Data;
     static readonly string FilePath = System.IO.Path.Combine(Dir, "settings.json");
     static readonly JsonSerializerOptions Json = new() { WriteIndented = true };
 

@@ -113,6 +113,7 @@ public static class Brain
                 msgs.Add(new JsonObject { ["role"] = l.FromUser ? "user" : "assistant", ["content"] = l.Text });
             msgs.Add(new JsonObject { ["role"] = "user", ["content"] = question });
             var tools = Tools();
+            bool readWeb = false;   // after a web page is in the context, its text could be giving the orders
 
             for (int round = 0; round < 6; round++)
             {
@@ -132,6 +133,13 @@ public static class Brain
                     string Arg(string k) => args[k]?.ToString() ?? "";
                     progress?.Invoke(name switch { "read_site" => $"Открываю «{Arg("name")}»…", "pc_command" => Arg("command"), "search_notes" => "Ищу в заметках…", _ => "Думаю…" });
 
+                    if (name == "read_site") readWeb = true;
+                    else if (name == "pc_command" && readWeb)
+                    {
+                        // Prompt injection guard: a page could say "выключи компьютер". The user confirms any PC action that follows reading a site.
+                        var c = Arg("command");
+                        return new Reply($"После чтения сайта хочу выполнить «{c}». Выполнить?", async () => { if (await Intents.Try(c) is { Confirm: { } more }) await more(); });
+                    }
                     var (result, confirm) = await Tool(name, Arg);
                     if (confirm != null) return confirm;
                     msgs.Add(new JsonObject { ["role"] = "tool", ["tool_call_id"] = call["id"]?.ToString() ?? name, ["content"] = result });

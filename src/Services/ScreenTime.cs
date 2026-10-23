@@ -9,7 +9,7 @@ namespace MishkaHelper.Core;
 /// <summary>Which program was in front and for how long, per day (30 days). Idle time (no input for 3 min) isn't counted.</summary>
 public static class ScreenTime
 {
-    static readonly string FilePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "MishkaHelper", "screentime.json");
+    static readonly string FilePath = Path.Combine(Settings.Dir, "screentime.json");
     /// <summary>"yyyy-MM-dd" → process name → seconds.</summary>
     static Dictionary<string, Dictionary<string, int>> _days = new();
     static DispatcherTimer? _t;
@@ -47,7 +47,22 @@ public static class ScreenTime
         if (name is "Idle" or "LockApp") return;
         var day = Today();
         day[name] = day.GetValueOrDefault(name) + Step;
+        CheckLimit(name, day[name]);
         if (++_ticks % 60 == 0) Save();   // every 5 min
+    }
+
+    static readonly HashSet<string> Warned = new();   // "date|app|stage", so each warning shows once a day
+
+    static void CheckLimit(string app, int seconds)
+    {
+        var limit = Settings.Current.AppLimits.FirstOrDefault(l => l.Key.Equals(app, StringComparison.OrdinalIgnoreCase));
+        if (limit.Key == null || limit.Value <= 0) return;
+        int left = limit.Value * 60 - seconds;
+        string stage = left <= 0 ? "over" : left <= 300 ? "soon" : "";
+        if (stage == "" || !Warned.Add($"{DateTime.Today:yyyyMMdd}|{app}|{stage}")) return;
+        Toast.Show("", "Экранное время", stage == "over"
+            ? $"{app}: дневной лимит {Format(limit.Value * 60)} исчерпан. Пора сделать перерыв."
+            : $"{app}: до дневного лимита осталось 5 минут.", () => App.Current.Navigate("Tools"));
     }
 
     static Dictionary<string, int> Today()

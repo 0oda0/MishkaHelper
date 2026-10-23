@@ -32,10 +32,25 @@ public static class SelfTest
             foreach (var b in await Task.Run(FullClean.Background)) L($"bg      {b.Verdict,-4} {b.Name} x{b.Count} {Cleaner.Size(b.Bytes)}");
         });
 
+        await Step("paths", async () =>   // run with MISHKA_PATHS_TEST set; elevated to test the protected folder
+        {
+            L($"paths elevated={AppPaths.Elevated} data={AppPaths.Data} shared={AppPaths.Shared} notes=[{string.Join("; ", AppPaths.Notes)}]");
+            L($"paths settings migrated={File.Exists(Path.Combine(AppPaths.Data, "settings.json"))} model moved={File.Exists(Path.Combine(AppPaths.Shared, "models", "fake.gguf"))}");
+            var acl = new DirectoryInfo(AppPaths.Shared).GetAccessControl();
+            L($"paths owner={acl.GetOwner(typeof(System.Security.Principal.NTAccount))} protected={acl.AreAccessRulesProtected}");
+            foreach (System.Security.AccessControl.FileSystemAccessRule r in acl.GetAccessRules(true, true, typeof(System.Security.Principal.NTAccount)))
+                L($"paths   {r.IdentityReference} {r.FileSystemRights} inherited={r.IsInherited}");
+            var f = new FileInfo(Path.Combine(AppPaths.Shared, "models", "fake.gguf"));
+            if (f.Exists)
+                foreach (System.Security.AccessControl.FileSystemAccessRule r in f.GetAccessControl().GetAccessRules(true, true, typeof(System.Security.Principal.NTAccount)))
+                    L($"paths   model file: {r.IdentityReference} {r.FileSystemRights} inherited={r.IsInherited}");
+            await Task.CompletedTask;
+        });
+
         await Step("remote", async () =>   // no input injection — only status, screen, auth
         {
             var pin = Settings.Current.RemotePin;
-            if (pin.Length < 4) Settings.Current.RemotePin = "4321";
+            Settings.Current.RemotePin = "432198";
             Remote.StartLocal();
             using var http = new System.Net.Http.HttpClient { BaseAddress = new Uri($"http://localhost:{Settings.Current.RemotePort}") };
             L($"remote page {(await http.GetStringAsync("/")).Length} chars");
@@ -45,6 +60,18 @@ public static class SelfTest
             L($"remote status {(int)st.StatusCode}: {await st.Content.ReadAsStringAsync()}");
             var scr = await Post("/api/screen?w=800", Settings.Current.RemotePin);
             L($"remote screen {(int)scr.StatusCode} {scr.Content.Headers.ContentType} {(await scr.Content.ReadAsByteArrayAsync()).Length} bytes");
+            var up = new System.Net.Http.HttpRequestMessage(System.Net.Http.HttpMethod.Post, "/api/upload?name=" + Uri.EscapeDataString("..\\..\\mishka-test?.txt"));
+            up.Headers.Add("X-Pin", Settings.Current.RemotePin); up.Content = new System.Net.Http.StringContent("hello from the phone");
+            var ur = await http.SendAsync(up);
+            var saved = Directory.Exists(Remote.Inbox) ? Directory.GetFiles(Remote.Inbox, "mishka-test*") : Array.Empty<string>();
+            L($"remote upload {(int)ur.StatusCode}: {await ur.Content.ReadAsStringAsync()} -> {string.Join(", ", saved)}");
+            foreach (var f in saved) File.Delete(f);
+            if (Directory.Exists(Remote.Inbox) && !Directory.EnumerateFileSystemEntries(Remote.Inbox).Any()) Directory.Delete(Remote.Inbox);
+            var reb = new System.Net.Http.HttpRequestMessage(System.Net.Http.HttpMethod.Post, "/api/status");
+            reb.Headers.Add("X-Pin", Settings.Current.RemotePin); reb.Headers.Host = "evil.example.com";
+            L($"remote dns-rebinding host -> {(int)(await http.SendAsync(reb)).StatusCode}");
+            for (int i = 0; i < 5; i++) await Post("/api/status", "000000");
+            L($"remote after 5 wrong pins, right pin -> {(int)(await Post("/api/status", Settings.Current.RemotePin)).StatusCode} (expect 429)");
             Remote.Stop();
             Settings.Current.RemotePin = pin;
 

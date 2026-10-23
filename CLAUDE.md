@@ -28,12 +28,13 @@ src/
   MainWindow.xaml(.cs) sidebar nav (Nav<Page> RadioButtons) → Pages; "Что можно сделать" button
   Theme.xaml           all styles/brushes (neon); accent/glass swapped at runtime by ThemeManager
   Core/
-    Settings.cs        AppSettings JSON model (%AppData%\MishkaHelper\settings.json) incl. JarvisSettings, Scenario, WebSource
+    AppPaths.cs        data dirs: elevated → %ProgramData%\MishkaHelper (admin-only write ACL, users\<SID> for settings), one-time migration from %AppData%/%LocalAppData%; dev (not elevated) → old per-user dirs; MISHKA_PATHS_TEST for tests
+    Settings.cs        AppSettings JSON model (AppPaths.Data\settings.json) incl. JarvisSettings, Scenario, WebSource
     Defaults.cs        first-run values, hotkey names/defaults, migrations (Jarvis.Version)
     Actions.cs         single dispatcher for every action key (hotkeys, tray, radial, palette, scenarios)
     Edition.cs         Full vs Lite (LITE define), version
     Native.cs          P/Invoke (DWM, hotkeys, display modes, power overlay, recycle bin…)
-    Shell.cs           run console tools (OEM 866 decoding), open files/URLs
+    Shell.cs           run console tools (OEM 866; Sys() = full System32 path), Open() via Explorer = unelevated
     ThemeManager.cs    accent colours, glass (DWM acrylic)
     Tray.cs            NotifyIcon + dark menu
     Features.cs        opens docs/index.html (landing)
@@ -66,6 +67,7 @@ src/
     Jarvis.cs          orchestrator: Handle(text) → scenarios → Intents (+compound "и") → Brain; confirmations; proactive Offer()
     Ears.cs            mic → energy VAD → Whisper (GPU) or Vosk; wake word (fuzzy); hallucination filter
     Voice.cs           TTS chain: Edge neural (EdgeTts) → Piper (offline) → Windows; ButlerFx; sentence queue (Say/Enqueue/Stop), Finished → dialog follow-up
+    EdgeGec.cs         Sec-MS-GEC v2 token (port of edge-tts drm.py; unit-tested against Python output)
     EdgeTts.cs         Microsoft Edge read-aloud voices over WebSocket (Sec-MS-GEC token); unofficial, online
     Intents.cs         offline Russian command parser, number words, app/site launch, Keys (SendInput)
     Brain.cs           LLM agent with native tool calling (pc_command, read_site, notes, diagnose)
@@ -110,6 +112,7 @@ STATUS.md              honest audit: not done / not verified live / known issues
 - Acer keyboard RGB: setters work, getters return stale colours → we persist zone colours in settings.
 - Whisper hallucinates on silence ("Продолжение следует…") → filtered in Ears.IsJunk.
 - A second running copy (installed + dev) shares llama port 18765 → set `MISHKA_LLAMA_PORT` for dev runs.
+- **Security rule:** the app runs elevated — never read commands from or execute files in user-writable places (%AppData%, %LocalAppData%, %TEMP%, Downloads). Use AppPaths.Shared/Data, Shell.Sys for system tools.
 - Hotkeys pressed by the owner work; hotkeys injected while an elevated window is in front don't.
 
 ## Conventions

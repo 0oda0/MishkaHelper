@@ -9,7 +9,7 @@ public record ModelInfo(string Key, string Name, string Url, long ApproxMb, stri
 /// <summary>Downloads speech/LLM models on demand into %LocalAppData%\MishkaHelper\models. No keys, no accounts.</summary>
 public static class Models
 {
-    public static readonly string Dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MishkaHelper", "models");
+    public static readonly string Dir = Path.Combine(AppPaths.Shared, "models");
 
     public static readonly ModelInfo Vosk = new("vosk", "Vosk RU (команды, 44 МБ)", "https://alphacephei.com/vosk/models/vosk-model-small-ru-0.22.zip", 44, "vosk-model-small-ru-0.22", Zip: true);
 

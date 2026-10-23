@@ -24,6 +24,7 @@ public static class Updater
         AppContext.BaseDirectory.StartsWith(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), StringComparison.OrdinalIgnoreCase);
 
     public static UpdateInfo? Available { get; private set; }
+    static readonly Dictionary<string, string> Digests = new();   // download url → sha256 hex from the release
 
     /// <summary>Early dev installs wrote their own "MishkaHelper" uninstall entry; the Inno setup has its own → drop the duplicate.</summary>
     public static void CleanLegacyUninstallEntry()
@@ -56,7 +57,11 @@ public static class Updater
             foreach (var a in r.GetProperty("assets").EnumerateArray())
             {
                 if (AssetMatches(a.GetProperty("name").GetString()!, kind, ext, Edition.HasJarvis))
-                    return a.GetProperty("browser_download_url").GetString();
+                {
+                    var u = a.GetProperty("browser_download_url").GetString()!;
+                    if (a.TryGetProperty("digest", out var d) && d.GetString() is { } dg && dg.StartsWith("sha256:")) Digests[u] = dg[7..];
+                    return u;
+                }
             }
             return null;
         }
@@ -67,13 +72,25 @@ public static class Updater
     /// <summary>Download and apply; the app quits at the end and the new version starts by itself.</summary>
     public static async Task Install(UpdateInfo u, Action<double>? progress = null)
     {
-        var dir = Path.Combine(Path.GetTempPath(), "MishkaHelper-update");
+        // Not %TEMP%: another program could swap the installer there between download and launch (we run it as admin).
+        var dir = Path.Combine(AppPaths.Shared, "update");
+        if (Directory.Exists(dir)) Directory.Delete(dir, true);
         Directory.CreateDirectory(dir);
         string? url = IsInstalled ? u.SetupUrl ?? u.PortableUrl : u.PortableUrl ?? u.SetupUrl;
         if (url == null) { Shell.Open(u.Page); throw new InvalidOperationException("В релизе нет файла для этой редакции — открыл страницу загрузки"); }
 
         var file = Path.Combine(dir, Path.GetFileName(new Uri(url).LocalPath));
         await Download(url, file, progress);
+        // GitHub publishes a SHA-256 for every release file: a damaged or tampered download is never run.
+        if (Digests.TryGetValue(url, out var want))
+        {
+            await using (var fs = File.OpenRead(file))
+                if (!Convert.ToHexString(await System.Security.Cryptography.SHA256.HashDataAsync(fs)).Equals(want, StringComparison.OrdinalIgnoreCase))
+                {
+                    fs.Close(); File.Delete(file);
+                    throw new InvalidOperationException("Файл обновления повреждён (контрольная сумма не совпала) — попробуй ещё раз");
+                }
+        }
         Log.Info($"update {Edition.Version} → {u.Version} via {Path.GetFileName(file)}");
 
         var appDir = AppContext.BaseDirectory.TrimEnd('\\');
@@ -97,7 +114,7 @@ public static class Updater
                 $"robocopy \"{unpack}\" \"{appDir}\" /E /IS /IT /R:3 /W:1 >nul\r\n" +
                 $"start \"\" \"{exe}\"\r\n",
                 new System.Text.UTF8Encoding(false));
-            Process.Start(new ProcessStartInfo("cmd.exe", $"/c \"{script}\"") { UseShellExecute = false, CreateNoWindow = true });
+            Process.Start(new ProcessStartInfo(Shell.Sys("cmd"), $"/c \"{script}\"") { UseShellExecute = false, CreateNoWindow = true });
         }
         System.Windows.Application.Current.Dispatcher.Invoke(() => App.Current.Quit());
     }

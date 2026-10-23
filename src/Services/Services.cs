@@ -131,7 +131,8 @@ public static class Autostart
                   <Actions Context="Author"><Exec><Command>"{exe}"</Command><Arguments>--autostart</Arguments></Exec></Actions>
                 </Task>
                 """;
-            var tmp = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "mishka-task.xml");
+            // Protected folder, not %TEMP%: a swapped XML here would become an admin logon task.
+            var tmp = System.IO.Path.Combine(AppPaths.Shared, "mishka-task.xml");
             System.IO.File.WriteAllText(tmp, xml, System.Text.Encoding.Unicode);
             Shell.Run("schtasks", $"/create /tn {Task} /xml \"{tmp}\" /f");
             System.IO.File.Delete(tmp);

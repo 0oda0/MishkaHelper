@@ -36,6 +36,7 @@ public partial class App : Application
         };
 
         Settings.Load();
+        foreach (var n in AppPaths.Notes) Log.Info(n);
         ThemeManager.Apply();
         _tray = new Tray();
 

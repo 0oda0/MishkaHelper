@@ -116,7 +116,7 @@ public partial class ToolsPage : UserControl
         b.Children.Add(bleInfo);
         b.Children.Add(qrs);
         var wp = new WrapPanel { Margin = new Thickness(0, 8, 0, 0) };
-        Btn(wp, "Новый PIN", () => { s.RemotePin = ""; Settings.Save(); if (s.RemoteEnabled) Remote.Apply(); if (s.RemotePin.Length == 0) s.RemotePin = Random.Shared.Next(1000, 10000).ToString(); Settings.Save(); Show(); });
+        Btn(wp, "Новый PIN", () => { s.RemotePin = ""; Remote.EnsurePin(); if (BleRemote.Running) _ = BleRemote.Start(); Show(); });   // restart drops phones logged in with the old PIN
         Btn(wp, "Скопировать Wi-Fi адрес", () => { System.Windows.Clipboard.SetText(Remote.Url); Osd.Show("", "Адрес скопирован"); });
         Btn(wp, "Скопировать ссылку Bluetooth", () => { System.Windows.Clipboard.SetText(BleRemote.PageUrl); Osd.Show("", "Ссылка скопирована"); });
         b.Children.Add(wp);
@@ -178,6 +178,39 @@ public partial class ToolsPage : UserControl
         b.Children.Add(wp);
         b.Children.Add(list);
         Render();
+
+        // Daily limits per program
+        b.Children.Add(new TextBlock { Text = "Лимиты в день", Style = S("H2"), Margin = new Thickness(0, 14, 0, 4) });
+        var limits = new StackPanel();
+        void RenderLimits()
+        {
+            limits.Children.Clear();
+            foreach (var (app, min) in Settings.Current.AppLimits.ToList())
+            {
+                var row = new DockPanel { Margin = new Thickness(0, 2, 0, 2) };
+                var del = new Button { Content = "Убрать", Padding = new Thickness(10, 3, 10, 3) };
+                del.Click += (_, _) => { Settings.Current.AppLimits.Remove(app); Settings.Save(); RenderLimits(); };
+                DockPanel.SetDock(del, Dock.Right); row.Children.Add(del);
+                var used = ScreenTime.Top(1).FirstOrDefault(t => t.App.Equals(app, StringComparison.OrdinalIgnoreCase)).Seconds;
+                row.Children.Add(UiKit.Text($"{app}: {min} мин (сегодня {ScreenTime.Format(used)})", 13));
+                limits.Children.Add(row);
+            }
+            if (Settings.Current.AppLimits.Count == 0) limits.Children.Add(UiKit.Text("Нет. Например: игра — 120 минут, браузер — 180.", 12, true));
+        }
+        RenderLimits();
+        b.Children.Add(limits);
+        var add = new WrapPanel { Margin = new Thickness(0, 6, 0, 0) };
+        var appBox = new ComboBox { IsEditable = true, Width = 180, Margin = new Thickness(0, 0, 8, 0) };
+        foreach (var (app, _) in ScreenTime.Top(30).Take(15)) appBox.Items.Add(app);
+        var minBox = new TextBox { Text = "120", Width = 60, Margin = new Thickness(0, 0, 8, 0) };
+        add.Children.Add(appBox); add.Children.Add(minBox); add.Children.Add(UiKit.Text("мин", 12, true));
+        Btn(add, "Добавить лимит", () =>
+        {
+            var app = appBox.Text.Trim().Replace(".exe", "", StringComparison.OrdinalIgnoreCase);
+            if (app.Length == 0 || !int.TryParse(minBox.Text, out var m) || m <= 0) return;
+            Settings.Current.AppLimits[app] = m; Settings.Save(); RenderLimits();
+        });
+        b.Children.Add(add);
         return c;
     }
 

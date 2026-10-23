@@ -42,12 +42,13 @@ nav button{border-radius:0;background:none;padding:14px 4px;font-size:13px}nav b
 <div id="app" hidden>
   <section id="t-main">
     <div class="c" id="st"><span id="cpu"></span><span id="ram"></span><span id="bat"></span></div>
-    <div class="c"><div class="m">Громкость <span id="vv"></span></div><input id="vol" type="range" min="0" max="100" onchange="api('volume',this.value)">
+    <div class="c"><div class="m">Громкость <span id="vv"></span></div><div id="np" class="m" style="color:var(--b)"></div><input id="vol" type="range" min="0" max="100" onchange="api('volume',this.value)">
       <div class="r"><button onclick="api('prev')">⏮</button><button onclick="api('play')">⏯</button><button onclick="api('next')">⏭</button><button onclick="api('mute')">🔇</button></div></div>
     <div class="c"><div class="m">Яркость <span id="bv"></span></div><input id="bri" type="range" min="0" max="100" onchange="api('brightness',this.value)"></div>
     <div class="c"><div class="m">Профили</div><div class="r" id="prof"></div><br><div class="r"><button onclick="api('boost')">🚀 Ускорить</button></div></div>
-    <div class="c" id="jv" hidden><div class="m">Сказать Джарвису</div><input id="q" type="text" placeholder="что у меня завтра?">
-      <br><br><button onclick="say()">Отправить</button><p id="ans" class="m"></p></div>
+    <div class="c" id="appsBox" hidden><div class="m">Программы</div><div class="r" id="apps"></div></div>
+    <div class="c" id="jv" hidden><div class="m">Сказать Джарвису</div><input id="q" type="text" placeholder="что у меня завтра?" onkeydown="if(event.key==='Enter')say()">
+      <br><br><div class="r"><button onclick="say()">Отправить</button><button id="mic" onclick="listen()" hidden>🎤 Голосом</button></div><p id="ans" class="m"></p></div>
     <div class="c"><div class="r"><button onclick="api('lock')">🔒 Блок</button><button onclick="api('screenOff')">🌙 Экран</button><button onclick="if(confirm('Усыпить ПК?'))api('sleep')">💤 Сон</button></div><br>
       <div class="r"><button class="d" onclick="if(confirm('Выключить ПК через 30 секунд?'))api('shutdown')">⏻ Выключить</button><button onclick="api('cancelShutdown')">Отмена</button></div></div>
   </section>
@@ -71,6 +72,18 @@ nav button{border-radius:0;background:none;padding:14px 4px;font-size:13px}nav b
     </div></div>
   </section>
 
+  <section id="t-files" hidden>
+    <div id="filesNet">
+      <div class="c"><div class="m">Фото, видео, документы → ПК (папка «Загрузки\С телефона»)</div><br>
+        <input id="up" type="file" multiple><br><br><button onclick="upload()">Отправить на ПК</button><p id="upst" class="m"></p></div>
+      <div class="c"><div class="m">Общий буфер обмена</div><br>
+        <textarea id="clip" rows="4" placeholder="Текст"></textarea><br><br>
+        <div class="r"><button onclick="clipGet()">⬇ Взять с ПК</button><button onclick="clipSet()">⬆ Отправить на ПК</button></div>
+        <p class="m">Взятый текст выделится — нажми «Копировать» на телефоне.</p></div>
+    </div>
+    <div id="filesBle" class="c m" hidden>Файлы и буфер — только по Wi-Fi: по Bluetooth слишком медленно.</div>
+  </section>
+
   <section id="t-scr" hidden>
     <div id="scrNet"><img id="scr" alt=""><p class="m">Тап по картинке — клик в это место, долгое нажатие — правый клик. Обновляется ~2 раза в секунду.</p>
       <div class="r"><button onclick="api('scroll','3')">Прокрутка ↑</button><button onclick="api('scroll','-3')">Прокрутка ↓</button><button onclick="key('backspace')">⌫</button></div></div>
@@ -80,7 +93,7 @@ nav button{border-radius:0;background:none;padding:14px 4px;font-size:13px}nav b
 </div>
 
 <nav id="nav" hidden>
-  <button data-t="main" class="on">Пульт</button><button data-t="pad">Тачпад</button><button data-t="kb">Клавиатура</button><button data-t="scr">Экран</button>
+  <button data-t="main" class="on">Пульт</button><button data-t="pad">Тачпад</button><button data-t="kb">Клава</button><button data-t="scr">Экран</button><button data-t="files">Файлы</button>
 </nav>
 
 <script>
@@ -131,6 +144,38 @@ function render(s) {
   $('bat').textContent = s.battery >= 0 ? (s.ac ? '⚡' : '🔋') + s.battery + '%' : '';
   $('jv').hidden = !s.jarvis;
   if (!$('prof').childElementCount) for (const p of s.profiles) { const b = document.createElement('button'); b.textContent = p; b.onclick = () => api('profile', p); $('prof').append(b); }
+  $('np').textContent = s.playing ? '♪ ' + s.playing : '';
+  if (s.apps && s.apps.length && !$('apps').childElementCount) {
+    $('appsBox').hidden = false;
+    s.apps.forEach((n, i) => { const b = document.createElement('button'); b.textContent = n; b.onclick = () => api('launch', String(i)); $('apps').append(b); });
+  }
+}
+
+// ---- files & clipboard (Wi-Fi) ----
+async function upload() {
+  const files = [...$('up').files]; if (!files.length) return;
+  for (const [i, f] of files.entries()) {
+    await new Promise(res => {
+      const x = new XMLHttpRequest();
+      x.open('POST', '/api/upload?name=' + encodeURIComponent(f.name)); x.setRequestHeader('X-Pin', pin);
+      x.upload.onprogress = e => $('upst').textContent = `${i + 1}/${files.length}: ${f.name} — ${Math.round(e.loaded / e.total * 100)}%`;
+      x.onloadend = () => { $('upst').textContent = x.status === 200 ? `Готово: ${i + 1}/${files.length}` : 'Ошибка ' + x.status; res(); };
+      x.send(f);
+    });
+  }
+  $('up').value = '';
+}
+async function clipGet() { const j = await api('clipGet'); if (j) { $('clip').value = j.clip; $('clip').select(); try { await navigator.clipboard.writeText(j.clip); } catch {} } }
+function clipSet() { if ($('clip').value) api('clipSet', $('clip').value); }
+
+// ---- voice to Jarvis: needs HTTPS (the Bluetooth page); on Wi-Fi use the phone keyboard's mic ----
+function listen() {
+  const R = window.SpeechRecognition || window.webkitSpeechRecognition; if (!R) return;
+  const r = new R(); r.lang = 'ru-RU'; r.interimResults = false;
+  $('ans').textContent = 'Слушаю…';
+  r.onresult = e => { $('q').value = e.results[0][0].transcript; say(); };
+  r.onerror = e => $('ans').textContent = 'Микрофон: ' + e.error;
+  r.start();
 }
 
 async function login() {
@@ -155,7 +200,7 @@ function typeText(enter) { const t = $('txt').value; if (t) api('type', t); if (
 // ---- tabs ----
 for (const b of document.querySelectorAll('nav button')) b.onclick = () => {
   for (const x of document.querySelectorAll('nav button')) x.classList.toggle('on', x === b);
-  for (const t of ['main', 'pad', 'kb', 'scr']) $('t-' + t).hidden = t !== b.dataset.t;
+  for (const t of ['main', 'pad', 'kb', 'scr', 'files']) $('t-' + t).hidden = t !== b.dataset.t;
   if (b.dataset.t === 'scr' && !BLE) refreshScreen();
 };
 
@@ -197,9 +242,11 @@ scr.onpointerup = e => {
 };
 
 // ---- start ----
+$('mic').hidden = !(window.isSecureContext && (window.SpeechRecognition || window.webkitSpeechRecognition));
 if (BLE) {
   $('bleBox').hidden = false; $('go').textContent = 'Подключиться по Bluetooth';
   $('scrNet').hidden = true; $('scrBle').hidden = false;
+  $('filesNet').hidden = true; $('filesBle').hidden = false;
   if (!navigator.bluetooth) $('err').textContent = 'Этот браузер не умеет Bluetooth. Android — Chrome, iPhone — Bluefy.';
   $('pin').value = pin; show(false);
 } else {

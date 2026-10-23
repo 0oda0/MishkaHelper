@@ -17,7 +17,7 @@ public static class ClipHistory
 {
     public class Item { public string Text { get; set; } = ""; public bool Pinned { get; set; } public DateTime When { get; set; } }
 
-    static readonly string PinFile = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "MishkaHelper", "clipboard-pinned.json");
+    static readonly string PinFile = Path.Combine(Settings.Dir, "clipboard-pinned.json");
     public static readonly List<Item> Items = new();
     static HwndSource? _src;
     static bool _ignoreNext;

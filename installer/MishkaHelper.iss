@@ -71,9 +71,10 @@ procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 begin
   if (CurUninstallStep = usPostUninstall) and not UninstallSilent then
     if MsgBox('Удалить также настройки, заметки и скачанные модели Джарвиса?' + #13#10 +
-              '(%AppData%\MishkaHelper и %LocalAppData%\MishkaHelper)', mbConfirmation, MB_YESNO or MB_DEFBUTTON2) = IDYES then
+              '(%ProgramData%\MishkaHelper, %AppData%\MishkaHelper и %LocalAppData%\MishkaHelper)', mbConfirmation, MB_YESNO or MB_DEFBUTTON2) = IDYES then
     begin
       DelTree(ExpandConstant('{userappdata}\MishkaHelper'), True, True, True);
       DelTree(ExpandConstant('{localappdata}\MishkaHelper'), True, True, True);
+      DelTree(ExpandConstant('{commonappdata}\MishkaHelper'), True, True, True);
     end;
 end;
