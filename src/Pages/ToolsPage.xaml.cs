@@ -87,10 +87,15 @@ public partial class ToolsPage : UserControl
         b.Children.Add(UiKit.Text("Есть тачпад, клавиатура и (по Wi-Fi) экран ПК с кликами по нему.", 12, true));
         var info = UiKit.Text("", 14);
         var bleInfo = UiKit.Text("", 13, true);
+        var qrs = new WrapPanel { Margin = new Thickness(0, 8, 0, 0) };
         void Show()
         {
             info.Text = (Remote.Running ? $"Wi-Fi: {Remote.Url}" : "Wi-Fi: выключен") + $"\nPIN: {(s.RemotePin.Length > 0 ? s.RemotePin : "появится при включении")}";
-            bleInfo.Text = BleRemote.Running ? $"Bluetooth: открой на телефоне {BleRemote.PageUrl} → «Подключиться». Android — Chrome, iPhone — Bluefy." : "Bluetooth: выключен";
+            bleInfo.Text = BleRemote.Running ? $"Bluetooth: {BleRemote.PageUrl} → «Подключиться». Android — Chrome, iPhone — Bluefy." : "Bluetooth: выключен";
+            // Scan with the phone camera → the remote opens and logs in by itself (PIN rides in the #fragment, never sent to a server).
+            qrs.Children.Clear();
+            if (Remote.Running) qrs.Children.Add(QrTile("Wi-Fi", $"{Remote.Url}/#pin={s.RemotePin}"));
+            if (BleRemote.Running) qrs.Children.Add(QrTile("Bluetooth", $"{BleRemote.PageUrl}#pin={s.RemotePin}"));
         }
         Switch(b, "Пульт по Wi-Fi (та же домашняя сеть)", s.RemoteEnabled, v =>
         {
@@ -109,6 +114,7 @@ public partial class ToolsPage : UserControl
         Show();
         b.Children.Add(info);
         b.Children.Add(bleInfo);
+        b.Children.Add(qrs);
         var wp = new WrapPanel { Margin = new Thickness(0, 8, 0, 0) };
         Btn(wp, "Новый PIN", () => { s.RemotePin = ""; Settings.Save(); if (s.RemoteEnabled) Remote.Apply(); if (s.RemotePin.Length == 0) s.RemotePin = Random.Shared.Next(1000, 10000).ToString(); Settings.Save(); Show(); });
         Btn(wp, "Скопировать Wi-Fi адрес", () => { System.Windows.Clipboard.SetText(Remote.Url); Osd.Show("", "Адрес скопирован"); });
@@ -127,6 +133,20 @@ public partial class ToolsPage : UserControl
         });
         b.Children.Add(rd);
         return c;
+    }
+
+    static UIElement QrTile(string title, string url)
+    {
+        var png = new QRCoder.PngByteQRCode(new QRCoder.QRCodeGenerator().CreateQrCode(url, QRCoder.QRCodeGenerator.ECCLevel.M)).GetGraphic(8);
+        var img = new System.Windows.Media.Imaging.BitmapImage();
+        img.BeginInit(); img.StreamSource = new MemoryStream(png); img.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad; img.EndInit(); img.Freeze();
+        var sp = new StackPanel { Margin = new Thickness(0, 0, 14, 0) };
+        // Black on white with a quiet zone: what phone cameras read best, even in the dark theme.
+        sp.Children.Add(new Border { Background = Brushes.White, CornerRadius = new CornerRadius(10), Padding = new Thickness(8),
+            Child = new Image { Source = img, Width = 170, Height = 170, ToolTip = url } });
+        var t = UiKit.Text($"{title}: наведи камеру телефона", 12, true); t.HorizontalAlignment = HorizontalAlignment.Center; t.Margin = new Thickness(0, 4, 0, 0);
+        sp.Children.Add(t);
+        return sp;
     }
 
     UIElement ScreenTimeCard()

@@ -246,6 +246,13 @@ public static class SelfTest
         });
 
         // Voice samples for choosing: every Edge voice plain, plus the butler effect on the male ones.
+        await Step("edgetts", async () =>
+        {
+            var t0 = DateTime.Now;
+            var mp3 = await EdgeTts.Synthesize("Добрый вечер, сэр. Проверка связи.", "ru-RU-DmitryNeural");
+            L($"edgetts {mp3.Length} bytes mp3 in {(DateTime.Now - t0).TotalSeconds:0.0}s");
+        });
+
         await Step("voices", async () =>
         {
             var j = Settings.Current.Jarvis;

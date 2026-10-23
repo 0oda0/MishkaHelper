@@ -63,8 +63,21 @@ public static class Remote
         if (on) try { Process.Start(new ProcessStartInfo("netsh", add) { CreateNoWindow = true, UseShellExecute = false })?.WaitForExit(5000); } catch (Exception e) { Log.Error(e); }
     }
 
+    static readonly System.Text.RegularExpressions.Regex VirtualNic = new(@"virtual|hyper-v|vethernet|vmware|virtualbox|docker|wsl|tap|tun|wireguard|vpn|loopback|xray|v2ray|outline|zerotier|tailscale|radmin|hamachi", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+    /// <summary>The address the phone can reach: a real Wi-Fi/Ethernet adapter with a gateway (VPN, Docker and WSL adapters skipped).</summary>
     public static string LocalIp()
     {
+        var real = System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces()
+            .Where(n => n.OperationalStatus == System.Net.NetworkInformation.OperationalStatus.Up
+                && n.NetworkInterfaceType is System.Net.NetworkInformation.NetworkInterfaceType.Wireless80211 or System.Net.NetworkInformation.NetworkInterfaceType.Ethernet
+                && !VirtualNic.IsMatch(n.Description + " " + n.Name))
+            .Select(n => (n, p: n.GetIPProperties()))
+            .Where(x => x.p.GatewayAddresses.Any(g => g.Address.AddressFamily == AddressFamily.InterNetwork))
+            .OrderBy(x => x.n.NetworkInterfaceType == System.Net.NetworkInformation.NetworkInterfaceType.Wireless80211 ? 0 : 1)
+            .SelectMany(x => x.p.UnicastAddresses.Select(u => u.Address))
+            .FirstOrDefault(a => a.AddressFamily == AddressFamily.InterNetwork && IsPrivate(a));
+        if (real != null) return real.ToString();
         try
         {
             // The interface Windows would use to reach the internet = the LAN address the phone can see.

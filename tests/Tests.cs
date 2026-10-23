@@ -59,6 +59,18 @@ public class ParsingTests
     public void RemotePrivateOnly(string ip, bool ok) => Assert.Equal(ok, Remote.IsPrivate(IPAddress.Parse(ip)));
 }
 
+public class EdgeGecTests
+{
+    // Reference values from edge-tts drm.generate_sec_ms_gec_v2 (Python) for the same timestamps.
+    [Theory]
+    [InlineData(1700000000.0, "2CD23A2CA0B2595A-F3C846C370E05F9CC83ACC5F995C5F5D87A4D0F14CE8936A0F902E64099E38A2")]
+    [InlineData(1761200000.5, "C18EDA1D9D6E9E1A-020D623AC0DF9B38882CE331BEBD65FD080406B574104C1D939CD3CC8DAA5662")]
+    [InlineData(1761200100.0, "17E5B724471DC36D-716848FA739D1BF437A4D47F4D9680A713D80AE6FDA92669439165A9B5AD3A10")]
+    [InlineData(1761210599.999, "D34EE2E9C8ADF566-6468D3DF9912EE46F6A1E84EEF882AE6854CFBECBA162BF0D77A3030C98FCDED")]
+    [InlineData(0.0, "52BC7A17B50DFEC9-28C4394775C8751CD2F6859C030C06DB1489ACAB3B3A7651831FC26895177ED6")]
+    public void MatchesEdgeTts(double t, string expected) => Assert.Equal(expected, EdgeGec.Generate(t, "6A5AA1D4EAFF4E9FB37E23D68491D6F4"));
+}
+
 public class FullCleanTests
 {
     [Theory]

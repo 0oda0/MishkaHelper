@@ -11,6 +11,8 @@ public static class Shots
     public static async void Run(string dir, MainWindow main)
     {
         Directory.CreateDirectory(dir);
+        // Dev copies aren't elevated, so the LAN remote can't bind; localhost is enough to show its QR on the Tools page.
+        if (!Remote.Running) try { Remote.StartLocal(); } catch { }
         await Task.Delay(1500);
         foreach (var p in new[] { "Jarvis", "Scenarios", "Home", "Controls", "System", "Devices", "Nitro", "Boost", "Security", "Tools", "Profiles", "Hotkeys", "Widgets", "Settings" })
         {

@@ -88,6 +88,9 @@ nav button{border-radius:0;background:none;padding:14px 4px;font-size:13px}nav b
 const BLE = location.protocol === 'https:';
 const SVC = '6d697368-6b61-4865-6c70-657200000001', CMD = '6d697368-6b61-4865-6c70-657200000002', EVT = '6d697368-6b61-4865-6c70-657200000003';
 const $ = id => document.getElementById(id);
+// A QR code from Mishka Helper carries the PIN as #pin=1234 (fragments never leave the phone).
+const hashPin = new URLSearchParams(location.hash.slice(1)).get('pin');
+if (hashPin) { localStorage.pin = hashPin; history.replaceState(null, '', location.pathname); }
 let pin = localStorage.pin || '', cmdChar = null, bleQueue = Promise.resolve();
 const enc = new TextEncoder(), dec = new TextDecoder();
 

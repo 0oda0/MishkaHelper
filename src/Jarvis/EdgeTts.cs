@@ -38,30 +38,45 @@ public static class EdgeTts
     /// <summary>Russian text can't be read by an English-only voice → a multilingual one reads it instead.</summary>
     public const string RussianFallback = "en-US-BrianMultilingualNeural";
 
-    /// <summary>Sec-MS-GEC: SHA-256 of the Windows file time rounded down to 5 minutes + the client token.</summary>
-    static string Gec()
-    {
-        long ticks = DateTimeOffset.UtcNow.ToUnixTimeSeconds() + 11644473600;
-        ticks -= ticks % 300;
-        ticks *= 10_000_000;
-        return Convert.ToHexString(SHA256.HashData(Encoding.ASCII.GetBytes($"{ticks}{Token}")));
-    }
+    /// <summary>Server time minus ours: a PC clock that is off by minutes gets 403 until corrected from the server's Date.</summary>
+    static double _skew;
+
+    static string Gec() => EdgeGec.Generate(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() / 1000.0 + _skew, Token);
 
     static string Stamp() => DateTime.UtcNow.ToString("ddd MMM dd yyyy HH:mm:ss", System.Globalization.CultureInfo.InvariantCulture) + " GMT+0000 (Coordinated Universal Time)";
 
     /// <summary>MP3 (24 kHz mono) for the text. rate/pitch in percent, e.g. +5 / -4.</summary>
-    public static async Task<byte[]> Synthesize(string text, string voice, int ratePct = 0, int pitchPct = 0, CancellationToken ct = default)
+    static async Task<ClientWebSocket> Connect(string conn, CancellationToken ct, bool retried = false)
     {
-        using var ws = new ClientWebSocket();
+        var ws = new ClientWebSocket();
+        ws.Options.CollectHttpResponseDetails = true;
         ws.Options.SetRequestHeader("Origin", "chrome-extension://jdiccldimpdaibmpdkjnbmckianbfold");
         ws.Options.SetRequestHeader("User-Agent", $"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/{ChromiumVersion.Split('.')[0]}.0.0.0 Safari/537.36 Edg/{ChromiumVersion.Split('.')[0]}.0.0.0");
         ws.Options.SetRequestHeader("Pragma", "no-cache");
         ws.Options.SetRequestHeader("Cache-Control", "no-cache");
         ws.Options.SetRequestHeader("Cookie", "muid=" + Convert.ToHexString(RandomNumberGenerator.GetBytes(16)) + ";");
+        try
+        {
+            await ws.ConnectAsync(new Uri($"{Wss}?TrustedClientToken={Token}&ConnectionId={conn}&Sec-MS-GEC={Gec()}&Sec-MS-GEC-Version=2-{ChromiumVersion}"), ct);
+            return ws;
+        }
+        catch (WebSocketException) when (!retried && ws.HttpStatusCode == System.Net.HttpStatusCode.Forbidden
+                                         && ws.HttpResponseHeaders?.TryGetValue("Date", out var d) == true && DateTimeOffset.TryParse(d.FirstOrDefault(), out var server))
+        {
+            // Token is bound to a 5-minute window: sync with the server clock once and retry.
+            _skew += (server - DateTimeOffset.UtcNow).TotalSeconds;
+            ws.Dispose();
+            return await Connect(conn, ct, true);
+        }
+        catch { ws.Dispose(); throw; }
+    }
+
+    public static async Task<byte[]> Synthesize(string text, string voice, int ratePct = 0, int pitchPct = 0, CancellationToken ct = default)
+    {
         var conn = Guid.NewGuid().ToString("N");
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
         timeout.CancelAfter(TimeSpan.FromSeconds(25));
-        await ws.ConnectAsync(new Uri($"{Wss}?TrustedClientToken={Token}&Sec-MS-GEC={Gec()}&Sec-MS-GEC-Version=1-{ChromiumVersion}&ConnectionId={conn}"), timeout.Token);
+        using var ws = await Connect(conn, timeout.Token);
 
         async Task Send(string s) => await ws.SendAsync(Encoding.UTF8.GetBytes(s), WebSocketMessageType.Text, true, timeout.Token);
         await Send($"X-Timestamp:{Stamp()}\r\nContent-Type:application/json; charset=utf-8\r\nPath:speech.config\r\n\r\n" +
