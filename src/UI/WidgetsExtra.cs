@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.IO;
 using System.Net.Http;
 using System.Text.Json;
 using System.Windows;
@@ -6,6 +7,7 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using Windows.Media.Control;
 
@@ -130,45 +132,175 @@ public static partial class Widgets
         return (root, null, null);
     }
 
-    // ---------- media ----------
+    // ---------- music ----------
     static GlobalSystemMediaTransportControlsSessionManager? _media;
+    static string? _mediaPick;   // AUMID the user switched to; null = whatever Windows considers current
 
+    static string Fmt(TimeSpan t) => t.TotalHours >= 1 ? t.ToString(@"h\:mm\:ss") : t.ToString(@"m\:ss");
+
+    static FontFamily Icon => (FontFamily)Application.Current.Resources["IconFont"];
+
+    /// <summary>Music: cover (also as a blurred backdrop), title, progress with seeking, shuffle/repeat, the player's own volume, source switch.</summary>
     static (UIElement, Action<Sample>?, Action?) MediaWidget()
     {
-        var title = new TextBlock { FontSize = 15, FontWeight = FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis, Width = 250 };
-        var artist = UiKit.Text("", 12, true);
-        var app = UiKit.Text("", 10, true);
-        var btns = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 8, 0, 0) };
-        Button Btn(string g, Func<GlobalSystemMediaTransportControlsSession, Task> act)
+        const double W = 290;
+        var backdrop = new Image { Stretch = Stretch.UniformToFill, Opacity = 0.28, Width = W, Height = 160, Effect = new System.Windows.Media.Effects.BlurEffect { Radius = 28 }, IsHitTestVisible = false };
+        var coverImg = new Image { Stretch = Stretch.UniformToFill };
+        var coverIcon = new TextBlock { Text = "\uE8D6", FontFamily = Icon, FontSize = 34, Foreground = B("AccentBrush"), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        var cover = new Border
         {
-            var b = new Button { Content = g, FontFamily = (FontFamily)Application.Current.Resources["IconFont"], FontSize = 16, Width = 46 };
-            b.Click += async (_, _) => { try { if (_media?.GetCurrentSession() is { } s) await act(s); } catch { } };
+            Width = 88, Height = 88, CornerRadius = new CornerRadius(12), Background = new SolidColorBrush(Color.FromArgb(0x40, 255, 255, 255)),
+            Child = new Grid { Children = { coverIcon, coverImg } }, ClipToBounds = true,
+        };
+        cover.Loaded += (_, _) => cover.Clip = new RectangleGeometry(new Rect(0, 0, 88, 88), 12, 12);
+
+        var title = new TextBlock { FontSize = 15, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap, MaxHeight = 42, TextTrimming = TextTrimming.CharacterEllipsis };
+        var artist = new TextBlock { FontSize = 12, Foreground = B("DimBrush"), TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(0, 2, 0, 0) };
+        var source = new Button { Style = (Style)Application.Current.Resources["GhostButton"], Padding = new Thickness(0), HorizontalAlignment = HorizontalAlignment.Left, FontSize = 11, Margin = new Thickness(0, 4, 0, 0), ToolTip = "Переключить плеер" };
+        var info = new StackPanel { Margin = new Thickness(12, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, Width = W - 100 };
+        info.Children.Add(title); info.Children.Add(artist); info.Children.Add(source);
+        var top = new StackPanel { Orientation = Orientation.Horizontal };
+        top.Children.Add(cover); top.Children.Add(info);
+
+        var progress = new Slider { Width = W, Minimum = 0, Maximum = 1, Margin = new Thickness(0, 10, 0, 0), IsMoveToPointEnabled = true };
+        var pos = UiKit.Text("0:00", 10, true); var len = UiKit.Text("0:00", 10, true);
+        var times = new DockPanel { Width = W };
+        DockPanel.SetDock(len, Dock.Right); times.Children.Add(len); times.Children.Add(pos);
+
+        var btns = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 6, 0, 0) };
+        GlobalSystemMediaTransportControlsSession? cur = null;
+        Action reload = () => { };   // buttons refresh right away; set to Load below
+        Button Btn(string glyph, Func<GlobalSystemMediaTransportControlsSession, Task> act, double size = 15, bool accent = false)
+        {
+            var b = new Button { Content = glyph, FontFamily = Icon, FontSize = size, Width = accent ? 54 : 42, Height = accent ? 42 : 36, Margin = new Thickness(3, 0, 3, 0) };
+            if (accent) b.Style = (Style)Application.Current.Resources["AccentButton"];
+            b.Click += async (_, _) => { try { if (cur != null) { await act(cur); await Task.Delay(150); reload(); } } catch { } };
             btns.Children.Add(b);
             return b;
         }
-        Btn("", async s => await s.TrySkipPreviousAsync());
-        var play = Btn("", async s => await s.TryTogglePlayPauseAsync());
-        Btn("", async s => await s.TrySkipNextAsync());
-        var root = Header("", "Сейчас играет", title);
-        root.Children.Add(artist); root.Children.Add(app); root.Children.Add(btns);
+        var shuffle = Btn("\uE8B1", async s => await s.TryChangeShuffleActiveAsync(!(s.GetPlaybackInfo().IsShuffleActive ?? false)), 13);
+        Btn("\uE892", async s => await s.TrySkipPreviousAsync());
+        var play = Btn("\uE768", async s => await s.TryTogglePlayPauseAsync(), 18, accent: true);
+        Btn("\uE893", async s => await s.TrySkipNextAsync());
+        var repeat = Btn("\uE8EE", async s =>
+        {
+            var m = s.GetPlaybackInfo().AutoRepeatMode ?? Windows.Media.MediaPlaybackAutoRepeatMode.None;
+            await s.TryChangeAutoRepeatModeAsync(m switch
+            {
+                Windows.Media.MediaPlaybackAutoRepeatMode.None => Windows.Media.MediaPlaybackAutoRepeatMode.List,
+                Windows.Media.MediaPlaybackAutoRepeatMode.List => Windows.Media.MediaPlaybackAutoRepeatMode.Track,
+                _ => Windows.Media.MediaPlaybackAutoRepeatMode.None,
+            });
+        }, 13);
+
+        var volIcon = new TextBlock { Text = "\uE767", FontFamily = Icon, FontSize = 13, Foreground = B("DimBrush"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) };
+        var vol = new Slider { Width = W - 24, Minimum = 0, Maximum = 100, VerticalAlignment = VerticalAlignment.Center };
+        var volRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 8, 0, 0), Visibility = Visibility.Collapsed, ToolTip = "Громкость этого плеера" };
+        volRow.Children.Add(volIcon); volRow.Children.Add(vol);
+        AudioApp? player = null;
+        vol.ValueChanged += (_, e) => { if (vol.IsMouseCaptureWithin && player != null) try { player.Session.SimpleAudioVolume.Volume = (float)(e.NewValue / 100); } catch { } };
+
+        var body = new StackPanel();
+        body.Children.Add(top); body.Children.Add(progress); body.Children.Add(times); body.Children.Add(btns); body.Children.Add(volRow);
+        var root = Header("\uE8D6", "Музыка");
+        // The backdrop takes exactly the size of the content; otherwise the picture's own size stretches the widget.
+        body.SizeChanged += (_, e) => { backdrop.Width = e.NewSize.Width; backdrop.Height = e.NewSize.Height; };
+        root.Children.Add(new Grid { Children = { backdrop, body }, ClipToBounds = true });
+        root.Width = W + 4;
+
+        // Seek when the user lets go of the slider.
+        progress.PreviewMouseLeftButtonUp += async (_, _) =>
+        {
+            try { if (cur != null) await cur.TryChangePlaybackPositionAsync(TimeSpan.FromSeconds(progress.Value).Ticks); } catch { }
+        };
+
+        source.Click += (_, _) =>
+        {
+            var all = _media?.GetSessions().ToList() ?? new();
+            if (all.Count < 2) return;
+            int i = all.FindIndex(s => s.SourceAppUserModelId == cur?.SourceAppUserModelId);
+            _mediaPick = all[(i + 1) % all.Count].SourceAppUserModelId;
+            reload();
+        };
+
+        string shownKey = "";
+        static string AppName(string aumid)
+        {
+            var a = aumid.Split('!')[0];
+            a = a.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) ? Path.GetFileNameWithoutExtension(a) : a.Split('.').Last().Split('_')[0];
+            return a.Length > 0 ? char.ToUpper(a[0]) + a[1..] : "Плеер";
+        }
+
         async void Load()
         {
             try
             {
                 _media ??= await GlobalSystemMediaTransportControlsSessionManager.RequestAsync();
-                var s = _media.GetCurrentSession();
-                if (s == null) { title.Text = "Ничего не играет"; artist.Text = ""; app.Text = ""; return; }
-                var p = await s.TryGetMediaPropertiesAsync();
-                title.Text = string.IsNullOrEmpty(p.Title) ? "Без названия" : p.Title;
-                artist.Text = p.Artist;
-                app.Text = s.SourceAppUserModelId.Split('!')[0].Split('.').LastOrDefault() ?? "";
-                play.Content = s.GetPlaybackInfo().PlaybackStatus == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing ? "" : "";
+                var sessions = _media.GetSessions().ToList();
+                cur = sessions.FirstOrDefault(s => s.SourceAppUserModelId == _mediaPick) ?? _media.GetCurrentSession() ?? sessions.FirstOrDefault();
+                if (cur == null)
+                {
+                    title.Text = "Ничего не играет"; artist.Text = "Включи музыку в любом плеере"; source.Content = "";
+                    coverImg.Source = backdrop.Source = null; coverIcon.Visibility = Visibility.Visible; shownKey = "";
+                    progress.Maximum = 1; progress.Value = 0; pos.Text = len.Text = "0:00"; volRow.Visibility = Visibility.Collapsed;
+                    return;
+                }
+                var p = await cur.TryGetMediaPropertiesAsync();
+                var name = AppName(cur.SourceAppUserModelId);
+                source.Content = sessions.Count > 1 ? $"{name}  ⇄ {sessions.Count}" : name;
+                var key = $"{cur.SourceAppUserModelId}|{p.Title}|{p.Artist}";
+                if (key != shownKey)
+                {
+                    shownKey = key;
+                    title.Text = string.IsNullOrEmpty(p.Title) ? "Без названия" : p.Title;
+                    artist.Text = string.IsNullOrEmpty(p.Artist) ? p.AlbumTitle : p.Artist;
+                    BitmapImage? img = null;
+                    if (p.Thumbnail != null)
+                    {
+                        using var ras = await p.Thumbnail.OpenReadAsync();
+                        var ms = new MemoryStream();
+                        await ras.AsStreamForRead().CopyToAsync(ms);
+                        ms.Position = 0;
+                        img = new BitmapImage();
+                        img.BeginInit(); img.StreamSource = ms; img.DecodePixelWidth = 176; img.CacheOption = BitmapCacheOption.OnLoad; img.EndInit(); img.Freeze();
+                    }
+                    coverImg.Source = backdrop.Source = img;
+                    coverIcon.Visibility = img == null ? Visibility.Visible : Visibility.Collapsed;
+                    // The player's own volume: match the audio session by process name.
+                    var lname = name.ToLowerInvariant();
+                    player = Audio.Apps().FirstOrDefault(a => a.Name.ToLowerInvariant() is var n && n.Length > 2 && (n.Contains(lname) || lname.Contains(n)));
+                    volRow.Visibility = player != null ? Visibility.Visible : Visibility.Collapsed;
+                }
+                if (player != null && !vol.IsMouseCaptureWithin) try { vol.Value = player.Session.SimpleAudioVolume.Volume * 100; } catch { }
+
+                var pb = cur.GetPlaybackInfo();
+                bool playing = pb.PlaybackStatus == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing;
+                play.Content = playing ? "\uE769" : "\uE768";
+                shuffle.Opacity = pb.IsShuffleActive == true ? 1 : 0.45;
+                shuffle.Visibility = pb.Controls.IsShuffleEnabled ? Visibility.Visible : Visibility.Collapsed;
+                var rep = pb.AutoRepeatMode ?? Windows.Media.MediaPlaybackAutoRepeatMode.None;
+                repeat.Content = rep == Windows.Media.MediaPlaybackAutoRepeatMode.Track ? "\uE8ED" : "\uE8EE";
+                repeat.Opacity = rep == Windows.Media.MediaPlaybackAutoRepeatMode.None ? 0.45 : 1;
+                repeat.Visibility = pb.Controls.IsRepeatEnabled ? Visibility.Visible : Visibility.Collapsed;
+
+                // Players report the position only now and then: move it forward ourselves while playing.
+                var tl = cur.GetTimelineProperties();
+                var end = tl.EndTime - tl.StartTime;
+                var at = tl.Position - tl.StartTime + (playing ? DateTimeOffset.Now - tl.LastUpdatedTime : TimeSpan.Zero);
+                if (at > end) at = end;
+                bool hasTime = end.TotalSeconds > 1;
+                progress.Visibility = times.Visibility = hasTime ? Visibility.Visible : Visibility.Collapsed;
+                progress.IsEnabled = pb.Controls.IsPlaybackPositionEnabled;
+                if (hasTime && !progress.IsMouseCaptureWithin)
+                {
+                    progress.Maximum = end.TotalSeconds; progress.Value = Math.Max(0, at.TotalSeconds);
+                    pos.Text = Fmt(at < TimeSpan.Zero ? TimeSpan.Zero : at); len.Text = Fmt(end);
+                }
             }
             catch { title.Text = "Медиа недоступно"; }
         }
         return (root, null, Load);
     }
-
     // ---------- ping ----------
     static (UIElement, Action<Sample>?, Action?) PingWidget()
     {

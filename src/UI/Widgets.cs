@@ -25,7 +25,7 @@ public static partial class Widgets
         ["notes"] = "Заметки",
         ["todo"] = "Список дел",
         ["timer"] = "Помодоро и секундомер",
-        ["media"] = "Сейчас играет",
+        ["media"] = "Музыка",
         ["ping"] = "Пинг и интернет",
         ["mic"] = "Индикатор микрофона",
         ["disks"] = "Место на дисках",
@@ -143,8 +143,8 @@ public static partial class Widgets
             slow();
             t = new DispatcherTimer { Interval = TimeSpan.FromSeconds(kind switch
             {
-                "clock" or "timer" or "worldclock" or "countdown" or "mic" => 1,
-                "ping" or "procs" or "media" => 2,
+                "clock" or "timer" or "worldclock" or "countdown" or "mic" or "media" => 1,
+                "ping" or "procs" => 2,
                 "currency" => 3600,
                 _ => 30,
             }) };
