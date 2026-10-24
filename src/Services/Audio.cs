@@ -138,6 +138,41 @@ public static class Audio
         return res.GroupBy(a => a.Pid).Select(g => g.First()).ToList();
     }
 
+    // ---- ducking: other apps quieter while Jarvis listens/answers ----
+    static readonly Dictionary<int, float> Ducked = new();   // pid → volume before ducking
+
+    public static bool IsDucked { get { lock (Ducked) return Ducked.Count > 0; } }
+
+    /// <summary>
+    /// Lower every other app to percent of its volume, or restore. Only touches a session if its volume is still the one we set,
+    /// so a slider the user moved meanwhile is left alone.
+    /// ponytail: originals live in memory only; if the app is killed while ducked, those apps stay quiet until moved.
+    /// </summary>
+    public static void Duck(bool on, int percent = 20)
+    {
+        lock (Ducked)
+        {
+            if (on == (Ducked.Count > 0)) return;
+            foreach (var a in Apps())
+            {
+                if (a.Pid == Environment.ProcessId || a.Pid == 0 || a.Session.IsSystemSoundsSession) continue;
+                try
+                {
+                    if (on)
+                    {
+                        Ducked[a.Pid] = a.Volume;
+                        a.Session.SimpleAudioVolume.Volume = a.Volume * Math.Clamp(percent, 0, 100) / 100f;
+                    }
+                    else if (Ducked.TryGetValue(a.Pid, out var orig) && Math.Abs(a.Volume - orig * Math.Clamp(percent, 0, 100) / 100f) < 0.02)
+                        a.Session.SimpleAudioVolume.Volume = orig;
+                }
+                catch { }
+            }
+            if (on && Ducked.Count == 0) Ducked[-1] = 0;   // nothing to duck still counts as "ducked", so unduck runs once
+            if (!on) Ducked.Clear();
+        }
+    }
+
     sealed class Notifier : IMMNotificationClient
     {
         public void OnDeviceStateChanged(string deviceId, DeviceState newState)

@@ -24,8 +24,37 @@ public static class Voice
         ("irina", "Ирина — женский"),
     };
 
-    public static ModelInfo PiperVoice(string key) =>
-        new("piper-" + key, key, $"https://huggingface.co/rhasspy/piper-voices/resolve/main/ru/ru_RU/{key}/medium/ru_RU-{key}-medium.onnx", 60, $"ru_RU-{key}-medium.onnx");
+    public static ModelInfo PiperVoice(string key) => key.StartsWith("custom:")
+        ? new("piper-" + key, key[7..], "", 0, Path.Combine("voices", key[7..] + ".onnx"))
+        : new("piper-" + key, key, $"https://huggingface.co/rhasspy/piper-voices/resolve/main/ru/ru_RU/{key}/medium/ru_RU-{key}-medium.onnx", 60, $"ru_RU-{key}-medium.onnx");
+
+    /// <summary>Built-in voices + ones the user imported (Models\voices\*.onnx).</summary>
+    public static List<(string Key, string Name)> AllPiperVoices()
+    {
+        var l = PiperVoices.ToList();
+        var dir = Path.Combine(Models.Dir, "voices");
+        if (Directory.Exists(dir))
+            l.AddRange(Directory.GetFiles(dir, "*.onnx").Select(f => Path.GetFileNameWithoutExtension(f)).Select(n => ("custom:" + n, "Свой: " + n)));
+        return l;
+    }
+
+    /// <summary>
+    /// Import a Piper voice (model.onnx + model.onnx.json next to it) into the protected models folder.
+    /// The model is data, not code, so taking it from Downloads is safe; it is copied, never run from there.
+    /// </summary>
+    public static string ImportPiper(string onnx)
+    {
+        var json = File.Exists(onnx + ".json") ? onnx + ".json" : Path.ChangeExtension(onnx, ".json");
+        if (!File.Exists(json)) throw new InvalidOperationException("Рядом с .onnx нужен файл настроек голоса: " + Path.GetFileName(onnx) + ".json");
+        using (var cfg = System.Text.Json.JsonDocument.Parse(File.ReadAllText(json)))
+            if (!cfg.RootElement.TryGetProperty("audio", out _)) throw new InvalidOperationException("Это не голос Piper: в .json нет раздела audio");
+        var name = string.Concat(Path.GetFileNameWithoutExtension(onnx).Select(c => Path.GetInvalidFileNameChars().Contains(c) ? '_' : c));
+        var dir = Path.Combine(Models.Dir, "voices");
+        Directory.CreateDirectory(dir);
+        File.Copy(onnx, Path.Combine(dir, name + ".onnx"), true);
+        File.Copy(json, Path.Combine(dir, name + ".onnx.json"), true);
+        return "custom:" + name;
+    }
 
     static readonly SpeechSynthesizer Synth = new();
     static WaveOutEvent? _out;
@@ -49,6 +78,7 @@ public static class Voice
     {
         if (!File.Exists(Path.Combine(Models.PathOf(PiperRuntime), "piper.exe"))) await Models.Download(PiperRuntime, f => progress?.Invoke(f * 0.25));
         var v = PiperVoice(key);
+        if (key.StartsWith("custom:")) { progress?.Invoke(1); return; }   // imported from a file, nothing to download
         if (!Models.Has(v)) await Models.Download(v, f => progress?.Invoke(0.25 + f * 0.75));
         var json = Models.PathOf(v) + ".json";
         if (!File.Exists(json)) await File.WriteAllBytesAsync(json, await Http.GetByteArrayAsync(v.Url + ".json"));

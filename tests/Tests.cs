@@ -71,6 +71,39 @@ public class EdgeGecTests
     public void MatchesEdgeTts(double t, string expected) => Assert.Equal(expected, EdgeGec.Generate(t, "6A5AA1D4EAFF4E9FB37E23D68491D6F4"));
 }
 
+public class OfflineCommandTests
+{
+    [Theory]
+    [InlineData("дискорд", "discord", true)]
+    [InlineData("яндекс", "yandex", true)]
+    [InlineData("телеграмм", "telegram", true)]
+    [InlineData("стим", "steam", true)]
+    [InlineData("обс", "obs", true)]
+    [InlineData("хром", "google chrome", true)]
+    [InlineData("блокнот", "discord", false)]
+    [InlineData("тетрис", "telegram", false)]
+    [InlineData("дискорт", "discord", true)]
+    [InlineData("ворд", "word", true)]
+    [InlineData("свет", "steam", false)]
+    public void FuzzyNames(string spoken, string name, bool match) => Assert.Equal(match, Intents.Fit(spoken, name) <= 0.3);
+
+    [Fact] public void Translit() => Assert.Equal("yandeks brauzer", Intents.Translit("яндекс браузер"));
+
+    [Fact]
+    public void UserPhrases()
+    {
+        var keep = Settings.Current.Jarvis.Commands.ToList();
+        Settings.Current.Jarvis.Commands = new() { new VoiceCommand { Phrases = "игровой режим; погнали играть", Action = "profile:Игра", ActionName = "Профиль: Игра" } };
+        try
+        {
+            Assert.NotNull(Intents.MatchCommand("погнали играть"));
+            Assert.NotNull(Intents.MatchCommand("игровой режин"));      // one letter misheard
+            Assert.Null(Intents.MatchCommand("игровой ноутбук купить"));
+        }
+        finally { Settings.Current.Jarvis.Commands = keep; }
+    }
+}
+
 public class YandexMusicTests
 {
     static YandexMusic.Found? P(string best) => YandexMusic.Parse(System.Text.Json.JsonDocument.Parse("{\"best\":" + best + "}").RootElement);

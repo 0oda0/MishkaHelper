@@ -23,6 +23,7 @@ public static class Jarvis
             Ears.Heard += t => Application.Current.Dispatcher.BeginInvoke(() => _ = Handle(t));
             Ears.Partial += p => Application.Current.Dispatcher.BeginInvoke(() => Status?.Invoke(p));
             Voice.Finished += OnSpeechFinished;
+            Ears.StateChanged += s => Application.Current.Dispatcher.BeginInvoke(() => { if (s is EarState.Listening or EarState.Thinking) DuckNow(); else ReleaseSoon(); });
         }
         if (j.ShowOrb) JarvisOrb.Show();
         Brain.Warmup();
@@ -37,6 +38,7 @@ public static class Jarvis
     {
         Ears.Stop();
         Voice.Stop();
+        Audio.Duck(false, Settings.Current.Jarvis.DuckPercent);
         _tips?.Stop();
         JarvisOrb.Hide();
     }
@@ -55,10 +57,31 @@ public static class Jarvis
     static readonly string[] Yes = { "да", "давай", "конечно", "подтверждаю", "ага", "угу", "выполняй", "согласен", "yes", "ок", "окей" };
     static readonly string[] No = { "нет", "не надо", "отмена", "не", "стоп", "отбой" };
 
+    static bool _busy;
+
+    /// <summary>The wake word was heard (or the hotkey pressed): other apps get quieter so the command and the answer are audible.</summary>
+    static void DuckNow() { if (Settings.Current.Jarvis.Duck) Audio.Duck(true, Settings.Current.Jarvis.DuckPercent); }
+
+    /// <summary>Sound comes back once Jarvis is neither listening, thinking nor talking.</summary>
+    static async void ReleaseSoon()
+    {
+        await Task.Delay(1200);
+        if (!_busy && !Voice.IsSpeaking && Ears.State is EarState.Idle or EarState.Off && Audio.IsDucked)
+            Audio.Duck(false, Settings.Current.Jarvis.DuckPercent);
+    }
+
     public static async Task Handle(string text)
+    {
+        _busy = true;
+        try { await HandleCore(text); }
+        finally { _busy = false; ReleaseSoon(); }
+    }
+
+    static async Task HandleCore(string text)
     {
         text = text.Trim();
         if (text.Length == 0) return;
+        DuckNow();
         ChatHistory.Add(true, text);
         Message?.Invoke(text, true);
 
@@ -134,6 +157,7 @@ public static class Jarvis
     /// <summary>Dialog mode: after Jarvis finishes an answer, the next phrase within a few seconds needs no wake word.</summary>
     static void OnSpeechFinished()
     {
+        ReleaseSoon();
         if (!_awaitFollowUp) return;
         _awaitFollowUp = false;
         if (Settings.Current.Jarvis.FollowUp && Ears.State != EarState.Off)

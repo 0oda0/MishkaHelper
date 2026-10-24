@@ -14,6 +14,7 @@ public partial class JarvisPage : UserControl
     {
         InitializeComponent();
         Cards.Children.Add(MainCard());
+        Cards.Children.Add(CommandsCard());
         Cards.Children.Add(ModelsCard());
         Cards.Children.Add(SitesCard());
         Cards.Children.Add(CalendarCard());
@@ -60,6 +61,12 @@ public partial class JarvisPage : UserControl
         Switch(b, "Диалог: после ответа 6 с слушать без «Джарвис»", J.FollowUp, v => J.FollowUp = v);
         Switch(b, "Перебивать словом «стоп» (лучше в наушниках)", J.BargeIn, v => J.BargeIn = v);
         Switch(b, "Начинать говорить, пока ИИ ещё думает", J.Stream, v => J.Stream = v);
+        Switch(b, "Приглушать музыку и видео, когда слышу «Джарвис»", J.Duck, v => J.Duck = v);
+        var duckText = UiKit.Text($"Громкость других программ на это время: {J.DuckPercent}%", 12, true);
+        var duck = new Slider { Minimum = 0, Maximum = 60, Value = J.DuckPercent, TickFrequency = 5, IsSnapToTickEnabled = true };
+        duck.ValueChanged += (_, e) => { J.DuckPercent = (int)e.NewValue; duckText.Text = $"Громкость других программ на это время: {J.DuckPercent}%"; };
+        duck.LostMouseCapture += (_, _) => Settings.Save();
+        b.Children.Add(duckText); b.Children.Add(duck);
         Switch(b, "Неоновый шар на экране", J.ShowOrb, v => { J.ShowOrb = v; if (v) JarvisOrb.Show(); else JarvisOrb.Hide(); });
         Switch(b, "Подсказки по ситуации (перегрев, память, батарея)", J.Proactive, v => J.Proactive = v);
         Combo(b, "Микрофон", new[] { ("", "По умолчанию") }.Concat(Ears.Microphones().Select(m => (m, m))), J.Microphone, async v => { J.Microphone = v; if (J.Enabled) await Jarvis.Restart(); });
@@ -81,7 +88,7 @@ public partial class JarvisPage : UserControl
         b.Children.Add(UiKit.Text("Без интернета Джарвис сам переключится на офлайн-голос Piper (если скачан).", 11, true));
         var status = UiKit.Text("", 12, true);
         void Status() => status.Text = Voice.PiperReady(J.PiperVoice) ? "✅ Голос скачан" : "Голос не скачан (≈80 МБ вместе с Piper)";
-        Combo(b, "Офлайн-голос Piper", Voice.PiperVoices.Select(v => (v.Key, v.Name)), J.PiperVoice, v => { J.PiperVoice = v; Status(); });
+        Combo(b, "Офлайн-голос Piper", Voice.AllPiperVoices().Select(v => (v.Key, v.Name)), J.PiperVoice, v => { J.PiperVoice = v; Status(); });
         Status();
         b.Children.Add(status);
         Combo(b, "Голос Windows (запасной)", Voice.WindowsVoices().Select(v => (v, v)), J.Voice, v => J.Voice = v);
@@ -102,7 +109,24 @@ public partial class JarvisPage : UserControl
         };
         var test = new Button { Content = "Послушать" };
         test.Click += (_, _) => _ = Voice.Say("Добрый вечер, сэр. Все системы в норме. Чем могу помочь?");
-        wp.Children.Add(dl); wp.Children.Add(test);
+        var own = new Button { Content = "Свой голос (.onnx)…", ToolTip = "Голос Piper: файл .onnx и рядом .onnx.json" };
+        own.Click += async (_, _) =>
+        {
+            var d = new Microsoft.Win32.OpenFileDialog { Filter = "Голос Piper (*.onnx)|*.onnx", Title = "Голос Piper: выбери .onnx (рядом должен лежать .onnx.json)" };
+            if (d.ShowDialog() != true) return;
+            own.IsEnabled = false;
+            try
+            {
+                J.PiperVoice = Voice.ImportPiper(d.FileName);
+                J.Tts = "piper";   // an imported voice is meant to be heard, not to sit behind the online one
+                Settings.Save();
+                await Voice.DownloadPiper(J.PiperVoice, f => Dispatcher.BeginInvoke(() => own.Content = $"Piper: {f * 100:0}%"));
+                _ = Voice.Say("Добрый вечер, сэр. Новый голос установлен.");
+                App.Current.Navigate("Jarvis");   // rebuild so the lists show the new voice
+            }
+            catch (Exception e) { Osd.Show("", e.Message); own.Content = "Свой голос (.onnx)…"; own.IsEnabled = true; }
+        };
+        wp.Children.Add(dl); wp.Children.Add(test); wp.Children.Add(own);
         b.Children.Add(wp);
         return c;
     }
@@ -225,6 +249,57 @@ public partial class JarvisPage : UserControl
         b.Children.Add(UiKit.Text("Название (например «Расписание»)", 12, true)); b.Children.Add(name);
         b.Children.Add(UiKit.Text("Ссылка на страницу", 12, true)); b.Children.Add(url);
         b.Children.Add(UiKit.Text("Слова, по которым понять, что спрашивают про этот сайт", 12, true)); b.Children.Add(keys);
+        b.Children.Add(add);
+        return c;
+    }
+
+    UIElement CommandsCard()
+    {
+        var (c, b) = Card("Мои команды (без ИИ, мгновенно)",
+            "Фраза → действие. Срабатывает сразу, даже если распознало с ошибкой в пару букв. Несколько вариантов фразы — через «;». " +
+            "Встроенные команды тоже работают без ИИ: «открой браузер», «закрой Яндекс», «громкость 30», «включи ночной свет», «профиль Игра»…");
+        var list = new StackPanel();
+        void Render()
+        {
+            list.Children.Clear();
+            foreach (var cmd in J.Commands.ToList())
+            {
+                var row = new DockPanel { Margin = new Thickness(0, 3, 0, 3) };
+                var del = new Button { Content = "Убрать", Padding = new Thickness(10, 3, 10, 3) };
+                del.Click += (_, _) => { J.Commands.Remove(cmd); Settings.Save(); Render(); };
+                DockPanel.SetDock(del, Dock.Right); row.Children.Add(del);
+                var info = new StackPanel();
+                info.Children.Add(UiKit.Text("«" + cmd.Phrases.Replace(";", "» / «") + "»", 13, weight: FontWeights.SemiBold));
+                info.Children.Add(UiKit.Text("→ " + cmd.ActionName + (cmd.Reply.Length > 0 ? $" · ответ: «{cmd.Reply}»" : ""), 11, true));
+                row.Children.Add(info);
+                list.Children.Add(row);
+            }
+            if (J.Commands.Count == 0) list.Children.Add(UiKit.Text("Пока нет. Например: «игровой режим; погнали играть» → Профиль: Игра.", 12, true));
+        }
+        Render();
+        b.Children.Add(list);
+
+        var cmds = CommandPalette.Commands();
+        b.Children.Add(UiKit.Text("Фраза (можно несколько через ;)", 12, true));
+        var phrase = new TextBox { Margin = new Thickness(0, 2, 0, 6) };
+        b.Children.Add(phrase);
+        b.Children.Add(UiKit.Text("Действие", 12, true));
+        var action = new ComboBox { IsEditable = true, IsTextSearchEnabled = true, StaysOpenOnEdit = true, Margin = new Thickness(0, 2, 0, 6) };
+        foreach (var x in cmds) action.Items.Add(x.Name);
+        b.Children.Add(action);
+        b.Children.Add(UiKit.Text("Что ответить (необязательно; пусто — молча)", 12, true));
+        var reply = new TextBox { Margin = new Thickness(0, 2, 0, 6) };
+        b.Children.Add(reply);
+        var add = new Button { Content = "+ Добавить команду", Style = S("AccentButton"), HorizontalAlignment = HorizontalAlignment.Left };
+        add.Click += (_, _) =>
+        {
+            int i = action.SelectedIndex >= 0 ? action.SelectedIndex : cmds.FindIndex(x => x.Name.Equals(action.Text.Trim(), StringComparison.OrdinalIgnoreCase));
+            if (phrase.Text.Trim().Length < 2 || i < 0) { Osd.Show("", "Напиши фразу и выбери действие из списка"); return; }
+            J.Commands.Add(new VoiceCommand { Phrases = phrase.Text.Trim(), Action = cmds[i].Action, ActionName = cmds[i].Name, Reply = reply.Text.Trim() });
+            Settings.Save();
+            phrase.Text = reply.Text = ""; action.SelectedIndex = -1; action.Text = "";
+            Render();
+        };
         b.Children.Add(add);
         return c;
     }

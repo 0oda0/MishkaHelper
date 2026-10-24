@@ -28,6 +28,13 @@ public static class Intents
         if (t.Length == 0) return null;
         Match m;
 
+        // --- the user's own phrases come first: instant, no AI ---
+        if (MatchCommand(t) is { } uc)
+        {
+            System.Windows.Application.Current.Dispatcher.Invoke(() => CommandPalette.RunAction(uc.Action));
+            return new(uc.Reply);
+        }
+
         // --- conversation ---
         if (Has(t, @"^(стоп|хватит|замолчи|отмена|тихо)$")) { Voice.Stop(); return new(""); }
         if (Has(t, @"что ты умеешь|^помощь$|какие команды|список команд")) return new(Help);
@@ -241,13 +248,14 @@ public static class Intents
         }
 
         // --- apps & sites ---
-        if (M(t, @"^(?:открой|запусти|включи|открыть|запустить)(?: мне)? (.+)", out m))
+        // Verbs as speech recognition actually hears them ("закрою", "открыть", "вруби"…).
+        if (M(t, @"^(?:откро\w*|откры\w*|запуст\w*|включи|вруби|покажи|зайди в)(?: мне| пожалуйста)? (?:программу |приложение |сайт )?(.+)", out m))
         {
             var what = m.Groups[1].Value;
             if (Launch(what) is { } name) return new($"Открываю {name}.");
             if (WebReader.Match(what) is { } src) { Shell.Open(src.Url); return new($"Открываю {src.Name}."); }
         }
-        if (M(t, @"^(?:закрой|выключи|убей)(?: программу)? (.+)", out m) && Close(m.Groups[1].Value) is { } closed)
+        if (M(t, @"^(?:закро\w*|закры\w*|выключи|выруби|убей|заверши|останови)(?: мне| пожалуйста)? (?:программу |приложение |окно )?(.+)", out m) && Close(m.Groups[1].Value) is { } closed)
             return new($"Закрыл {closed}.");
 
         return null;
@@ -336,9 +344,69 @@ public static class Intents
         ["пайчарм"] = "pycharm", ["эпик"] = "epic games", ["майнкрафт"] = "minecraft", ["настройки windows"] = "параметры",
     };
 
+    /// <summary>User phrase match: exact, or close enough that a misheard word or two still counts (≤ 20% letters off).</summary>
+    public static VoiceCommand? MatchCommand(string clean) =>
+        Settings.Current.Jarvis.Commands
+            .Select(c => (c, d: c.Phrases.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Select(ph => Ears.Clean(ph)).Where(ph => ph.Length > 0)
+                .Select(ph => (double)Ears.Distance(ph, clean) / Math.Max(ph.Length, clean.Length)).DefaultIfEmpty(1).Min()))
+            .Where(x => x.d <= 0.2).OrderBy(x => x.d).Select(x => x.c).FirstOrDefault();
+
+    // ---------- fuzzy names: Cyrillic speech vs Latin program names ----------
+    static readonly Dictionary<char, string> Lat = new()
+    {
+        ['а'] = "a", ['б'] = "b", ['в'] = "v", ['г'] = "g", ['д'] = "d", ['е'] = "e", ['ж'] = "zh", ['з'] = "z", ['и'] = "i", ['й'] = "y",
+        ['к'] = "k", ['л'] = "l", ['м'] = "m", ['н'] = "n", ['о'] = "o", ['п'] = "p", ['р'] = "r", ['с'] = "s", ['т'] = "t", ['у'] = "u",
+        ['ф'] = "f", ['х'] = "h", ['ц'] = "ts", ['ч'] = "ch", ['ш'] = "sh", ['щ'] = "sch", ['ъ'] = "", ['ы'] = "y", ['ь'] = "", ['э'] = "e",
+        ['ю'] = "yu", ['я'] = "ya",
+    };
+
+    /// <summary>"дискорд" → "diskord", "яндекс" → "yandeks": lets spoken Russian match Latin names.</summary>
+    public static string Translit(string s) => string.Concat(s.Select(c => Lat.TryGetValue(c, out var l) ? l : c.ToString()));
+
+    /// <summary>How well a spoken name fits a program name: 0 = exact … 1 = unrelated. Spelling-tolerant, script-independent.</summary>
+    public static double Fit(string spoken, string name)
+    {
+        if (spoken.Length == 0 || name.Length == 0) return 1;
+        string a = Translit(spoken).Replace("ks", "x").Replace(" ", ""), b = Translit(name).Replace("ks", "x").Replace(" ", "");
+        if (a == b) return 0;
+        if (b.StartsWith(a) && a.Length >= 3) return 0.1;
+        if (b.Contains(a) && a.Length >= 4) return 0.2;
+        // Same consonants = same word said the Russian way ("стим" ~ steam, "дискорт" ~ discord).
+        var sa = Skeleton(a);
+        if (sa.Length >= 2 && sa == Skeleton(b)) return 0.15;
+        return (double)Ears.Distance(a, b) / Math.Max(a.Length, b.Length);
+    }
+
+    static string Skeleton(string s)
+    {
+        s = s.Replace("ph", "f").Replace("ck", "k").Replace("c", "k").Replace("q", "k").Replace("w", "v").Replace("x", "ks").Replace("ts", "z").TrimEnd('t', 'd') + "|";
+        return new string(s.Where(ch => "aeiouy|".IndexOf(ch) < 0).ToArray());
+    }
+
+    /// <summary>The browser that opens links (http UserChoice → its command), so "открой браузер" works with any browser.</summary>
+    static string? DefaultBrowser()
+    {
+        try
+        {
+            using var uc = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\Shell\Associations\UrlAssociations\https\UserChoice");
+            if (uc?.GetValue("ProgId") is not string prog) return null;
+            using var cmd = Microsoft.Win32.Registry.ClassesRoot.OpenSubKey($@"{prog}\shell\open\command");
+            var line = cmd?.GetValue("") as string ?? "";
+            var exe = line.StartsWith('"') ? line[1..line.IndexOf('"', 1)] : line.Split(' ')[0];
+            return File.Exists(exe) ? exe : null;
+        }
+        catch { return null; }
+    }
+
     /// <summary>Launchers → Start menu → known sites. Returns a display name or null.</summary>
     public static string? Launch(string q)
     {
+        if (q is "браузер" or "браузеры" or "интернет" && DefaultBrowser() is { } browser)
+        {
+            Shell.Open(browser);
+            return "браузер";
+        }
         q = Aliases.TryGetValue(q, out var a) ? a : q;
         var ls = Settings.Current.Launchers;
         int li = ls.FindIndex(l => Ears.Clean(l.Name) == q || Ears.Clean(l.Name).Contains(q));
@@ -351,7 +419,12 @@ public static class Intents
         var sm = StartMenu();
         var hit = sm.FirstOrDefault(x => x.Name == q);
         if (hit.Path == null) hit = sm.Where(x => x.Name.StartsWith(q) || x.Name.Contains(" " + q)).OrderBy(x => x.Name.Length).FirstOrDefault();
-        if (hit.Path == null && q.Length >= 5) hit = sm.Where(x => Ears.Distance(x.Name, q) <= 2).OrderBy(x => Ears.Distance(x.Name, q)).FirstOrDefault();
+        // Misheard or said in Russian ("дискорт", "телеграмм", "обсидиан"): best fuzzy match across scripts.
+        if (hit.Path == null && q.Length >= 4)   // short words ("свет", "звук") are too easy to mis-match
+        {
+            var best = sm.Select(x => (x, f: Math.Min(Fit(q, x.Name), x.Name.Split(' ').Min(w => Fit(q, w) + 0.05)))).OrderBy(x => x.f).FirstOrDefault();
+            if (best.x.Path != null && best.f <= 0.3) hit = best.x;
+        }
         if (hit.Path != null) { Shell.Open(hit.Path); return Path.GetFileNameWithoutExtension(hit.Path); }
 
         foreach (var (k, (name, url)) in Sites)
@@ -360,27 +433,39 @@ public static class Intents
         return null;
     }
 
+    /// <summary>Closes the window that best fits the spoken name: process name, product name ("Yandex" for browser.exe) or title.</summary>
     static string? Close(string q)
     {
         q = Aliases.TryGetValue(q, out var a) ? a : q;
+        if (q is "браузер" && DefaultBrowser() is { } browser) q = Path.GetFileNameWithoutExtension(browser).ToLowerInvariant();
+        var candidates = new List<(Process P, double Fit, string Name)>();
         foreach (var p in Process.GetProcesses())
         {
             try
             {
-                if (p.MainWindowHandle == IntPtr.Zero || p.Id == Environment.ProcessId) continue;
-                var name = Ears.Clean(p.ProcessName);
-                string desc = "";
-                try { desc = Ears.Clean(p.MainModule?.FileVersionInfo.FileDescription ?? ""); } catch { }
-                if (name == q || name.StartsWith(q) || desc.Contains(q) || Ears.Clean(p.MainWindowTitle).Contains(q))
-                {
-                    p.CloseMainWindow();
-                    return string.IsNullOrEmpty(desc) ? p.ProcessName : p.MainModule?.FileVersionInfo.FileDescription ?? p.ProcessName;
-                }
+                if (p.MainWindowHandle == IntPtr.Zero || p.Id == Environment.ProcessId) { p.Dispose(); continue; }
+                string desc = "", product = "";
+                try { var vi = p.MainModule?.FileVersionInfo; desc = vi?.FileDescription ?? ""; product = vi?.ProductName ?? ""; } catch { }
+                var title = Ears.Clean(p.MainWindowTitle);
+                double fit = new[] { Ears.Clean(p.ProcessName), Ears.Clean(desc), Ears.Clean(product) }
+                    .Where(s => s.Length > 0)
+                    .Select(s => Math.Min(Fit(q, s), s.Split(' ').Min(w => Fit(q, w) + 0.05)))
+                    .DefaultIfEmpty(1).Min();
+                if (title.Contains(q) || Translit(title).Contains(Translit(q))) fit = Math.Min(fit, 0.25);
+                candidates.Add((p, fit, desc.Length > 0 ? desc : p.ProcessName));
             }
-            catch { }
-            finally { p.Dispose(); }
+            catch { p.Dispose(); }
         }
-        return null;
+        var best = candidates.OrderBy(c => c.Fit).FirstOrDefault();
+        string? closed = null;
+        if (best.P != null && best.Fit <= 0.3)
+        {
+            // Every window of that program (a browser with two windows closes fully).
+            foreach (var c in candidates.Where(c => c.P.ProcessName == best.P.ProcessName)) try { c.P.CloseMainWindow(); } catch { }
+            closed = best.Name;
+        }
+        foreach (var c in candidates) c.P.Dispose();
+        return closed;
     }
 }
 

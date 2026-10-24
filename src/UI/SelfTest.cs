@@ -32,6 +32,18 @@ public static class SelfTest
             foreach (var b in await Task.Run(FullClean.Background)) L($"bg      {b.Verdict,-4} {b.Name} x{b.Count} {Cleaner.Size(b.Bytes)}");
         });
 
+        await Step("duck", async () =>   // other apps' volume dips for ~1.5 s, then comes back
+        {
+            string Vols() => string.Join(", ", Audio.Apps().Where(a => a.Pid != Environment.ProcessId).Select(a => $"{a.Name}={a.Volume * 100:0}%"));
+            L($"duck before: {Vols()}");
+            Audio.Duck(true, 20);
+            await Task.Delay(1500);
+            L($"duck ducked: {Vols()}");
+            Audio.Duck(false, 20);
+            await Task.Delay(300);
+            L($"duck after:  {Vols()}");
+        });
+
         await Step("paths", async () =>   // run with MISHKA_PATHS_TEST set; elevated to test the protected folder
         {
             L($"paths elevated={AppPaths.Elevated} data={AppPaths.Data} shared={AppPaths.Shared} notes=[{string.Join("; ", AppPaths.Notes)}]");

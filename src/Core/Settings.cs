@@ -63,6 +63,10 @@ public class JarvisSettings
     public List<string> Memory { get; set; } = new();
     public List<WebSource> Sources { get; set; } = new();
     public List<string> Calendars { get; set; } = new();   // ICS / webcal links
+    /// <summary>User phrases handled instantly, without the AI.</summary>
+    public List<VoiceCommand> Commands { get; set; } = new();
+    public bool Duck { get; set; } = true;       // quieter other apps while Jarvis listens/answers
+    public int DuckPercent { get; set; } = 20;
     public int Version { get; set; }   // bumps migrate old defaults
 }
 
@@ -106,6 +110,15 @@ public class Launcher
 }
 
 /// <summary>Root item of the wheel: a built-in key ("profiles", "music"…) or "act:&lt;action&gt;" with its own label/icon.</summary>
+/// <summary>"Phrase(s) → action": phrases split by ";", action = any palette command key.</summary>
+public class VoiceCommand
+{
+    public string Phrases { get; set; } = "";
+    public string Action { get; set; } = "";
+    public string ActionName { get; set; } = "";
+    public string Reply { get; set; } = "";
+}
+
 public class RadialEntry
 {
     public string Key { get; set; } = "";

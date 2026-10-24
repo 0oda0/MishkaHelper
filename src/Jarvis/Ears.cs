@@ -195,10 +195,23 @@ public static class Ears
         wav.Position = 0;
         // The prompt nudges spelling of the wake word and keeps Russian.
         var wake = Settings.Current.Jarvis.WakeWord;
-        using var p = _whisper.CreateBuilder().WithLanguage("ru").WithPrompt($"{char.ToUpper(wake[0])}{wake[1..]}, включи музыку.").Build();
+        using var p = _whisper.CreateBuilder().WithLanguage("ru").WithPrompt(Prompt(wake)).Build();
         var sb = new System.Text.StringBuilder();
         await foreach (var seg in p.ProcessAsync(wav)) sb.Append(seg.Text);
         return Clean(sb.ToString());
+    }
+
+    /// <summary>
+    /// Whisper's prompt biases spelling toward words it has "seen": the wake word, the user's own phrases and program names.
+    /// Kept short — a long prompt costs time and can leak into the transcript.
+    /// </summary>
+    static string Prompt(string wake)
+    {
+        var words = Settings.Current.Jarvis.Commands.Select(c => c.Phrases.Split(';')[0].Trim())
+            .Concat(Settings.Current.Launchers.Select(l => l.Name))
+            .Where(w => w.Length > 1).Distinct().Take(12);
+        var s = $"{char.ToUpper(wake[0])}{wake[1..]}, включи музыку. Открой браузер, закрой Яндекс. {string.Join(", ", words)}.";
+        return s.Length > 300 ? s[..300] : s;
     }
 
     static string VoskText(byte[] pcm)
