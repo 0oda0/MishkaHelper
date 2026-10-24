@@ -28,9 +28,19 @@ public static class CommandPalette
     static readonly (string Page, string Name)[] Pages =
     {
         ("Home", "Главная"), ("Jarvis", "Джарвис"), ("Scenarios", "Сценарии"), ("Controls", "Управление"), ("System", "Система"), ("Devices", "Устройства"), ("Nitro", "Nitro"),
-        ("Boost", "Ускорение"), ("Security", "Защита"), ("Tools", "Инструменты"), ("Profiles", "Профили"), ("Hotkeys", "Горячие клавиши"),
+        ("Boost", "Ускорение"), ("Security", "Защита"), ("Tools", "Инструменты"), ("Profiles", "Профили"), ("Hotkeys", "Горячие клавиши"), ("Radial", "Колесо"),
         ("Widgets", "Виджеты"), ("Settings", "Настройки"),
     };
+
+    /// <summary>Every runnable command (for the wheel editor): icon, name, action key.</summary>
+    public static List<(string Icon, string Name, string Action)> Commands() => All().Select(c => (c.Icon, c.Name, c.Action)).ToList();
+
+    /// <summary>Run a command key the way the palette does (widget:x toggles that widget).</summary>
+    public static void RunAction(string action)
+    {
+        if (action.StartsWith("widget:")) Widgets.Set(action[7..], !Widgets.IsOpen(action[7..]));
+        else Actions.Run(action);
+    }
 
     static List<Cmd> All()
     {
@@ -41,6 +51,9 @@ public static class CommandPalette
             .Select(p => new Cmd("", "Открыть: " + p.Name, "page:" + p.Page, "")));
         l.AddRange(Settings.Current.Profiles.Select(p => new Cmd(p.Icon, "Профиль: " + p.Name, "profile:" + p.Name, "")));
         l.AddRange(Settings.Current.Launchers.Select((x, i) => new Cmd("", "Запустить: " + x.Name, "launch:" + i, "")));
+#if !LITE
+        l.AddRange(Settings.Current.Scenarios.Select(s => new Cmd("\uE8B1", "Сценарий: " + s.Name, "scenario:" + s.Id, "")));
+#endif
         l.AddRange(Widgets.Names.Select(kv => new Cmd("", "Виджет: " + kv.Value, "widget:" + kv.Key, "")));
         return l;
     }

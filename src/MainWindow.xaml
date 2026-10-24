@@ -65,6 +65,7 @@
                         <RadioButton Style="{StaticResource NavItem}" Tag="&#xE90F;" Content="Инструменты" x:Name="NavTools" Checked="Nav_Checked"/>
                         <RadioButton Style="{StaticResource NavItem}" Tag="&#xE77B;" Content="Профили" x:Name="NavProfiles" Checked="Nav_Checked"/>
                         <RadioButton Style="{StaticResource NavItem}" Tag="&#xE765;" Content="Горячие клавиши" x:Name="NavHotkeys" Checked="Nav_Checked"/>
+                        <RadioButton Style="{StaticResource NavItem}" Tag="&#xE7AD;" Content="Колесо" x:Name="NavRadial" Checked="Nav_Checked"/>
                         <RadioButton Style="{StaticResource NavItem}" Tag="&#xECA5;" Content="Виджеты" x:Name="NavWidgets" Checked="Nav_Checked"/>
                     </StackPanel>
                 </ScrollViewer>

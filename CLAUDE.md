@@ -59,6 +59,7 @@ src/
     BleRemote.cs       Bluetooth LE GATT server (no pairing) for docs/remote page via Web Bluetooth; PIN per device; turns BT radio on
     InputSim.cs        SendInput mouse/keys/unicode text + JPEG screenshot (remotes)
     RustDesk.cs        find/download official signed RustDesk for access from anywhere
+    YandexMusic.cs     anonymous catalog search (api.music.yandex.net) + app deeplinks yandexmusic://<web path>; ?deeplink=play-vibe&seeds=artist:ID|track:ID / stationId=user:onyourwave starts a wave
     FullClean.cs       full-cleanup wizard logic: Junk/Ask/Keep classification (regex), background processes
     ScreenTime.cs      foreground app seconds per day (idle >3 min skipped), 30 days JSON
     Updater.cs         GitHub releases → silent Inno setup or portable zip swap; per edition
@@ -79,13 +80,13 @@ src/
     Calendar.cs        ICS links → events per day (DAILY/WEEKLY RRULE, EXDATE, COUNT/UNTIL); intent + Brain tool
     Scenarios.cs       scenario engine: steps + triggers (voice/hotkey/time/events)
   Pages/               one UserControl per section (XAML shell + code-built cards)
-    Home, Jarvis, Controls, System, Devices, Nitro, Boost, Security, Tools, Profiles, Hotkeys, Widgets, Settings
+    Home, Jarvis, Scenarios, Controls, System, Devices, Nitro, Boost (+BoostPage.Full = cleanup wizard), Security, Tools, Profiles, Hotkeys, Radial (wheel editor), Widgets, Settings
   UI/
     UiKit.cs           shared builders (tiles, cards, ask/confirm dialogs)
     Controls.cs        Sparkline, Ring
     Popups.cs          Floating window base, Osd, Toast
     QuickPanel.xaml    tray flyout
-    RadialMenu.cs      pie menu (Ctrl+Alt+R); submenus page at 11 items; OpenAt(label) for screenshots
+    RadialMenu.cs      pie menu (Ctrl+Alt+R); Builtins() keyed catalog, Settings.Radial = user order/custom "act:<palette action>" items; submenus page at 11, root at 16; OpenAt(label)
     AppIcon.cs         real program/folder icons (SHGetFileInfo) for the wheel
     CommandPalette.cs  Ctrl+Alt+K search
     ClipHistory.cs     Ctrl+Alt+V clipboard history (message-only window, AddClipboardFormatListener; only pinned items persist)

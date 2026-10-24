@@ -1,0 +1,9 @@
+<UserControl x:Class="MishkaHelper.Pages.RadialPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <StackPanel>
+        <TextBlock Text="Колесо" Style="{StaticResource H1}"/>
+        <TextBlock Text="Собери круговое меню под себя: порядок, что убрать, что добавить — любую функцию программы, профиль, программу, сценарий или виджет. Открывается по Ctrl+Alt+R." Style="{StaticResource Dim}" FontSize="13" Margin="0,0,0,18" TextWrapping="Wrap"/>
+        <StackPanel x:Name="Cards"/>
+    </StackPanel>
+</UserControl>

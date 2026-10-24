@@ -17,6 +17,7 @@ public static class RadialMenu
     record Item(string Icon, string Label, Action? Run = null, Func<List<Item>>? Sub = null, ImageSource? Img = null);
 
     const int PerPage = 11;   // more segments than this get unreadable → "Ещё" pages
+    public const int RootMax = 16;   // the root ring has bigger segments; past this it pages too
 
     static List<Item> WidgetItems() =>
         new List<Item> { new("", "Все: показать / скрыть", () => Actions.Run("widgets")) }
@@ -37,46 +38,83 @@ public static class RadialMenu
     /// <summary>Dev/screenshots: open the wheel straight into a submenu by its label.</summary>
     public static void OpenAt(string label) { _w?.Close(); Open(label); }
 
-    static List<Item> Root()
+    /// <summary>Every built-in root item: key (stored in settings), and the item. Order = default wheel.</summary>
+    static List<(string Key, Item Item)> Builtins()
     {
-        var l = new List<Item>
+        var l = new List<(string, Item)>
         {
-            new("", "Профили", Sub: () => Settings.Current.Profiles.Select(p => new Item(p.Icon, p.Name, () => Profiles.Apply(p))).ToList()),
-            new("", "Звук", Sub: () => Audio.Devices(DataFlow.Render).Select(d => new Item(d.IsDefault ? "" : "", Short(d.Name), () => Actions.Run("audio:" + d.Id))).ToList()),
-            new("", "Программы", Sub: () => Settings.Current.Launchers.Select((x, i) => new Item("", x.Name, () => Actions.Run("launch:" + i), Img: AppIcon.For(x))).ToList()),
-            new("", "Ускорить", () => Actions.Run("boost")),
-            new("", "Микрофон", () => Actions.Run("micMute")),
-            new("", "Не беспокоить", () => Actions.Run("dnd")),
-            new("", "Режим", Sub: () => Acer.Available
-                ? Acer.SupportedModes().Select(m => new Item("", m.Name, () => { Acer.Mode = m.Id; Osd.Show("", "Режим: " + m.Name); })).ToList()
-                : Power.Modes.Select(m => new Item("", m.Name, () => { Power.Mode = m.Key; Osd.Show("", "Питание: " + m.Name); })).ToList()),
-            new("", "Скриншот", () => Actions.Run("screenshot")),
-            new("", "Инструменты", Sub: () => new List<Item>
+            ("profiles", new("\uE77B", "Профили", Sub: () => Settings.Current.Profiles.Select(p => new Item(p.Icon, p.Name, () => Profiles.Apply(p))).ToList())),
+#if !LITE
+            // Labels show the state the click switches to, so the wheel doubles as an indicator.
+            ("jarvis", new("\uE720", "Джарвис", Sub: () => new List<Item>
             {
-                new("", "Окно поверх", () => Actions.Run("topmost")),
-                new("", "Пипетка", () => Actions.Run("colorPick")),
-                new("", "Не засыпать", () => Actions.Run("keepAwake")),
-                new("", "Выключить экран", () => Actions.Run("screenOff")),
-                new("", "Заблокировать", () => Actions.Run("lock")),
-                new("", "Очистить корзину", () => Actions.Run("recycle")),
-                new("", "Пинг", () => Actions.Run("ping")),
-                new("", "Пароль в буфер", () => Actions.Run("password")),
-                new("", "Палитра команд", () => Actions.Run("palette")),
-            }),
-            new("", "Виджеты", Sub: WidgetItems),
-            new("", "Wi-Fi", () => Actions.Run("wifi")),
-            new("", "Диспетчер", () => Actions.Run("taskmgr")),
+                new("\uE720", "Слушать", () => Actions.Run("jarvis")),
+                new("\uE7E8", Settings.Current.Jarvis.Enabled ? "Выключить" : "Включить", () => Actions.Run("jarvisToggle")),
+                new("\uEA3A", Settings.Current.Jarvis.ShowOrb ? "Скрыть шар" : "Показать шар", () => Actions.Run("jarvisOrb")),
+                new("\uE767", Settings.Current.Jarvis.Speak ? "Без голоса" : "С голосом", () => Actions.Run("jarvisVoice")),
+                new("\uE8BD", "Чат", () => Actions.Run("jarvisChat")),
+            })),
+#endif
+            ("sound", new("\uE7F5", "Звук", Sub: () => Audio.Devices(DataFlow.Render).Select(d => new Item(d.IsDefault ? "\uE73E" : "\uE7F5", Short(d.Name), () => Actions.Run("audio:" + d.Id))).ToList())),
+            ("music", new("\uE8D6", "Музыка", Sub: () => new List<Item>
+            {
+                new("\uE768", "Играть / пауза", () => InputSim.Key("play")),
+                new("\uE893", "Следующий", () => InputSim.Key("next")),
+                new("\uE892", "Предыдущий", () => InputSim.Key("prev")),
+                new("\uE93C", "Моя волна", YandexMusic.MyWave),
+                new("\uE8D6", "Яндекс Музыка", () => YandexMusic.Open("/")),
+                new("\uE7F4", "Виджет музыки", () => Widgets.Set("media", !Widgets.IsOpen("media"))),
+            })),
+            ("programs", new("\uE8A9", "Программы", Sub: () => Settings.Current.Launchers.Select((x, i) => new Item("\uE7AC", x.Name, () => Actions.Run("launch:" + i), Img: AppIcon.For(x))).ToList())),
+            ("boost", new("\uE945", "Ускорить", () => Actions.Run("boost"))),
+            ("mic", new("\uE720", "Микрофон", () => Actions.Run("micMute"))),
+            ("dnd", new("\uE708", "Не беспокоить", () => Actions.Run("dnd"))),
+            ("mode", new("\uE7E8", "Режим", Sub: () => Acer.Available
+                ? Acer.SupportedModes().Select(m => new Item("\uE945", m.Name, () => { Acer.Mode = m.Id; Osd.Show("\uE945", "Режим: " + m.Name); })).ToList()
+                : Power.Modes.Select(m => new Item("\uE945", m.Name, () => { Power.Mode = m.Key; Osd.Show("\uE945", "Питание: " + m.Name); })).ToList())),
+            ("screenshot", new("\uE722", "Скриншот", () => Actions.Run("screenshot"))),
+            ("tools", new("\uE90F", "Инструменты", Sub: () => new List<Item>
+            {
+                new("\uE718", "Окно поверх", () => Actions.Run("topmost")),
+                new("\uEF3C", "Пипетка", () => Actions.Run("colorPick")),
+                new("\uE708", "Не засыпать", () => Actions.Run("keepAwake")),
+                new("\uE7E8", "Выключить экран", () => Actions.Run("screenOff")),
+                new("\uE72E", "Заблокировать", () => Actions.Run("lock")),
+                new("\uE74D", "Очистить корзину", () => Actions.Run("recycle")),
+                new("\uE968", "Пинг", () => Actions.Run("ping")),
+                new("\uE8D7", "Пароль в буфер", () => Actions.Run("password")),
+                new("\uE721", "Палитра команд", () => Actions.Run("palette")),
+            })),
+            ("widgets", new("\uECA5", "Виджеты", Sub: WidgetItems)),
+            ("wifi", new("\uE701", "Wi-Fi", () => Actions.Run("wifi"))),
+            ("taskmgr", new("\uE9D9", "Диспетчер", () => Actions.Run("taskmgr"))),
         };
-        if (Acer.Available) l.Insert(7, new("", "Вентиляторы", () => Actions.Run("fanMax")));
+        if (Acer.Available) l.Insert(l.FindIndex(x => x.Item1 == "screenshot"), ("fans", new("\uE9CA", "Вентиляторы", () => Actions.Run("fanMax"))));
         return l;
     }
 
-    /// <summary>Long submenus (20 widgets, many programs) show 11 items + "Ещё →"; Back walks the pages.</summary>
-    static List<Item> Paged(List<Item> all, int page = 0)
+    /// <summary>For the editor page: built-in items as (key, icon, name).</summary>
+    public static List<(string Key, string Icon, string Name)> Catalog() => Builtins().Select(b => (b.Key, b.Item.Icon, b.Item.Label)).ToList();
+
+    /// <summary>The user's wheel (Settings.Radial) or the default one. Custom entries run any action from the palette.</summary>
+    static List<Item> Root()
     {
-        if (all.Count <= PerPage + 1) return all;
-        var chunk = all.Skip(page * PerPage).Take(PerPage).ToList();
-        if ((page + 1) * PerPage < all.Count) chunk.Add(new Item("", "Ещё →", Sub: () => Paged(all, page + 1)));
+        var builtins = Builtins();
+        var cfg = Settings.Current.Radial;
+        if (cfg.Count == 0) return Paged(builtins.Select(b => b.Item).ToList(), per: RootMax);
+        var byKey = builtins.ToDictionary(b => b.Key, b => b.Item);
+        return Paged(cfg.Select(e => e.Key.StartsWith("act:")
+                ? new Item(e.Icon.Length > 0 ? e.Icon : "\uE768", e.Label, () => CommandPalette.RunAction(e.Key[4..]))
+                : byKey.GetValueOrDefault(e.Key))
+            .OfType<Item>().ToList(), per: RootMax);
+    }
+
+    /// <summary>Long submenus (20 widgets, many programs) show 11 items + "Ещё →"; Back walks the pages.</summary>
+    static List<Item> Paged(List<Item> all, int page = 0, int per = PerPage)
+    {
+        if (all.Count <= per + 1) return all;
+        var chunk = all.Skip(page * per).Take(per).ToList();
+        if ((page + 1) * per < all.Count) chunk.Add(new Item("", "Ещё →", Sub: () => Paged(all, page + 1, per)));
         return chunk;
     }
 

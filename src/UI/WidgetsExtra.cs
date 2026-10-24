@@ -174,7 +174,15 @@ public static partial class Widgets
         {
             var b = new Button { Content = glyph, FontFamily = Icon, FontSize = size, Width = accent ? 54 : 42, Height = accent ? 42 : 36, Margin = new Thickness(3, 0, 3, 0) };
             if (accent) b.Style = (Style)Application.Current.Resources["AccentButton"];
-            b.Click += async (_, _) => { try { if (cur != null) { await act(cur); await Task.Delay(150); reload(); } } catch { } };
+            b.Click += async (_, _) =>
+            {
+                try
+                {
+                    if (cur != null) { await act(cur); await Task.Delay(150); reload(); }
+                    else if (glyph == "\uE768") YandexMusic.MyWave();   // nothing playing: ▶ starts «Моя волна»
+                }
+                catch { }
+            };
             btns.Children.Add(b);
             return b;
         }
@@ -240,7 +248,7 @@ public static partial class Widgets
                 cur = sessions.FirstOrDefault(s => s.SourceAppUserModelId == _mediaPick) ?? _media.GetCurrentSession() ?? sessions.FirstOrDefault();
                 if (cur == null)
                 {
-                    title.Text = "Ничего не играет"; artist.Text = "Включи музыку в любом плеере"; source.Content = "";
+                    title.Text = "Ничего не играет"; artist.Text = YandexMusic.Installed ? "▶ — «Моя волна» в Яндекс Музыке" : "Включи музыку в любом плеере"; source.Content = "";
                     coverImg.Source = backdrop.Source = null; coverIcon.Visibility = Visibility.Visible; shownKey = "";
                     progress.Maximum = 1; progress.Value = 0; pos.Text = len.Text = "0:00"; volRow.Visibility = Visibility.Collapsed;
                     return;

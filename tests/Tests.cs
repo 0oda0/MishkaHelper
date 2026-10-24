@@ -71,6 +71,22 @@ public class EdgeGecTests
     public void MatchesEdgeTts(double t, string expected) => Assert.Equal(expected, EdgeGec.Generate(t, "6A5AA1D4EAFF4E9FB37E23D68491D6F4"));
 }
 
+public class YandexMusicTests
+{
+    static YandexMusic.Found? P(string best) => YandexMusic.Parse(System.Text.Json.JsonDocument.Parse("{\"best\":" + best + "}").RootElement);
+
+    [Fact] public void Artist() => Assert.Equal(new YandexMusic.Found("artist", "artist:4462686", "Yanix"), P("{\"type\":\"artist\",\"result\":{\"id\":4462686,\"name\":\"Yanix\"}}"));
+    [Fact] public void Track() => Assert.Equal(new YandexMusic.Found("track", "track:136352390", "Yanix — Party"),
+        P("{\"type\":\"track\",\"result\":{\"id\":136352390,\"title\":\"Party\",\"artists\":[{\"name\":\"Yanix\"}]}}"));
+    [Fact] public void Playlist() => Assert.Equal("playlist:1399409368_1000", P("{\"type\":\"playlist\",\"result\":{\"uid\":1399409368,\"kind\":1000,\"title\":\"Музыка звёзд\"}}")!.Seed);
+    [Fact] public void NoBest() => Assert.Null(YandexMusic.Parse(System.Text.Json.JsonDocument.Parse("{\"best\":null}").RootElement));
+    [Fact] public void Links()
+    {
+        Assert.Equal("yandexmusic://?deeplink=play-vibe&openPlayer=true&seeds=artist%3A1", YandexMusic.Link(YandexMusic.WavePath("artist:1"), app: true));
+        Assert.Equal("https://music.yandex.ru/?deeplink=play-vibe&openPlayer=true&stationId=user:onyourwave", YandexMusic.Link(YandexMusic.WavePath(), app: false));
+    }
+}
+
 public class FullCleanTests
 {
     [Theory]

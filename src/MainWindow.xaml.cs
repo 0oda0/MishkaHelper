@@ -46,6 +46,7 @@ public partial class MainWindow : Window
 #endif
             "Profiles" => new ProfilesPage(),
             "Hotkeys" => new HotkeysPage(),
+            "Radial" => new RadialPage(),
             "Widgets" => new WidgetsPage(),
             "Settings" => new SettingsPage(),
             _ => new TextBlock { Text = "?" },

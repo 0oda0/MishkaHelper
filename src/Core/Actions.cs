@@ -68,6 +68,23 @@ public static class Actions
 #if !LITE
                 case "jarvis": Jarvis.Listen(); break;
                 case "jarvisChat": JarvisChat.Open(); break;
+                case "jarvisToggle":
+                {
+                    var j = Settings.Current.Jarvis;
+                    j.Enabled = !j.Enabled; Settings.Save();
+                    if (j.Enabled) await Jarvis.Start(); else Jarvis.Stop();
+                    Osd.Show("", j.Enabled ? "Джарвис включён" : "Джарвис выключен");
+                    break;
+                }
+                case "jarvisOrb":
+                    Settings.Current.Jarvis.ShowOrb = !Settings.Current.Jarvis.ShowOrb; Settings.Save();
+                    if (Settings.Current.Jarvis.ShowOrb) JarvisOrb.Show(); else JarvisOrb.Hide();
+                    break;
+                case "jarvisVoice":
+                    Settings.Current.Jarvis.Speak = !Settings.Current.Jarvis.Speak; Settings.Save();
+                    if (!Settings.Current.Jarvis.Speak) Voice.Stop();
+                    Osd.Show("", Settings.Current.Jarvis.Speak ? "Джарвис говорит вслух" : "Джарвис отвечает только текстом");
+                    break;
 #endif
                 case "topmost": Osd.Show("", Toolbox.ToggleTopmost()); break;
                 case "opacity": Osd.Show("", "Прозрачность окна", Toolbox.CycleOpacity()); break;

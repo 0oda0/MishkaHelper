@@ -105,6 +105,14 @@ public class Launcher
     public string Args { get; set; } = "";
 }
 
+/// <summary>Root item of the wheel: a built-in key ("profiles", "music"…) or "act:&lt;action&gt;" with its own label/icon.</summary>
+public class RadialEntry
+{
+    public string Key { get; set; } = "";
+    public string Label { get; set; } = "";
+    public string Icon { get; set; } = "";
+}
+
 public class WidgetConfig
 {
     public string Kind { get; set; } = "";
@@ -183,6 +191,8 @@ public class AppSettings
     /// <summary>Process name → minutes per day; a toast warns 5 min before and at the limit.</summary>
     public Dictionary<string, int> AppLimits { get; set; } = new();
     public bool ClipboardHistory { get; set; } = true;
+    /// <summary>Wheel root, in order. Empty = the default wheel.</summary>
+    public List<RadialEntry> Radial { get; set; } = new();
     public DateTime LastUpdateCheck { get; set; }
 
     public JarvisSettings Jarvis { get; set; } = new();

@@ -14,7 +14,7 @@ public static class Shots
         // Dev copies aren't elevated, so the LAN remote can't bind; localhost is enough to show its QR on the Tools page.
         if (!Remote.Running) try { Remote.StartLocal(); } catch { }
         await Task.Delay(1500);
-        foreach (var p in new[] { "Jarvis", "Scenarios", "Home", "Controls", "System", "Devices", "Nitro", "Boost", "Security", "Tools", "Profiles", "Hotkeys", "Widgets", "Settings" })
+        foreach (var p in new[] { "Jarvis", "Scenarios", "Home", "Controls", "System", "Devices", "Nitro", "Boost", "Security", "Tools", "Profiles", "Hotkeys", "Radial", "Widgets", "Settings" })
         {
             if (p is "Jarvis" or "Scenarios" && !Edition.HasJarvis) continue;
             main.Navigate(p);
@@ -38,10 +38,26 @@ public static class Shots
         RadialMenu.Toggle();
         await Task.Delay(800);
         foreach (Window w in Application.Current.Windows)
-            if (w.Content is System.Windows.Controls.Canvas) Save(w, Path.Combine(dir, "Radial.png"));
+            if (w.Content is System.Windows.Controls.Canvas) Save(w, Path.Combine(dir, "Wheel.png"));
         RadialMenu.Toggle();
 
-        foreach (var (sub, name) in new[] { ("Программы", "RadialPrograms"), ("Виджеты", "RadialWidgets") })
+        // A custom wheel: built-ins + any palette actions, then the user's own wheel comes back.
+        var keep = Settings.Current.Radial.ToList();
+        Settings.Current.Radial = new()
+        {
+            new() { Key = "music" }, new() { Key = "profiles" }, new() { Key = "tools" },
+            new() { Key = "act:page:Security", Label = "Защита", Icon = "" },
+            new() { Key = "act:widget:media", Label = "Виджет музыки", Icon = "" },
+        };
+        RadialMenu.Toggle();
+        await Task.Delay(800);
+        foreach (Window w in Application.Current.Windows)
+            if (w.Content is System.Windows.Controls.Canvas) Save(w, Path.Combine(dir, "RadialCustom.png"));
+        RadialMenu.Toggle();
+        Settings.Current.Radial = keep;
+        await Task.Delay(200);
+
+        foreach (var (sub, name) in new[] { ("Программы", "RadialPrograms"), ("Виджеты", "RadialWidgets"), ("Джарвис", "RadialJarvis") }.Where(x => Edition.HasJarvis || x.Item1 != "Джарвис"))
         {
             RadialMenu.OpenAt(sub);
             await Task.Delay(800);

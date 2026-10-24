@@ -174,7 +174,8 @@ public static class Remote
 
     static Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager? _media;
 
-    static async Task<string> NowPlaying()
+    /// <summary>"Artist — Title" of what Windows media controls show now, or "".</summary>
+    public static async Task<string> NowPlaying()
     {
         try
         {

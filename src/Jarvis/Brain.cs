@@ -90,7 +90,9 @@ public static class Brain
                 new JsonObject { ["command"] = Str("Команда") }, "command"),
             Fn("add_note", "Записать заметку пользователя.", new JsonObject { ["text"] = Str("Текст заметки") }, "text"),
             Fn("search_notes", "Найти заметки пользователя по теме.", new JsonObject { ["query"] = Str("О чём искать") }, "query"),
-            Fn("diagnose", "Проверить компьютер: перегрев, нагрузка, память, диски, режим питания, автозагрузка."),
+            Fn("play_music", "Включить музыку в Яндекс Музыке: исполнителя, песню, альбом, плейлист или жанр. Пустой запрос — «Моя волна».",
+                new JsonObject { ["query"] = Str("Что включить, например «Скриптонит» или «Yanix Party»; пусто — Моя волна") }, "query"),
+            Fn("diagnose","Проверить компьютер: перегрев, нагрузка, память, диски, режим питания, автозагрузка."),
         };
         if (Calendar.Configured)
             tools.Add(Fn("calendar", "События из календаря пользователя на день.",
@@ -175,6 +177,9 @@ public static class Brain
                 var found = Notes.Search(arg("query"));
                 return (found.Count == 0 ? "Ничего не найдено." : string.Join("\n", found.Select(n => $"{n.When:dd.MM.yyyy}: {n.Text}")), null);
             case "diagnose": return (Diagnostics.Report(), null);
+            case "play_music":
+                if (arg("query").Trim().Length == 0) { YandexMusic.MyWave(); return ("Включена «Моя волна».", null); }
+                return (await YandexMusic.Play(arg("query")), null);
             case "calendar": return (await Calendar.Say(DateTime.Today.AddDays(int.TryParse(arg("days_from_today"), out var d) ? d : 0)), null);
             default: return ("Нет такого инструмента.", null);
         }
