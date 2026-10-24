@@ -23,7 +23,8 @@ public static class Jarvis
             Ears.Heard += t => Application.Current.Dispatcher.BeginInvoke(() => _ = Handle(t));
             Ears.Partial += p => Application.Current.Dispatcher.BeginInvoke(() => Status?.Invoke(p));
             Voice.Finished += OnSpeechFinished;
-            Ears.StateChanged += s => Application.Current.Dispatcher.BeginInvoke(() => { if (s is EarState.Listening or EarState.Thinking) DuckNow(); else ReleaseSoon(); });
+            Ears.StateChanged += s => Application.Current.Dispatcher.BeginInvoke(() => { if (s is EarState.Listening or EarState.Thinking) DuckNow(); else ReleaseSoon();
+                if (s == EarState.Listening && Settings.Current.Jarvis.WakeSound && !Voice.IsSpeaking) Voice.Chime(); });
         }
         if (j.ShowOrb) JarvisOrb.Show();
         Brain.Warmup();

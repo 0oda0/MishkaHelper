@@ -5,6 +5,7 @@
     <StackPanel>
         <TextBlock x:Name="Hello" Style="{StaticResource H1}"/>
         <TextBlock x:Name="Sub" Style="{StaticResource Dim}" FontSize="13" Margin="0,0,0,18"/>
+        <ContentControl x:Name="Guide"/>
 
         <WrapPanel>
             <Border Style="{StaticResource Card}">

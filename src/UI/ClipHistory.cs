@@ -82,7 +82,7 @@ public static class ClipHistory
         var list = new ListBox { MaxHeight = 420, Width = 520, Margin = new Thickness(0, 8, 0, 0) };
         ScrollViewer.SetHorizontalScrollBarVisibility(list, ScrollBarVisibility.Disabled);
         var sp = new StackPanel();
-        sp.Children.Add(box); sp.Children.Add(list);
+        sp.Children.Add(UiKit.WithHint(box, "Поиск по скопированному…")); sp.Children.Add(list);
         sp.Children.Add(UiKit.Text("Enter — вставить · Ctrl+P — закрепить · Del — удалить", 11, true));
         var panel = Floating.Panel(sp, 16); panel.Padding = new Thickness(12);
         w.Content = panel;

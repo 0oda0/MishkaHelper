@@ -61,6 +61,7 @@ public partial class JarvisPage : UserControl
         Switch(b, "Диалог: после ответа 6 с слушать без «Джарвис»", J.FollowUp, v => J.FollowUp = v);
         Switch(b, "Перебивать словом «стоп» (лучше в наушниках)", J.BargeIn, v => J.BargeIn = v);
         Switch(b, "Начинать говорить, пока ИИ ещё думает", J.Stream, v => J.Stream = v);
+        Switch(b, "Сигнал «слушаю», когда слышу «Джарвис»", J.WakeSound, v => J.WakeSound = v);
         Switch(b, "Приглушать музыку и видео, когда слышу «Джарвис»", J.Duck, v => J.Duck = v);
         var duckText = UiKit.Text($"Громкость других программ на это время: {J.DuckPercent}%", 12, true);
         var duck = new Slider { Minimum = 0, Maximum = 60, Value = J.DuckPercent, TickFrequency = 5, IsSnapToTickEnabled = true };
@@ -136,27 +137,7 @@ public partial class JarvisPage : UserControl
         var (c, b) = Card("Модели (скачиваются один раз)", "Всё бесплатно и без регистрации. Хранится в %LocalAppData%\\MishkaHelper\\models.");
         var rec = Models.Recommend();
         b.Children.Add(UiKit.Text(rec.Why, 12, true));
-        var auto = new Button { Content = "Настроить Джарвиса под этот ПК", Style = S("AccentButton"), HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 4, 0, 10) };
-        auto.Click += async (_, _) =>
-        {
-            auto.IsEnabled = false;
-            try
-            {
-                // Sequential: parallel multi-GB downloads only slow each other down.
-                foreach (var m in new[] { rec.Stt, LlamaServer.Runtime, rec.Llm }.Where(m => !Models.Has(m)))
-                    await Models.Download(m, f => Dispatcher.BeginInvoke(() => auto.Content = $"{m.Name.Split(" (")[0].Split(" —")[0]}: {f * 100:0}%"));
-                J.Engine = rec.Engine;
-                if (rec.Stt != Models.Vosk) J.WhisperModel = rec.Stt.Key;
-                J.AiModel = rec.Llm.Key; J.AiGpu = rec.Gpu; J.AiEnabled = true; J.Enabled = true;
-                Settings.Save();
-                Ears.ResetWhisper(); Brain.Unload();
-                await Jarvis.Restart();
-                Osd.Show("", "Джарвис готов — скажи «Джарвис»");
-                App.Current.Navigate("Jarvis");   // rebuild the page so switches show the new values
-            }
-            catch (Exception e) { Osd.Show("", e.Message); auto.Content = "Настроить Джарвиса под этот ПК"; auto.IsEnabled = true; }
-        };
-        b.Children.Add(auto);
+        b.Children.Add(AutoSetupButton());
         Combo(b, "Распознавание речи", new[] { ("whisper", "Whisper — точное (рекомендую)"), ("vosk", "Vosk — лёгкое, для слабых ПК") }, J.Engine, async v => { J.Engine = v; Ears.ResetWhisper(); if (J.Enabled) await Jarvis.Restart(); });
         Combo(b, "Модель Whisper", Models.Whisper.Select(w => (w.Key, w.Name)), J.WhisperModel, async v => { J.WhisperModel = v; Ears.ResetWhisper(); if (J.Enabled) await Jarvis.Restart(); });
         foreach (var w in Models.Whisper) Row(b, w, async () => { if (J.Enabled) await Jarvis.Restart(); });
@@ -253,6 +234,54 @@ public partial class JarvisPage : UserControl
         return c;
     }
 
+    /// <summary>Downloads what this PC can run (sequentially, with sizes), switches everything on.</summary>
+    Button AutoSetupButton()
+    {
+        var rec = Models.Recommend();
+        const string Label = "Настроить Джарвиса под этот ПК";
+        var auto = new Button { Content = Label, Style = S("AccentButton"), HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 4, 0, 10) };
+        auto.Click += async (_, _) =>
+        {
+            auto.IsEnabled = false;
+            try
+            {
+                var todo = new[] { rec.Stt, LlamaServer.Runtime, rec.Llm }.Where(m => !Models.Has(m)).ToList();
+                long totalMb = todo.Sum(m => m.ApproxMb);
+                for (int i = 0; i < todo.Count; i++)
+                {
+                    var m = todo[i];
+                    var name = m.Name.Split(" (")[0].Split(" —")[0];
+                    // Parallel multi-GB downloads only slow each other down — one by one, and say how much is left.
+                    await Models.Download(m, f => Dispatcher.BeginInvoke(() =>
+                        auto.Content = $"Скачиваю {i + 1}/{todo.Count}: {name} — {f * 100:0}% из {m.ApproxMb} МБ (всего ≈{totalMb / 1024.0:0.0} ГБ)"));
+                }
+                J.Engine = rec.Engine;
+                if (rec.Stt != Models.Vosk) J.WhisperModel = rec.Stt.Key;
+                J.AiModel = rec.Llm.Key; J.AiGpu = rec.Gpu; J.AiEnabled = true; J.Enabled = true;
+                Settings.Save();
+                Ears.ResetWhisper(); Brain.Unload();
+                await Jarvis.Restart();
+                Osd.Show("", "Джарвис готов — скажи «Джарвис»");
+                App.Current.Navigate("Jarvis");   // rebuild the page so switches show the new values
+            }
+            catch (Exception e) { Osd.Show("", e.Message); auto.Content = Label; auto.IsEnabled = true; }
+        };
+        return auto;
+    }
+
+    /// <summary>Until speech recognition is downloaded nothing else on this page works — say so at the very top.</summary>
+    UIElement? SetupBanner()
+    {
+        if (Models.Has(Models.WhisperModel) || Models.Has(Models.Vosk)) return null;
+        var rec = Models.Recommend();
+        var (c, b) = Card("Джарвис ещё не настроен",
+            $"Нужно один раз скачать модели (≈{(rec.Stt.ApproxMb + rec.Llm.ApproxMb + LlamaServer.Runtime.ApproxMb) / 1024.0:0.0} ГБ) — бесплатно, без регистрации. Дальше всё работает без интернета.");
+        b.Children.Add(UiKit.Text(rec.Why, 12, true));
+        b.Children.Add(AutoSetupButton());
+        c.BorderBrush = (Brush)FindResource("AccentBrush");
+        return c;
+    }
+
     UIElement CommandsCard()
     {
         var (c, b) = Card("Мои команды (без ИИ, мгновенно)",
@@ -279,25 +308,22 @@ public partial class JarvisPage : UserControl
         Render();
         b.Children.Add(list);
 
-        var cmds = CommandPalette.Commands();
         b.Children.Add(UiKit.Text("Фраза (можно несколько через ;)", 12, true));
-        var phrase = new TextBox { Margin = new Thickness(0, 2, 0, 6) };
-        b.Children.Add(phrase);
+        var phrase = new TextBox { Margin = new Thickness(0, 2, 0, 6), Padding = new Thickness(8, 6, 8, 6) };
+        b.Children.Add(UiKit.WithHint(phrase, "игровой режим; погнали играть"));
         b.Children.Add(UiKit.Text("Действие", 12, true));
-        var action = new ComboBox { IsEditable = true, IsTextSearchEnabled = true, StaysOpenOnEdit = true, Margin = new Thickness(0, 2, 0, 6) };
-        foreach (var x in cmds) action.Items.Add(x.Name);
-        b.Children.Add(action);
+        var (picker, selected, reset) = UiKit.ActionPicker();
+        b.Children.Add(picker);
         b.Children.Add(UiKit.Text("Что ответить (необязательно; пусто — молча)", 12, true));
-        var reply = new TextBox { Margin = new Thickness(0, 2, 0, 6) };
-        b.Children.Add(reply);
-        var add = new Button { Content = "+ Добавить команду", Style = S("AccentButton"), HorizontalAlignment = HorizontalAlignment.Left };
+        var reply = new TextBox { Margin = new Thickness(0, 2, 0, 6), Padding = new Thickness(8, 6, 8, 6) };
+        b.Children.Add(UiKit.WithHint(reply, "Поехали!"));
+        var add = new Button { Content = "+ Добавить команду", Style = S("AccentButton"), HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 6, 0, 0) };
         add.Click += (_, _) =>
         {
-            int i = action.SelectedIndex >= 0 ? action.SelectedIndex : cmds.FindIndex(x => x.Name.Equals(action.Text.Trim(), StringComparison.OrdinalIgnoreCase));
-            if (phrase.Text.Trim().Length < 2 || i < 0) { Osd.Show("", "Напиши фразу и выбери действие из списка"); return; }
-            J.Commands.Add(new VoiceCommand { Phrases = phrase.Text.Trim(), Action = cmds[i].Action, ActionName = cmds[i].Name, Reply = reply.Text.Trim() });
+            if (phrase.Text.Trim().Length < 2 || selected() is not { } cmd) { Osd.Show("", "Напиши фразу и выбери действие в списке"); return; }
+            J.Commands.Add(new VoiceCommand { Phrases = phrase.Text.Trim(), Action = cmd.Action, ActionName = cmd.Name, Reply = reply.Text.Trim() });
             Settings.Save();
-            phrase.Text = reply.Text = ""; action.SelectedIndex = -1; action.Text = "";
+            phrase.Text = reply.Text = ""; reset();
             Render();
         };
         b.Children.Add(add);

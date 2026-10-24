@@ -102,6 +102,52 @@ public static class UiKit
 
     public static Border Card(UIElement child) => new() { Style = (Style)Application.Current.Resources["Card"], Child = child };
 
+    /// <summary>A grey hint inside an empty text box ("Найди функцию…"), gone as soon as you type.</summary>
+    public static Grid WithHint(TextBox box, string hint)
+    {
+        var h = new TextBlock
+        {
+            Text = hint, IsHitTestVisible = false, VerticalAlignment = VerticalAlignment.Center, Opacity = 0.55,
+            Margin = new Thickness(box.Padding.Left + 4, 0, 0, 0), FontSize = box.FontSize,
+            Foreground = (Brush)Application.Current.Resources["DimBrush"], TextTrimming = TextTrimming.CharacterEllipsis,
+        };
+        box.TextChanged += (_, _) => h.Visibility = box.Text.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
+        return new Grid { Children = { box, h } };
+    }
+
+    /// <summary>
+    /// Search-as-you-type list of every command (functions, pages, profiles, programs, widgets, scenarios):
+    /// all typed words must appear anywhere in the name ("защ" finds «Открыть: Защита»).
+    /// </summary>
+    public static (FrameworkElement View, Func<(string Icon, string Name, string Action)?> Selected, Action Reset) ActionPicker(string hint = "Начни печатать: защита, профиль, громкость…")
+    {
+        var all = CommandPalette.Commands();
+        var box = new TextBox { Padding = new Thickness(8, 6, 8, 6) };
+        var list = new ListBox { MaxHeight = 190, Margin = new Thickness(0, 4, 0, 0) };
+        void Filter()
+        {
+            var words = box.Text.ToLowerInvariant().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            list.Items.Clear();
+            foreach (var c in all.Where(c => words.All(w => c.Name.ToLowerInvariant().Contains(w))).Take(60))
+            {
+                var row = new StackPanel { Orientation = Orientation.Horizontal, Tag = c };
+                var ic = Icon(c.Icon, 14); ic.Width = 26; ic.Foreground = (Brush)Application.Current.Resources["AccentBrush"];
+                row.Children.Add(ic);
+                row.Children.Add(new TextBlock { Text = c.Name, VerticalAlignment = VerticalAlignment.Center });
+                list.Items.Add(row);
+            }
+            if (list.Items.Count > 0 && words.Length > 0) list.SelectedIndex = 0;
+        }
+        box.TextChanged += (_, _) => Filter();
+        Filter();
+        var sp = new StackPanel();
+        sp.Children.Add(WithHint(box, hint));
+        sp.Children.Add(list);
+        return (sp,
+            () => (list.SelectedItem as FrameworkElement)?.Tag is ValueTuple<string, string, string> t ? t : null,
+            () => { box.Text = ""; list.SelectedIndex = -1; });
+    }
+
     public static string Ask(string title, string prompt, string value = "")
     {
         var tb = new TextBox { Text = value, Margin = new Thickness(0, 10, 0, 12), MinWidth = 300 };

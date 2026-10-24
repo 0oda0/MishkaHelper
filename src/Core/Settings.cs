@@ -65,6 +65,7 @@ public class JarvisSettings
     public List<string> Calendars { get; set; } = new();   // ICS / webcal links
     /// <summary>User phrases handled instantly, without the AI.</summary>
     public List<VoiceCommand> Commands { get; set; } = new();
+    public bool WakeSound { get; set; } = true;   // short chime when the wake word is heard
     public bool Duck { get; set; } = true;       // quieter other apps while Jarvis listens/answers
     public int DuckPercent { get; set; } = 20;
     public int Version { get; set; }   // bumps migrate old defaults
@@ -196,6 +197,7 @@ public class AppSettings
     public string DarkAt { get; set; } = "21:00";
     public bool LockKeysOsd { get; set; } = true;
     public bool CheckUpdates { get; set; } = true;
+    public bool Onboarded { get; set; }   // «С чего начать» on Home was dismissed
     public bool RemoteEnabled { get; set; }
     public bool BleRemoteEnabled { get; set; }
     public int RemotePort { get; set; } = 8770;

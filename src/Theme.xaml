@@ -228,8 +228,9 @@
     <!-- Sidebar navigation item -->
     <Style x:Key="NavItem" TargetType="RadioButton">
         <Setter Property="Foreground" Value="{DynamicResource DimBrush}"/>
-        <Setter Property="Height" Value="42"/>
-        <Setter Property="Margin" Value="10,2"/>
+        <!-- 36 px: all 16 sections fit without scrolling at the default window height -->
+        <Setter Property="Height" Value="36"/>
+        <Setter Property="Margin" Value="10,1"/>
         <Setter Property="Cursor" Value="Hand"/>
         <Setter Property="FontSize" Value="14"/>
         <Setter Property="GroupName" Value="nav"/>

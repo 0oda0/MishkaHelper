@@ -13,6 +13,7 @@ public partial class HomePage : UserControl
         InitializeComponent();
         var h = DateTime.Now.Hour;
         Hello.Text = (h < 6 ? "Доброй ночи" : h < 12 ? "Доброе утро" : h < 18 ? "Добрый день" : "Добрый вечер") + ", Mishka";
+        if (!Settings.Current.Onboarded) Guide.Content = FirstSteps();
         foreach (var t in UiKit.StandardTiles()) Tiles.Children.Add(t);
         Modes.Content = UiKit.PowerModes();
         ProfilesBox.Content = UiKit.ProfileButtons();
@@ -68,4 +69,38 @@ public partial class HomePage : UserControl
     }
 
     void Sec_Click(object sender, RoutedEventArgs e) => App.Current.Navigate("Security");
+
+    /// <summary>First run: the four things worth knowing, each one click away; hidden for good after «Понятно».</summary>
+    UIElement FirstSteps()
+    {
+        var sp = new StackPanel();
+        sp.Children.Add(new TextBlock { Text = "С чего начать", Style = (Style)FindResource("H2") });
+        var steps = new List<(string Key, string Text, string Button, Action Go)>
+        {
+            ("Ctrl+Alt+R", "Колесо у курсора — профили, звук, музыка, программы. Настраивается под себя.", "Настроить колесо", () => App.Current.Navigate("Radial")),
+            ("Ctrl+Alt+K", "Поиск любой функции: набери слово и нажми Enter.", "Попробовать", CommandPalette.Toggle),
+            ("", "Полная очистка — мусор, автозагрузка, фоновые программы одной кнопкой.", "Открыть", () => App.Current.Navigate("Boost")),
+        };
+        if (Edition.HasJarvis) steps.Add(("Ctrl+Alt+J", "Джарвис — голосовой помощник. Один раз скачать модели — и «Джарвис, открой браузер».", "Настроить", () => App.Current.Navigate("Jarvis")));
+        foreach (var (key, text, button, go) in steps)
+        {
+            var row = new DockPanel { Margin = new Thickness(0, 6, 0, 0) };
+            var b = new Button { Content = button, Padding = new Thickness(12, 4, 12, 4) };
+            b.Click += (_, _) => go();
+            DockPanel.SetDock(b, Dock.Right); row.Children.Add(b);
+            var k = UiKit.Text(key, 12); k.Width = 92; k.FontFamily = new System.Windows.Media.FontFamily("Consolas");
+            k.Foreground = (System.Windows.Media.Brush)FindResource("AccentBrush"); k.VerticalAlignment = VerticalAlignment.Center;
+            DockPanel.SetDock(k, Dock.Left); row.Children.Add(k);
+            var t = UiKit.Text(text, 13); t.VerticalAlignment = VerticalAlignment.Center; t.Margin = new Thickness(0, 0, 10, 0);
+            row.Children.Add(t);
+            sp.Children.Add(row);
+        }
+        var ok = new Button { Content = "Понятно, скрыть", Style = (Style)FindResource("GhostButton"), HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 10, 0, 0) };
+        ok.Click += (_, _) => { Settings.Current.Onboarded = true; Settings.Save(); Guide.Content = null; };
+        sp.Children.Add(ok);
+        var card = UiKit.Card(sp);
+        card.BorderBrush = (System.Windows.Media.Brush)FindResource("AccentBrush");
+        card.Margin = new Thickness(0, 0, 0, 14);
+        return card;
+    }
 }

@@ -73,7 +73,9 @@ public partial class RadialPage : UserControl
         foreach (var c in RadialMenu.Catalog().Where(c => shown.All(s => s.Key != c.Key)))
             _builtin.Items.Add(new ComboBoxItem { Content = c.Name, Tag = c.Key });
         _builtin.IsEnabled = _builtin.Items.Count > 0;
-        if (_builtin.Items.Count > 0) _builtin.SelectedIndex = 0;
+        // An empty box looks broken — say why it's empty.
+        if (_builtin.Items.Count == 0) _builtin.Items.Add(new ComboBoxItem { Content = "Все разделы уже в колесе", IsEnabled = false });
+        _builtin.SelectedIndex = 0;
     }
 
     UIElement ItemsCard()
@@ -113,31 +115,24 @@ public partial class RadialPage : UserControl
         sp.Children.Add(row1);
 
         sp.Children.Add(UiKit.Text("Любое действие: функция, страница, профиль, программа, виджет, сценарий", 12, true));
-        var cmds = CommandPalette.Commands();
-        var action = new ComboBox { IsEditable = true, IsTextSearchEnabled = true, Width = 360, Margin = new Thickness(0, 4, 8, 0), StaysOpenOnEdit = true };
-        foreach (var c in cmds) action.Items.Add(c.Name);
-        var label = new TextBox { Width = 200, Margin = new Thickness(0, 4, 8, 0), ToolTip = "Подпись в колесе (необязательно)" };
-        action.SelectionChanged += (_, _) =>
-        {
-            if (action.SelectedIndex < 0) return;
-            // Suggest a short label: "Открыть: Защита" → "Защита".
-            var n = cmds[action.SelectedIndex].Name;
-            label.Text = n.Contains(": ") ? n[(n.IndexOf(": ") + 2)..] : n;
-        };
-        var add2 = new Button { Content = "+ Добавить", Margin = new Thickness(0, 4, 0, 0) };
+        var (picker, selected, reset) = UiKit.ActionPicker();
+        sp.Children.Add(picker);
+        var label = new TextBox { Width = 220, Margin = new Thickness(0, 6, 8, 0), Padding = new Thickness(8, 6, 8, 6) };
+        var add2 = new Button { Content = "+ Добавить в колесо", Margin = new Thickness(0, 6, 0, 0) };
         add2.Click += (_, _) =>
         {
-            int i = action.SelectedIndex >= 0 ? action.SelectedIndex : cmds.FindIndex(c => c.Name.Equals(action.Text.Trim(), StringComparison.OrdinalIgnoreCase));
-            if (i < 0) { Osd.Show("", "Выбери действие из списка"); return; }
+            if (selected() is not { } cmd) { Osd.Show("", "Выбери действие в списке"); return; }
+            // Short label by default: "Открыть: Защита" → "Защита".
             var name = label.Text.Trim();
-            if (name.Length == 0) name = cmds[i].Name;
+            if (name.Length == 0) name = cmd.Name.Contains(": ") ? cmd.Name[(cmd.Name.IndexOf(": ") + 2)..] : cmd.Name;
             Materialize();
-            R.Add(new RadialEntry { Key = "act:" + cmds[i].Action, Label = name.Length > 22 ? name[..21] + "…" : name, Icon = cmds[i].Icon });
-            label.Text = ""; action.SelectedIndex = -1; action.Text = "";
+            R.Add(new RadialEntry { Key = "act:" + cmd.Action, Label = name.Length > 22 ? name[..21] + "…" : name, Icon = cmd.Icon });
+            label.Text = ""; reset();
             Changed();
+            Osd.Show("", $"«{name}» — в колесе, пункт {R.Count}");
         };
         var row2 = new WrapPanel();
-        row2.Children.Add(action); row2.Children.Add(label); row2.Children.Add(add2);
+        row2.Children.Add(UiKit.WithHint(label, "Подпись (необязательно)")); row2.Children.Add(add2);
         sp.Children.Add(row2);
         sp.Children.Add(UiKit.Text("Например: «Профиль: Игра» прямо в корне, «Открыть: Защита», «Виджет: Музыка», свой сценарий «Режим кино».", 11, true));
         return UiKit.Card(sp);

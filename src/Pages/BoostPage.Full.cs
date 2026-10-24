@@ -25,7 +25,7 @@ public partial class BoostPage
         {
             start.IsEnabled = false; start.Content = "Анализирую…";
             body.Children.Clear();
-            try { await Analyze(body, ct); } catch (OperationCanceledException) { return; }
+            try { await Analyze(body, intro, ct); } catch (OperationCanceledException) { return; }
             start.Content = "Анализ заново"; start.IsEnabled = true;
         };
         return root;
@@ -59,7 +59,7 @@ public partial class BoostPage
         return cb;
     }
 
-    async Task Analyze(StackPanel body, CancellationToken ct)
+    async Task Analyze(StackPanel body, StackPanel top, CancellationToken ct)
     {
         double ramBefore = FullClean.RamUsedPercent();
 
@@ -104,12 +104,23 @@ public partial class BoostPage
         var (c5, b5) = Step(5, "Готово к очистке", "Проверь галочки выше и жми. Можно ничего не менять — отмечено только безопасное.");
         var go = new Button { Content = "Сделать отмеченное", Style = S("AccentButton"), HorizontalAlignment = HorizontalAlignment.Left };
         var status = UiKit.Text("", 12, true);
-        b5.Children.Add(go); b5.Children.Add(status);
+        var bar = new ProgressBar { IsIndeterminate = true, Height = 4, Margin = new Thickness(0, 8, 0, 0), Visibility = Visibility.Collapsed };
+        b5.Children.Add(go); b5.Children.Add(bar); b5.Children.Add(status);
         body.Children.Add(c5);
+        // The checklist is long: the same button sits at the top too, right where "Начать анализ" was pressed.
+        foreach (var old in top.Children.OfType<FrameworkElement>().Where(e => "go" == e.Tag as string).ToList()) top.Children.Remove(old);
+        var goTop = new Button { Content = "Сделать отмеченное", Style = S("AccentButton"), HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 8, 0, 0), Tag = "go" };
+        var hint = UiKit.Text("Анализ готов — проверь галочки ниже или сразу жми: отмечено только безопасное.", 12, true);
+        hint.Tag = "go";
+        goTop.Click += (_, _) => go.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+        top.Children.Add(hint); top.Children.Add(goTop);
 
         go.Click += async (_, _) =>
         {
             go.IsEnabled = false;
+            foreach (var e in top.Children.OfType<Button>().Where(e => "go" == e.Tag as string)) e.IsEnabled = false;
+            bar.Visibility = Visibility.Visible;
+            c5.BringIntoView();
             long freed = 0; int disabled = 0, closed = 0; string virus = "не проверялось";
             var undo = new List<StartupItem>();
             Cleaner.LastSkipped = 0;
@@ -147,7 +158,7 @@ public partial class BoostPage
             Settings.Current.LastClean = DateTime.Now; Settings.Save();
             await Task.Delay(1500);   // let memory numbers settle after closing programs
             double ramAfter = FullClean.RamUsedPercent();
-            status.Text = "";
+            status.Text = ""; bar.Visibility = Visibility.Collapsed;
             var (c6, b6) = Step(6, "Отчёт", "Готово! Вот что изменилось:");
             foreach (var line in new[]
                      {

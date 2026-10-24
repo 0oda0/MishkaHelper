@@ -23,6 +23,9 @@ public static class CommandPalette
         ["screenshot"] = "Снимок экрана",
         ["taskmgr"] = "Диспетчер задач",
         ["features"] = "Что можно сделать (все функции)",
+        ["page:Tools"] = "Пульт с телефона (QR-код)",
+        ["page:Boost"] = "Полная очистка компьютера",
+        ["page:Radial"] = "Настроить колесо под себя",
     };
 
     static readonly (string Page, string Name)[] Pages =
@@ -65,7 +68,7 @@ public static class CommandPalette
         var box = new TextBox { FontSize = 18, MinWidth = 560, Padding = new Thickness(12, 10, 12, 10), BorderThickness = new Thickness(0) };
         var list = new ListBox { MaxHeight = 380, Margin = new Thickness(0, 8, 0, 0) };
         var sp = new StackPanel();
-        sp.Children.Add(box); sp.Children.Add(list);
+        sp.Children.Add(UiKit.WithHint(box, "Найди что угодно: громкость, очистка, профиль, Джарвис…")); sp.Children.Add(list);
         var panel = Floating.Panel(sp, 16);
         panel.Padding = new Thickness(12);
         w.Content = panel;

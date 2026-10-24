@@ -89,6 +89,21 @@ public static class Voice
         SpeechSynthesizer.AllVoices.Where(v => v.Language.StartsWith("ru", StringComparison.OrdinalIgnoreCase)).Select(v => v.DisplayName)
             .Concat(SpeechSynthesizer.AllVoices.Where(v => !v.Language.StartsWith("ru", StringComparison.OrdinalIgnoreCase)).Select(v => v.DisplayName)).ToList();
 
+    /// <summary>Two soft rising notes (~0.16 s): "I heard you, go on". Too short for the speech detector to take as a phrase.</summary>
+    public static void Chime() => Task.Run(() =>
+    {
+        try
+        {
+            ISampleProvider Note(double hz, int ms) => new NAudio.Wave.SampleProviders.SignalGenerator(24000, 1)
+                { Type = NAudio.Wave.SampleProviders.SignalGeneratorType.Sin, Frequency = hz, Gain = 0.12 }.Take(TimeSpan.FromMilliseconds(ms));
+            using var o = new WaveOutEvent();
+            o.Init(Note(880, 70).FollowedBy(Note(1320, 90)));
+            o.Play();
+            while (o.PlaybackState == PlaybackState.Playing) Thread.Sleep(15);
+        }
+        catch { }
+    });
+
     /// <summary>Stop talking and drop everything queued.</summary>
     public static void Stop()
     {

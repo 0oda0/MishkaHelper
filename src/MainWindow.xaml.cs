@@ -12,6 +12,7 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         SourceInitialized += (_, _) => ThemeManager.ApplyBackdrop(this);
+        Height = Math.Min(840, SystemParameters.WorkArea.Height - 24);   // tall enough for the whole menu, never taller than the screen
         // Maximized WindowChrome windows overhang the screen by the resize border.
         StateChanged += (_, _) => Root.Margin = WindowState == WindowState.Maximized ? new Thickness(7) : new Thickness(0);
         if (Acer.Available) NavNitro.Visibility = Visibility.Visible;

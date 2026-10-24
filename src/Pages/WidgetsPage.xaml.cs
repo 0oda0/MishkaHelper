@@ -12,7 +12,14 @@ public partial class WidgetsPage : UserControl
     {
         InitializeComponent();
         City.Text = Settings.Current.WeatherCity;
-        foreach (var (kind, name) in Widgets.Names) List.Children.Add(Card(kind, name));
+        foreach (var (kind, name) in Widgets.Names) { var c = Card(kind, name); ((FrameworkElement)c).Tag = name.ToLowerInvariant(); List.Children.Add(c); }
+        var search = new TextBox { Padding = new Thickness(8, 6, 8, 6) };
+        search.TextChanged += (_, _) =>
+        {
+            var q = search.Text.Trim().ToLowerInvariant();
+            foreach (FrameworkElement c in List.Children) c.Visibility = q.Length == 0 || ((string)c.Tag).Contains(q) ? Visibility.Visible : Visibility.Collapsed;
+        };
+        SearchHost.Content = UiKit.WithHint(search, "Найти виджет: музыка, погода, батарея…");
     }
 
     UIElement Card(string kind, string name)
