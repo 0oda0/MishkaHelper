@@ -53,6 +53,7 @@ public partial class JarvisPage : UserControl
     {
         var (c, b) = Card("Включение", "Скажи «Джарвис» и команду, или нажми Ctrl+Alt+J, или кликни по шару.");
         Switch(b, "Джарвис слушает микрофон", J.Enabled, async v => { J.Enabled = v; Settings.Save(); if (v) await Jarvis.Start(); else Jarvis.Stop(); });
+        Switch(b, "Включать Джарвиса при запуске программы", J.StartWithApp, v => J.StartWithApp = v);
         Switch(b, "Слово-активатор", J.WakeWordOn, v => J.WakeWordOn = v);
         var wake = new TextBox { Text = J.WakeWord, Margin = new Thickness(0, 2, 0, 8) };
         wake.LostFocus += (_, _) => { J.WakeWord = wake.Text.Trim().ToLowerInvariant(); Settings.Save(); };
@@ -348,7 +349,10 @@ public partial class JarvisPage : UserControl
             }
         }
         Render();
-        var url = new TextBox { Margin = new Thickness(0, 2, 0, 6) };
+        Switch(b, "Напоминания на дни вперёд — в Google Календарь", Settings.Current.GoogleCalendar, v => Settings.Current.GoogleCalendar = v);
+        b.Children.Add(UiKit.Text("Откроется готовое событие в Google Календаре — останется нажать «Сохранить». " +
+            "Чтобы твои события из Google были видны Джарвису и в виджете «Ближайшие дела», добавь ниже «Секретный адрес в формате iCal».", 11, true));
+        var url = new TextBox { Margin = new Thickness(0, 6, 0, 6) };
         var wp = new WrapPanel();
         var add = new Button { Content = "+ Добавить", Style = S("AccentButton") };
         add.Click += (_, _) => { var u = url.Text.Trim(); if (u.Length < 8) return; J.Calendars.Add(u); Settings.Save(); url.Text = ""; Render(); };

@@ -61,6 +61,7 @@ src/
     RustDesk.cs        find/download official signed RustDesk for access from anywhere
     YandexMusic.cs     anonymous catalog search (api.music.yandex.net) + app deeplinks yandexmusic://<web path>; ?deeplink=play-vibe&seeds=artist:ID|track:ID / stationId=user:onyourwave starts a wave
     FullClean.cs       full-cleanup wizard logic: Junk/Ask/Keep classification (regex), background processes
+    Reminders.cs       persistent reminders (Settings.Reminders), 15 s tick, date-only = eve 19:00 + day 10:00, silent at startup; Google Calendar template link
     ScreenTime.cs      foreground app seconds per day (idle >3 min skipped), 30 days JSON
     Updater.cs         GitHub releases → silent Inno setup or portable zip swap; per edition
     Services.cs        start/stop everything, periodic jobs (5 s tick), auto theme, Caps/Num OSD; Autostart task
@@ -77,6 +78,7 @@ src/
     Notes.cs           notes store + chat history (jsonl)
     WebReader.cs       WebView2: login window + invisible page text reader for "web sources"
     Diagnostics.cs     "почему тормозит" report, status, snapshot for the LLM
+    When.cs            Russian time phrases → DateTime + rest of sentence (через N минут / в воскресенье / завтра в 6 вечера / 1 ноября / 25.12); unit-tested
     Calendar.cs        ICS links → events per day (DAILY/WEEKLY RRULE, EXDATE, COUNT/UNTIL); intent + Brain tool
     Scenarios.cs       scenario engine: steps + triggers (voice/hotkey/time/events)
   Pages/               one UserControl per section (XAML shell + code-built cards)
@@ -91,7 +93,7 @@ src/
     CommandPalette.cs  Ctrl+Alt+K search
     ClipHistory.cs     Ctrl+Alt+V clipboard history (message-only window, AddClipboardFormatListener; only pinned items persist)
     Widgets.cs / WidgetsExtra.cs  20 desktop widgets (partial class)
-    JarvisUi.cs        orb + chat window
+    JarvisUi.cs        orb + chat window + JarvisInput (Ctrl+Alt+Enter typed request, silent answer)
     Shots.cs / SelfTest.cs  dev tooling
 docs/remote/           phone remote page: served by Remote.cs (embedded) over Wi-Fi, and by GitHub Pages (HTTPS → Web Bluetooth)
 docs/features/         landing page (index.html + img/*.png) shipped as <app>\docs
@@ -100,6 +102,7 @@ tests/                 xunit project (InternalsVisibleTo MishkaHelper.Tests)
 tools/                 install-local.ps1, app.dev.manifest, make-icon.ps1
 .github/workflows/release.yml  builds both editions, setup + portable zip, GitHub release
 ROADMAP.md             feature list: done / later / rejected (with reasons)
+docs/JARVIS_TESTS.md   owner's manual Jarvis checklist — update with every Jarvis change, send with releases
 STATUS.md              honest audit: not done / not verified live / known issues / improvement ideas — keep it current
 ```
 

@@ -90,7 +90,11 @@ public static class Brain
                 new JsonObject { ["command"] = Str("Команда") }, "command"),
             Fn("add_note", "Записать заметку пользователя.", new JsonObject { ["text"] = Str("Текст заметки") }, "text"),
             Fn("search_notes", "Найти заметки пользователя по теме.", new JsonObject { ["query"] = Str("О чём искать") }, "query"),
-            Fn("play_music", "Включить музыку в Яндекс Музыке: исполнителя, песню, альбом, плейлист или жанр. Пустой запрос — «Моя волна».",
+            Fn("remind", "Создать напоминание пользователю на дату/время (оно же уходит в заметки и Google Календарь). Для дел, сроков, встреч.",
+                new JsonObject { ["text"] = Str("Что напомнить, коротко: «сделать лабу по физике»"), ["when"] = Str("ГГГГ-ММ-ДД ЧЧ:ММ, или ГГГГ-ММ-ДД если время не названо") }, "text", "when"),
+            Fn("schedule", "Выполнить команды на компьютере позже (создаётся разовый сценарий). Команды — как для pc_command, через « и ».",
+                new JsonObject { ["commands"] = Str("Например «запусти фотошоп и профиль Работа»"), ["when"] = Str("ГГГГ-ММ-ДД ЧЧ:ММ") }, "commands", "when"),
+            Fn("play_music","Включить музыку в Яндекс Музыке: исполнителя, песню, альбом, плейлист или жанр. Пустой запрос — «Моя волна».",
                 new JsonObject { ["query"] = Str("Что включить, например «Скриптонит» или «Yanix Party»; пусто — Моя волна") }, "query"),
             Fn("diagnose","Проверить компьютер: перегрев, нагрузка, память, диски, режим питания, автозагрузка."),
         };
@@ -177,6 +181,16 @@ public static class Brain
                 var found = Notes.Search(arg("query"));
                 return (found.Count == 0 ? "Ничего не найдено." : string.Join("\n", found.Select(n => $"{n.When:dd.MM.yyyy}: {n.Text}")), null);
             case "diagnose": return (Diagnostics.Report(), null);
+            case "remind" or "schedule":
+            {
+                var w = arg("when").Trim();
+                if (!DateTime.TryParse(w, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var at))
+                    return ("Не понял дату — переспроси пользователя, когда именно.", null);
+                bool hasTime = w.Contains(':');
+                if ((hasTime ? at : at.Date.AddHours(10)) < DateTime.Now) return ("Эта дата уже прошла — уточни у пользователя.", null);
+                var plan = Intents.MakePlan(at, hasTime || name == "schedule", (name == "remind" ? arg("text") : arg("commands")).Trim().ToLowerInvariant(), name == "schedule");
+                return (plan.Say, null);
+            }
             case "play_music":
                 if (arg("query").Trim().Length == 0) { YandexMusic.MyWave(); return ("Включена «Моя волна».", null); }
                 return (await YandexMusic.Play(arg("query")), null);

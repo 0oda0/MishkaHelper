@@ -65,6 +65,7 @@ public class JarvisSettings
     public List<string> Calendars { get; set; } = new();   // ICS / webcal links
     /// <summary>User phrases handled instantly, without the AI.</summary>
     public List<VoiceCommand> Commands { get; set; } = new();
+    public bool StartWithApp { get; set; } = true;   // false: Jarvis stays off at launch even if it was on last time
     public bool WakeSound { get; set; } = true;   // short chime when the wake word is heard
     public bool Duck { get; set; } = true;       // quieter other apps while Jarvis listens/answers
     public int DuckPercent { get; set; } = 20;
@@ -118,6 +119,17 @@ public class VoiceCommand
     public string Action { get; set; } = "";
     public string ActionName { get; set; } = "";
     public string Reply { get; set; } = "";
+}
+
+/// <summary>A reminder that survives restarts. Date-only ones ring at 10:00 that day and the evening before.</summary>
+public class Reminder
+{
+    public string Id { get; set; } = Guid.NewGuid().ToString("N")[..8];
+    public string Text { get; set; } = "";
+    public DateTime At { get; set; }
+    public bool HasTime { get; set; }
+    public bool Done { get; set; }
+    public bool EveWarned { get; set; }
 }
 
 public class RadialEntry
@@ -198,6 +210,8 @@ public class AppSettings
     public bool LockKeysOsd { get; set; } = true;
     public bool CheckUpdates { get; set; } = true;
     public bool Onboarded { get; set; }   // «С чего начать» on Home was dismissed
+    public List<Reminder> Reminders { get; set; } = new();
+    public bool GoogleCalendar { get; set; } = true;   // open a pre-filled Google Calendar event for dated reminders
     public bool RemoteEnabled { get; set; }
     public bool BleRemoteEnabled { get; set; }
     public int RemotePort { get; set; } = 8770;

@@ -68,6 +68,7 @@ public static class Actions
 #if !LITE
                 case "jarvis": Jarvis.Listen(); break;
                 case "jarvisChat": JarvisChat.Open(); break;
+                case "jarvisType": JarvisInput.Toggle(); break;
                 case "jarvisToggle":
                 {
                     var j = Settings.Current.Jarvis;

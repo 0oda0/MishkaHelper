@@ -226,3 +226,48 @@ public static class JarvisChat
         _scroll?.ScrollToEnd();
     }
 }
+
+/// <summary>
+/// Ctrl+Alt+Enter anywhere: one line to Jarvis in plain words — "через 5 минут запусти фотошоп",
+/// "в воскресенье сделать лабу". The answer comes back as a quiet toast, nothing is spoken.
+/// </summary>
+public static class JarvisInput
+{
+    static Window? _w;
+
+    public static void Toggle()
+    {
+        if (_w != null) { _w.Close(); return; }
+        var w = Floating.Create(clickThrough: false, noActivate: false);
+        var box = new TextBox { FontSize = 17, MinWidth = 600, Padding = new Thickness(12, 10, 12, 10), BorderThickness = new Thickness(0) };
+        var sp = new StackPanel();
+        sp.Children.Add(UiKit.WithHint(box, "Например: через 5 минут запусти фотошоп и включи режим работы"));
+        sp.Children.Add(UiKit.Text("Enter — отправить · Esc — закрыть · команды, напоминания, вопросы", 11, true));
+        var panel = Floating.Panel(sp, 16);
+        panel.Padding = new Thickness(12);
+        w.Content = panel;
+
+        box.PreviewKeyDown += async (_, e) =>
+        {
+            if (e.Key == Key.Escape) { w.Close(); return; }
+            if (e.Key != Key.Enter || box.Text.Trim().Length == 0) return;
+            e.Handled = true;
+            var text = box.Text.Trim();
+            w.Close();
+            var answer = await Jarvis.HandleTyped(text);
+            Toast.Show("\uE720", "Джарвис", answer.Length > 0 ? answer : "Готово.", JarvisChat.Open);
+        };
+        bool closing = false;
+        w.Closing += (_, _) => closing = true;
+        w.Deactivated += (_, _) => { if (!closing && box.Text.Length == 0) w.Close(); };   // keep a half-typed line
+        w.Closed += (_, _) => _w = null;
+        _w = w;
+        w.Show();
+        var wa = SystemParameters.WorkArea;
+        w.Left = wa.Left + (wa.Width - w.ActualWidth) / 2;
+        w.Top = wa.Top + wa.Height * 0.22;
+        Native.SetForegroundWindow(new System.Windows.Interop.WindowInteropHelper(w).Handle);
+        w.Activate();
+        box.Focus();
+    }
+}

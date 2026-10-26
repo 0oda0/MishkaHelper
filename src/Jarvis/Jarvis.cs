@@ -23,6 +23,7 @@ public static class Jarvis
             Ears.Heard += t => Application.Current.Dispatcher.BeginInvoke(() => _ = Handle(t));
             Ears.Partial += p => Application.Current.Dispatcher.BeginInvoke(() => Status?.Invoke(p));
             Voice.Finished += OnSpeechFinished;
+            Reminders.Due += text => { if (Settings.Current.Jarvis.Enabled) _ = Voice.Say(text); };
             Ears.StateChanged += s => Application.Current.Dispatcher.BeginInvoke(() => { if (s is EarState.Listening or EarState.Thinking) DuckNow(); else ReleaseSoon();
                 if (s == EarState.Listening && Settings.Current.Jarvis.WakeSound && !Voice.IsSpeaking) Voice.Chime(); });
         }
@@ -59,6 +60,19 @@ public static class Jarvis
     static readonly string[] No = { "нет", "не надо", "отмена", "не", "стоп", "отбой" };
 
     static bool _busy;
+    static bool _silent;
+
+    /// <summary>Typed requests (Ctrl+Alt+Enter, remote): same brain, but the answer is shown, not spoken.</summary>
+    public static async Task<string> HandleTyped(string text)
+    {
+        string answer = "";
+        void Grab(string m, bool user) { if (!user) answer = m; }
+        Message += Grab;
+        _silent = true;
+        try { await Handle(text); }
+        finally { _silent = false; Message -= Grab; }
+        return answer;
+    }
 
     /// <summary>The wake word was heard (or the hotkey pressed): other apps get quieter so the command and the answer are audible.</summary>
     static void DuckNow() { if (Settings.Current.Jarvis.Duck) Audio.Duck(true, Settings.Current.Jarvis.DuckPercent); }
@@ -114,7 +128,7 @@ public static class Jarvis
                     Status?.Invoke("Думаю…");
                     // Streamed: the first sentence is spoken while the rest is still being generated.
                     r = await Brain.Ask(text, s => Application.Current.Dispatcher.BeginInvoke(() => Status?.Invoke(s)),
-                        sentence => { streamed = true; Voice.Enqueue(sentence); });
+                        _silent ? null : sentence => { streamed = true; Voice.Enqueue(sentence); });
                     Ears.Thinking(false);
                 }
                 else r = new("Не понял. Скажи «что ты умеешь», или включи ИИ на странице «Джарвис» — тогда я пойму любые фразы и вопросы.");
@@ -135,6 +149,8 @@ public static class Jarvis
     /// <summary>"сделай погромче и включи ночной свет": run every part if all are known commands; otherwise leave it to the AI.</summary>
     static async Task<Reply?> Compound(string text)
     {
+        // "через 5 минут X и Y" is one plan for later — splitting would leave the time on X only.
+        if (When.Parse(text, DateTime.Now) != null) return await Intents.Try(text);
         var parts = System.Text.RegularExpressions.Regex.Split(Ears.Clean(text), @"\s+(?:и|а потом|потом|затем|и еще|а еще|плюс)\s+")
             .Where(p => p.Length > 1).ToList();
         if (parts.Count < 2) return await Intents.Try(text);
@@ -174,7 +190,7 @@ public static class Jarvis
         ChatHistory.Add(false, text);
         Message?.Invoke(text, false);
         Status?.Invoke(text);
-        if (speak) _ = Voice.Say(text);
+        if (speak && !_silent) _ = Voice.Say(text);
     }
 
     /// <summary>Jarvis offers something on its own; "да" (voice or click) runs it.</summary>

@@ -53,6 +53,7 @@ public static class RadialMenu
                 new("\uEA3A", Settings.Current.Jarvis.ShowOrb ? "Скрыть шар" : "Показать шар", () => Actions.Run("jarvisOrb")),
                 new("\uE767", Settings.Current.Jarvis.Speak ? "Без голоса" : "С голосом", () => Actions.Run("jarvisVoice")),
                 new("\uE8BD", "Чат", () => Actions.Run("jarvisChat")),
+                new("\uE765", "Написать", () => Actions.Run("jarvisType")),
             })),
 #endif
             ("sound", new("\uE7F5", "Звук", Sub: () => Audio.Devices(DataFlow.Render).Select(d => new Item(d.IsDefault ? "\uE73E" : "\uE7F5", Short(d.Name), () => Actions.Run("audio:" + d.Id))).ToList())),

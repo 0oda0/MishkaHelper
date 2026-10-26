@@ -142,6 +142,9 @@ public static class Intents
         { _ = Scenarios.Run(sc); return new($"Запускаю сценарий «{sc.Name}»."); }
         if (M(t, @"(?:профиль|режим)(?: на)? (.+)$", out m) && FindProfile(m.Groups[1].Value) is { } pr)
         { Profiles.Apply(pr); return new($"Профиль «{pr.Name}»."); }
+        // "включи режим работы" without such a profile: say how to make one instead of "не понял".
+        if (M(t, @"^(?:включи |поставь )?(?:профиль|режим) (\w+)$", out m) && !Has(t, @"самолет|ночной|тихий|турбо|баланс|эко|производител"))
+            return new($"Профиля «{Cap(m.Groups[1].Value)}» нет. Создай его на странице «Профили» — и я буду его включать. Сейчас есть: {string.Join(", ", Settings.Current.Profiles.Select(p => p.Name))}.");
 
         // --- system info ---
         if (Has(t, @"почему (тормозит|лагает|глючит|медленно|виснет|греется)|что (грузит|тормозит|жрет)|диагностик|проверь (систему|компьютер|ноутбук)$"))
@@ -167,19 +170,10 @@ public static class Intents
             Later(span, "Таймер", $"Прошло {m.Groups[1].Value} {m.Groups[2].Value}");
             return new($"Таймер на {m.Groups[1].Value} {m.Groups[2].Value}.");
         }
-        if (M(t, @"напомни(?: мне)? через (.+?) (минут\w*|час\w*|секунд\w*)(?: что| о том что| чтобы)? (.+)", out m) && Number(m.Groups[1].Value) is int rn)
-        {
-            var span = m.Groups[2].Value.StartsWith("час") ? TimeSpan.FromHours(rn) : m.Groups[2].Value.StartsWith("сек") ? TimeSpan.FromSeconds(rn) : TimeSpan.FromMinutes(rn);
-            Later(span, "Напоминание", m.Groups[3].Value);
-            return new($"Напомню через {m.Groups[1].Value} {m.Groups[2].Value}.");
-        }
-        if (M(t, @"напомни(?: мне)? в (\d{1,2})(?: (\d{2}))?(?: что| о том что| чтобы)? (.+)", out m))
-        {
-            var at = DateTime.Today.AddHours(int.Parse(m.Groups[1].Value)).AddMinutes(m.Groups[2].Success ? int.Parse(m.Groups[2].Value) : 0);
-            if (at < DateTime.Now) at = at.AddDays(1);
-            Later(at - DateTime.Now, "Напоминание", m.Groups[3].Value);
-            return new($"Напомню в {at:H:mm}.");
-        }
+        // --- anything with a time in it: delayed commands → one-time scenario, everything else → reminder ---
+        if (!Has(t, @"^таймер|(выключи|выруби) (компьютер|комп|ноутбук|ноут|пк)") && When.Parse(raw, DateTime.Now) is { Rest.Length: > 1 } plan
+            && !IsQuestion(plan.Rest))
+            return Plan(plan);
 
         // --- power (confirm first) ---
         if (M(t, @"(выключи|выруби) (компьютер|комп|ноутбук|ноут|пк)(?: через (.+?) минут\w*)?", out m))
@@ -271,9 +265,59 @@ public static class Intents
         return (h < 6 ? "Доброй ночи" : h < 12 ? "Доброе утро" : h < 18 ? "Добрый день" : "Добрый вечер") + (name.Length > 0 ? ", " + name : "") + "! Чем помочь?";
     }
 
+    /// <summary>Test hook: the profile a "режим X" / "профиль X" phrase would switch to.</summary>
+    internal static Profile? FindProfileFor(string phrase) =>
+        M(Ears.Clean(phrase), @"(?:профиль|режим)(?: на)? (.+)$", out var m) ? FindProfile(m.Groups[1].Value) : null;
+
     static Profile? FindProfile(string q) =>
         Settings.Current.Profiles.FirstOrDefault(p => Ears.Clean(p.Name) == q) ??
-        Settings.Current.Profiles.FirstOrDefault(p => Ears.Distance(Ears.Clean(p.Name), q) <= 2);
+        Settings.Current.Profiles.FirstOrDefault(p => Ears.Distance(Ears.Clean(p.Name), q) <= 2) ??
+        // Cases: "режим работы" → «Работа», "профиль учёбы" → «Учёба» (same stem, different ending).
+        Settings.Current.Profiles.FirstOrDefault(p => Ears.Clean(p.Name) is var n && n.Length >= 4 && q.Length >= 4 && n[..^1] == q[..Math.Min(q.Length, n.Length - 1)]);
+
+    // ---------- plans ----------
+    static readonly Regex ActionStart = new(@"^(запусти|открой|включи|выключи|закрой|поставь|убавь|прибавь|сделай (громче|тише|ярче|темнее)|громкость|яркость|профиль|режим|переключи|заблокируй|сверни|очисти|ускорь|запусти сценарий)\b");
+
+    /// <summary>"какая погода завтра", "что у меня в пятницу" — questions go to the AI, not into reminders.</summary>
+    public static bool IsQuestion(string rest) => Regex.IsMatch(rest, @"^(что|какая|какой|какие|какое|сколько|когда|где|кто|как|почему|зачем|будет ли|есть ли|ли)\b");
+
+    /// <summary>Is the part after the time a list of commands (run later) rather than something to remember?</summary>
+    public static bool IsActionPlan(string rest) => !rest.StartsWith("напомни") && ActionStart.IsMatch(rest);
+
+    static Reply Plan(When.Result w)
+    {
+        var rest = Regex.Replace(w.Rest, @"^(?:напомни(?:те)?(?: мне)?|запиши(?: в заметк\w*)?)(?: что| о том что| чтобы| про)? ?", "").Trim();
+        if (rest.Length < 2) rest = w.Rest;
+        return MakePlan(w.At, w.HasTime, rest, IsActionPlan(w.Rest));
+    }
+
+    /// <summary>Shared by the offline parser and the AI tools: a one-time scenario of commands, or a reminder (+ note, + Google Calendar).</summary>
+    public static Reply MakePlan(DateTime at, bool hasTime, string rest, bool actions)
+    {
+        var w = new When.Result(at, hasTime, rest);
+        var when = When.Say(w.At, w.HasTime, DateTime.Now);
+        if (actions)
+        {
+            var parts = Regex.Split(rest, @"\s+(?:и потом|а потом|потом|затем|и)\s+").Where(p => p.Length > 1).ToList();
+            var sc = new Scenario
+            {
+                Name = $"{Reminders.Cap(when)}: {rest}",
+                Triggers = { new ScenarioTrigger { Kind = "once", Value = w.At.ToString("yyyy-MM-dd HH:mm:ss") } },
+                Steps = parts.Select(p => new ScenarioStep { Kind = "command", Value = p }).ToList(),
+            };
+            Settings.Current.Scenarios.Add(sc);
+            Settings.Save();
+            Notes.Add($"Запланировано на {when}: {rest}");
+            return new($"Хорошо, {when}: {rest}. Создал сценарий и записал в заметки.");
+        }
+        var r = Reminders.Add(Reminders.Cap(rest), w.At, w.HasTime);
+        Notes.Add($"Напоминание на {when}: {rest}");
+        // Into Google Calendar only what's worth a calendar entry: days ahead, not "через 5 минут".
+        bool google = Settings.Current.GoogleCalendar && (!w.HasTime || w.At - DateTime.Now > TimeSpan.FromHours(3));
+        if (google) Shell.Open(Reminders.GoogleLink(r));
+        return new($"Напомню {when}: {rest}." + (w.HasTime ? "" : " Накануне вечером тоже скажу.") +
+                   (google ? " Открыл Google Календарь — нажми «Сохранить»." : ""));
+    }
 
     /// <summary>Reminders/timers: toast + voice when due.</summary>
     static void Later(TimeSpan span, string title, string text)

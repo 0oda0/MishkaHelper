@@ -19,9 +19,12 @@ public static class Services
         Try(Remote.Apply);
         if (Settings.Current.BleRemoteEnabled) _ = BleRemote.Start().ContinueWith(t => { if (t.Result != null) Log.Info("BLE remote: " + t.Result); });
         Try(ScreenTime.Start);
+        Try(Reminders.Start);
         Try(ClipHistory.Start);
 #if !LITE
         Try(Scenarios.Start);
+        // "Не включать при запуске": off at launch whatever it was last time; the switch on the Jarvis page turns it on for this session.
+        if (!Settings.Current.Jarvis.StartWithApp && Settings.Current.Jarvis.Enabled) { Settings.Current.Jarvis.Enabled = false; Settings.Save(); }
         _ = Jarvis.Start();
 #endif
 

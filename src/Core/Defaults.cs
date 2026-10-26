@@ -23,6 +23,7 @@ public static class Defaults
         ["fanMax"] = "Вентиляторы на максимум",
         ["jarvis"] = "Джарвис: слушать команду",
         ["jarvisChat"] = "Джарвис: чат",
+        ["jarvisType"] = "Джарвис: написать текстом (команды, напоминания)",
         ["jarvisToggle"] = "Джарвис: включить / выключить",
         ["jarvisOrb"] = "Джарвис: показать / скрыть шар",
         ["jarvisVoice"] = "Джарвис: голос вкл / выкл",
@@ -68,6 +69,7 @@ public static class Defaults
             ["palette"] = "Ctrl+Alt+K",
             ["jarvis"] = "Ctrl+Alt+J",
             ["jarvisChat"] = "Ctrl+Alt+I",
+            ["jarvisType"] = "Ctrl+Alt+Enter",
             ["clipboard"] = "Ctrl+Alt+V",
             ["topmost"] = "Ctrl+Alt+T",
             ["opacity"] = "Ctrl+Alt+Y",
@@ -89,7 +91,7 @@ public static class Defaults
             });
 
         foreach (var kind in new[] { "system", "battery", "clock", "network", "profiles", "audio",
-                     "notes", "todo", "timer", "media", "ping", "mic", "disks", "calendar", "currency", "procs", "fans", "worldclock", "countdown", "launcher" })
+                     "notes", "todo", "timer", "media", "ping", "mic", "disks", "calendar", "currency", "procs", "fans", "worldclock", "countdown", "launcher", "events" })
             if (!s.Widgets.Any(w => w.Kind == kind))
                 s.Widgets.Add(new WidgetConfig { Kind = kind, Left = 60, Top = 60 + s.Widgets.Count * 150 });
 

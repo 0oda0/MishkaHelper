@@ -32,6 +32,29 @@ public static class SelfTest
             foreach (var b in await Task.Run(FullClean.Background)) L($"bg      {b.Verdict,-4} {b.Name} x{b.Count} {Cleaner.Size(b.Bytes)}");
         });
 
+        await Step("plan", async () =>   // silent: typed path, no ducking, no browser; everything created is removed after
+        {
+            var j = Settings.Current.Jarvis;
+            var (duck, google) = (j.Duck, Settings.Current.GoogleCalendar);
+            j.Duck = false; Settings.Current.GoogleCalendar = false;
+            int sc0 = Settings.Current.Scenarios.Count, rem0 = Settings.Current.Reminders.Count;
+            foreach (var q in new[]
+                     {
+                         "Через минут 5 запусти фотошоп и включи режим работы",
+                         "В следующее воскресенье позарез надо сделать лабу по физике",
+                         "завтра в 6 вечера тренировка",
+                     })
+                L($"plan «{q}» → {await Jarvis.HandleTyped(q)}");
+            foreach (var s in Settings.Current.Scenarios.Skip(sc0))
+                L($"plan   scenario: {s.Name} | {string.Join(", ", s.Triggers.Select(t => t.Kind + "=" + t.Value))} | steps: {string.Join(" / ", s.Steps.Select(x => x.Kind + ":" + x.Value))}");
+            foreach (var r in Settings.Current.Reminders.Skip(rem0))
+                L($"plan   reminder: {r.Text} at {r.At:yyyy-MM-dd HH:mm} time={r.HasTime}");
+            Settings.Current.Scenarios.RemoveRange(sc0, Settings.Current.Scenarios.Count - sc0);
+            Settings.Current.Reminders.RemoveRange(rem0, Settings.Current.Reminders.Count - rem0);
+            (j.Duck, Settings.Current.GoogleCalendar) = (duck, google);
+            Settings.Save();
+        });
+
         await Step("duck", async () =>   // other apps' volume dips for ~1.5 s, then comes back
         {
             string Vols() => string.Join(", ", Audio.Apps().Where(a => a.Pid != Environment.ProcessId).Select(a => $"{a.Name}={a.Volume * 100:0}%"));

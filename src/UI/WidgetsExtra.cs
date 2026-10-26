@@ -23,7 +23,7 @@ public static partial class Widgets
         ["profiles"] = "", ["audio"] = "", ["launcher"] = "",
         ["notes"] = "", ["todo"] = "", ["timer"] = "", ["media"] = "", ["ping"] = "", ["mic"] = "",
         ["disks"] = "", ["calendar"] = "", ["currency"] = "", ["procs"] = "", ["fans"] = "",
-        ["worldclock"] = "", ["countdown"] = "",
+        ["worldclock"] = "", ["countdown"] = "", ["events"] = "\uE787",
     };
 
     static Brush B(string key) => (Brush)Application.Current.Resources[key];
@@ -497,6 +497,60 @@ public static partial class Widgets
     }
 
     // ---------- countdown ----------
+    /// <summary>Upcoming week: Jarvis reminders + calendar events (ICS, e.g. Google's secret iCal link). ✓ marks a reminder done.</summary>
+    static (UIElement, Action<Sample>?, Action?) EventsWidget()
+    {
+        var list = new StackPanel { Width = 280 };
+        var ru = new System.Globalization.CultureInfo("ru-RU");
+        string Day(DateTime d) => d.Date == DateTime.Today ? "Сегодня" : d.Date == DateTime.Today.AddDays(1) ? "Завтра" : d.ToString("ddd d MMM", ru);
+        var root = Header("\uE787", "Ближайшие дела", list);
+        var add = new Button { Content = "+ Добавить", Style = (Style)Application.Current.Resources["GhostButton"], HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 6, 0, 0),
+            ToolTip = "Напиши как есть: «в пятницу сдать отчёт», «завтра в 18:00 тренировка»" };
+#if !LITE
+        add.Click += (_, _) => JarvisInput.Toggle();
+#else
+        add.Visibility = Visibility.Collapsed;
+#endif
+        root.Children.Add(add);
+
+        async void Load()
+        {
+            var items = Reminders.Upcoming(7).Select(r => (At: Reminders.RingAt(r), Time: r.HasTime, Text: r.Text, R: (Reminder?)r)).ToList();
+#if !LITE
+            if (Core.Calendar.Configured)
+                for (int d = 0; d < 7; d++)
+                    try { foreach (var e in await Core.Calendar.On(DateTime.Today.AddDays(d))) if (e.AllDay || e.Start >= DateTime.Now) items.Add((e.Start, !e.AllDay, e.Title + (e.Place.Length > 0 ? $" · {e.Place}" : ""), null)); }
+                    catch { }
+#endif
+            list.Children.Clear();
+            if (items.Count == 0) { list.Children.Add(UiKit.Text("На неделю ничего. Скажи или напиши Джарвису: «в пятницу сдать отчёт».", 12, true)); return; }
+            string? lastDay = null;
+            foreach (var it in items.OrderBy(i => i.At).Take(10))
+            {
+                var day = Day(it.At);
+                if (day != lastDay)
+                {
+                    var h = UiKit.Text(day, 11, true); h.Margin = new Thickness(0, lastDay == null ? 0 : 8, 0, 2); h.FontWeight = FontWeights.SemiBold;
+                    list.Children.Add(h);
+                    lastDay = day;
+                }
+                var row = new DockPanel { Margin = new Thickness(0, 1, 0, 1) };
+                if (it.R is { } r)
+                {
+                    var done = new Button { Content = "\uE73E", FontFamily = Icon, Style = (Style)Application.Current.Resources["GhostButton"], ToolTip = "Сделано — убрать", Padding = new Thickness(4, 0, 4, 0) };
+                    done.Click += (_, _) => { Reminders.Remove(r); Load(); };
+                    DockPanel.SetDock(done, Dock.Right); row.Children.Add(done);
+                }
+                var time = UiKit.Text(it.Time ? it.At.ToString("H:mm") : "весь день", 11, true); time.Width = 62; DockPanel.SetDock(time, Dock.Left);
+                row.Children.Add(time);
+                var txt = new TextBlock { Text = it.Text, FontSize = 13, TextTrimming = TextTrimming.CharacterEllipsis, ToolTip = it.Text, VerticalAlignment = VerticalAlignment.Center,
+                    Foreground = it.R != null ? B("TextBrush") : B("AccentBrush") };   // accent = from your calendar
+                row.Children.Add(txt);
+                list.Children.Add(row);
+            }
+        }
+        return (root, null, Load);
+    }
     static (UIElement, Action<Sample>?, Action?) CountdownWidget()
     {
         var big = new TextBlock { FontSize = 30, FontWeight = FontWeights.Bold, Foreground = B("AccentBrush") };

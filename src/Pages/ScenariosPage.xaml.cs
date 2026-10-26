@@ -14,7 +14,7 @@ public partial class ScenariosPage : UserControl
     static Style S(string k) => (Style)Application.Current.Resources[k];
     static Brush Br(string k) => (Brush)Application.Current.Resources[k];
 
-    static readonly (string Key, string Name)[] TriggerKinds = { ("voice", "Голосом"), ("hotkey", "Горячей клавишей"), ("time", "По времени"), ("event", "По событию") };
+    static readonly (string Key, string Name)[] TriggerKinds = { ("voice", "Голосом"), ("hotkey", "Горячей клавишей"), ("time", "По времени"), ("once", "Один раз"), ("event", "По событию") };
     static readonly string[] Days = { "Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс" };
 
     public ScenariosPage()
@@ -60,7 +60,7 @@ public partial class ScenariosPage : UserControl
     static string Describe(Scenario s) =>
         (s.Triggers.Count == 0 ? "без запуска" : string.Join(", ", s.Triggers.Select(t => t.Kind switch
         {
-            "voice" => $"«{t.Value}»", "hotkey" => Hotkeys.Pretty(t.Value), "time" => t.Value,
+            "voice" => $"«{t.Value}»", "hotkey" => Hotkeys.Pretty(t.Value), "time" => t.Value, "once" => "один раз " + t.Value,
             _ => Scenarios.Events.FirstOrDefault(e => e.Key == t.Value).Name ?? t.Value,
         }))) + $" · {s.Steps.Count} шаг.";
 
@@ -105,7 +105,7 @@ public partial class ScenariosPage : UserControl
         foreach (var t in sc.Triggers.ToList()) trig.Children.Add(TriggerRow(sc, t));
         var addT = new WrapPanel();
         foreach (var (k, n) in TriggerKinds)
-            Btn(addT, "+ " + n.ToLower(), () => { sc.Triggers.Add(new ScenarioTrigger { Kind = k, Value = k == "time" ? "09:00" : k == "event" ? "startup" : "" }); Save(); RenderEditor(); RenderList(); });
+            Btn(addT, "+ " + n.ToLower(), () => { sc.Triggers.Add(new ScenarioTrigger { Kind = k, Value = k == "time" ? "09:00" : k == "event" ? "startup" : k == "once" ? DateTime.Now.AddHours(1).ToString("yyyy-MM-dd HH:mm") : "" }); Save(); RenderEditor(); RenderList(); });
         trig.Children.Add(addT);
         Editor.Children.Add(UiKit.Card(trig));
 
@@ -139,6 +139,11 @@ public partial class ScenariosPage : UserControl
                 var hb = new Button { Content = t.Value.Length > 0 ? Hotkeys.Pretty(t.Value) : "Нажми, чтобы записать", Margin = new Thickness(0), FontFamily = new FontFamily("Consolas, Segoe UI") };
                 hb.Click += (_, _) => RecordHotkey(hb, t);
                 row.Children.Add(hb);
+                break;
+            case "once":
+                var when = new TextBox { Text = t.Value, Width = 140, ToolTip = "Дата и время: 2026-11-01 18:30" };
+                when.LostFocus += (_, _) => { if (DateTime.TryParse(when.Text, out var at)) { t.Value = at.ToString("yyyy-MM-dd HH:mm"); Save(); RenderList(); } else when.Text = t.Value; };
+                row.Children.Add(when);
                 break;
             case "time":
                 var sp = new StackPanel { Orientation = Orientation.Horizontal };

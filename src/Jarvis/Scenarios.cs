@@ -10,6 +10,7 @@ public static class Scenarios
 {
     public static readonly (string Key, string Name, string Hint)[] StepKinds =
     {
+        ("command", "Команда Джарвису", "Как сказал бы голосом: «запусти фотошоп», «профиль Игра»"),
         ("action", "Действие Mishka", "Любое действие из горячих клавиш"),
         ("launch", "Открыть программу / сайт / файл", "Путь, ссылка или имя программы"),
         ("close", "Закрыть программу", "Имя процесса, например chrome"),
@@ -71,6 +72,12 @@ public static class Scenarios
         switch (st.Kind)
         {
             case "action": await ui.InvokeAsync(() => Actions.Run(v)); break;
+            case "command":
+                // The user scheduled it themselves, so a confirmation ("выключить?") counts as already given.
+                var r = await Intents.Try(v);
+                if (r == null) await ui.InvokeAsync(() => Toast.Show("", "Сценарий", $"Не понял команду «{v}»"));
+                else if (r.Confirm != null) await r.Confirm();
+                break;
             case "launch":
                 if (v.Contains("://") || v.Contains('\\') || v.Contains('.') && File.Exists(Environment.ExpandEnvironmentVariables(v))) Shell.Open(Environment.ExpandEnvironmentVariables(v), st.Arg);
                 else if (Intents.Launch(Ears.Clean(v)) == null) Shell.Open(v, st.Arg);
@@ -157,7 +164,16 @@ public static class Scenarios
     static void Tick()
     {
         var all = Settings.Current.Scenarios;
-        if (all.Count == 0 || !all.Any(s => s.Enabled && s.Triggers.Any(t => t.Kind is "time" or "event"))) return;
+        if (all.Count == 0 || !all.Any(s => s.Enabled && s.Triggers.Any(t => t.Kind is "time" or "event" or "once"))) return;
+
+        // One-time scenarios ("через 5 минут запусти фотошоп"): run once, then they are gone.
+        foreach (var s in all.Where(s => s.Enabled && s.Triggers.Any(t => t.Kind == "once" && DateTime.TryParse(t.Value, out var at) && at <= DateTime.Now)).ToList())
+        {
+            s.Triggers.RemoveAll(t => t.Kind == "once");
+            if (s.Triggers.Count == 0) all.Remove(s);
+            Settings.Save();
+            _ = Run(s);
+        }
 
         var minute = DateTime.Now.ToString("HH:mm");
         if (minute != _lastMinute)

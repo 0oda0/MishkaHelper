@@ -71,6 +71,45 @@ public class EdgeGecTests
     public void MatchesEdgeTts(double t, string expected) => Assert.Equal(expected, EdgeGec.Generate(t, "6A5AA1D4EAFF4E9FB37E23D68491D6F4"));
 }
 
+public class WhenTests
+{
+    static readonly DateTime Now = new(2026, 10, 26, 14, 0, 0);   // Monday
+
+    static When.Result P(string s) => When.Parse(s, Now)!;
+
+    [Fact] public void InMinutesReversed() { var r = P("Через минут 5 запусти фотошоп и включи режим работы"); Assert.Equal(Now.AddMinutes(5), r.At); Assert.Equal("запусти фотошоп и включи режим работы", r.Rest); }
+    [Fact] public void InMinutes() { var r = P("через 10 минут выключи звук"); Assert.Equal(Now.AddMinutes(10), r.At); Assert.Equal("выключи звук", r.Rest); }
+    [Fact] public void HalfHour() => Assert.Equal(Now.AddMinutes(30), P("через полчаса позвонить маме").At);
+    [Fact] public void Hour() => Assert.Equal(Now.AddHours(1), P("через час проверить духовку").At);
+    [Fact]
+    public void NextSunday()
+    {
+        var r = P("В следующее воскресенье позарез надо сделать лабу по физике");
+        Assert.Equal(new DateTime(2026, 11, 1), r.At); Assert.False(r.HasTime); Assert.Equal("сделать лабу по физике", r.Rest);
+    }
+    [Fact] public void Weekday() => Assert.Equal(new DateTime(2026, 10, 30), P("в пятницу сдать отчёт").At);
+    [Fact] public void SameWeekdayMeansNextWeek() => Assert.Equal(new DateTime(2026, 11, 2), P("в понедельник созвон").At);
+    [Fact] public void TomorrowEvening() { var r = P("завтра в 6 вечера тренировка"); Assert.Equal(new DateTime(2026, 10, 27, 18, 0, 0), r.At); Assert.Equal("тренировка", r.Rest); }
+    [Fact] public void TomorrowClock() => Assert.Equal(new DateTime(2026, 10, 27, 9, 30, 0), P("завтра в 9:30 пара").At);
+    [Fact] public void DateWords() => Assert.Equal(new DateTime(2026, 11, 1, 18, 30, 0), P("1 ноября в 18:30 концерт").At);
+    [Fact] public void DateDots() => Assert.Equal(new DateTime(2026, 12, 25), P("25.12 купить подарки").At);
+    [Fact] public void PastDateIsNextYear() => Assert.Equal(new DateTime(2027, 1, 5), P("5 января экзамен").At);
+    [Fact] public void ClockAlreadyPassedIsTomorrow() => Assert.Equal(new DateTime(2026, 10, 27, 9, 0, 0), P("в 9 утра встать").At);
+    [Fact] public void ClockLaterToday() => Assert.Equal(new DateTime(2026, 10, 26, 20, 0, 0), P("в 20:00 сериал").At);
+    [Fact] public void NoTime() => Assert.Null(When.Parse("открой браузер", Now));
+    [Theory]
+    [InlineData("Через минут 5 запусти фотошоп и включи режим работы", true)]
+    [InlineData("через 10 минут выключи звук", true)]
+    [InlineData("В следующее воскресенье позарез надо сделать лабу по физике", false)]
+    [InlineData("напомни завтра в 9 включить чайник", false)]
+    [InlineData("завтра в 6 вечера тренировка", false)]
+    public void ActionsOrReminder(string text, bool actions) => Assert.Equal(actions, Intents.IsActionPlan(P(text).Rest));
+
+    [Fact] public void QuestionsAreNotPlans() { Assert.True(Intents.IsQuestion(P("какая погода завтра").Rest)); Assert.False(Intents.IsQuestion(P("завтра в 6 вечера тренировка").Rest)); }
+
+    [Fact] public void Spoken() => Assert.Equal("в воскресенье, 1 ноября", When.Say(new DateTime(2026, 11, 1), false, Now));
+}
+
 public class OfflineCommandTests
 {
     [Theory]
@@ -86,6 +125,18 @@ public class OfflineCommandTests
     [InlineData("ворд", "word", true)]
     [InlineData("свет", "steam", false)]
     public void FuzzyNames(string spoken, string name, bool match) => Assert.Equal(match, Intents.Fit(spoken, name) <= 0.3);
+
+    [Theory]
+    [InlineData("режим учебы", "Учёба")]
+    [InlineData("профиль игры", "Игра")]
+    [InlineData("режим работы", null)]
+    public void ProfileByStem(string phrase, string? expected)
+    {
+        var keep = Settings.Current.Profiles.ToList();
+        Settings.Current.Profiles = new() { new Profile { Name = "Игра" }, new Profile { Name = "Учёба" } };
+        try { Assert.Equal(expected, Intents.FindProfileFor(phrase)?.Name); }
+        finally { Settings.Current.Profiles = keep; }
+    }
 
     [Fact] public void Translit() => Assert.Equal("yandeks brauzer", Intents.Translit("яндекс браузер"));
 

@@ -35,6 +35,7 @@ public static partial class Widgets
         ["fans"] = "Вентиляторы Nitro",
         ["worldclock"] = "Мировое время",
         ["countdown"] = "Обратный отсчёт",
+        ["events"] = "Ближайшие дела",
     };
 
     /// <summary>Widgets with text input need real focus; the rest never steal it.</summary>
@@ -146,6 +147,7 @@ public static partial class Widgets
                 "clock" or "timer" or "worldclock" or "countdown" or "mic" or "media" => 1,
                 "ping" or "procs" => 2,
                 "currency" => 3600,
+                "events" => 60,
                 _ => 30,
             }) };
             t.Tick += (_, _) => slow();
@@ -251,6 +253,7 @@ public static partial class Widgets
         "fans" => FansWidget(),
         "worldclock" => WorldClockWidget(),
         "countdown" => CountdownWidget(),
+        "events" => EventsWidget(),
         _ => (new TextBlock(), null, null),
     };
 
