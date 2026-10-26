@@ -15,11 +15,12 @@ h1{font-size:19px;margin:2px 0 10px;background:linear-gradient(90deg,var(--a),va
 button{flex:1;min-width:28%;padding:13px 6px;border:0;border-radius:12px;background:#22223a;color:var(--t);font-size:15px}
 button:active,button.on{background:var(--a)}button.d{background:#4a1530}
 input[type=range]{width:100%;accent-color:var(--a)}
-input,textarea{width:100%;padding:12px;border-radius:10px;border:1px solid #334;background:#0e0e1c;color:var(--t);font-size:16px}
+input,textarea,select{width:100%;padding:12px;border-radius:10px;border:1px solid #334;background:#0e0e1c;color:var(--t);font-size:16px}
 .m{color:var(--m);font-size:13px}#st{display:flex;justify-content:space-between}
 nav{position:fixed;left:0;right:0;bottom:0;display:flex;background:#10101e;border-top:1px solid #223}
-nav button{border-radius:0;background:none;padding:14px 4px;font-size:13px}nav button.on{color:var(--a);background:none}
-#pad{height:52vh;border-radius:16px;background:radial-gradient(circle at 50% 40%,#1d1d36,#121222);position:relative;touch-action:none;border:1px solid #2a2a48}
+nav button{border-radius:0;background:none;padding:14px 0;font-size:12px;min-width:0}nav button.on{color:var(--a);background:none}
+/* vh is 0 in the phone app's WebView at first layout, hence the px floor */
+#pad{height:40vh;min-height:280px;border-radius:16px;background:radial-gradient(circle at 50% 40%,#1d1d36,#121222);position:relative;touch-action:none;border:1px solid #2a2a48}
 #wheel{position:absolute;right:0;top:0;bottom:0;width:44px;border-left:1px dashed #334;touch-action:none}
 #scr{width:100%;border-radius:10px;display:block;touch-action:none;background:#000;min-height:120px}
 [hidden]{display:none!important}
@@ -50,14 +51,42 @@ nav button{border-radius:0;background:none;padding:14px 4px;font-size:13px}nav b
     <div class="c" id="appsBox" hidden><div class="m">Программы</div><div class="r" id="apps"></div></div>
     <div class="c" id="jv" hidden><div class="m">Сказать Джарвису</div><input id="q" type="text" placeholder="что у меня завтра?" onkeydown="if(event.key==='Enter')say()">
       <br><br><div class="r"><button onclick="say()">Отправить</button><button id="mic" onclick="listen()" hidden>🎤 Голосом</button></div><p id="ans" class="m"></p></div>
-    <div class="c"><div class="r"><button onclick="api('lock')">🔒 Блок</button><button onclick="api('screenOff')">🌙 Экран</button><button onclick="if(confirm('Усыпить ПК?'))api('sleep')">💤 Сон</button></div><br>
-      <div class="r"><button class="d" onclick="if(confirm('Выключить ПК через 30 секунд?'))api('shutdown')">⏻ Выключить</button><button onclick="api('cancelShutdown')">Отмена</button></div></div>
+    <div class="c"><div class="m">Игровой режим <span id="gst"></span></div><div id="gstats" class="m" style="color:var(--b)"></div><br>
+      <div class="r"><button id="gbtn" onclick="api('focus')">🎮 Включить</button></div>
+      <p class="m">Тишина на ПК: «Не беспокоить», звук только у игры и голосовых чатов, уведомления телефона ждут конца игры. Включается сам, когда игра на весь экран.</p></div>
+    <div class="c"><div class="m">Питание <span id="pw" style="color:var(--b)"></span></div>
+      <div class="r"><button onclick="api('lock')">🔒 Блок</button><button onclick="api('screenOff')">🌙 Экран</button><button onclick="if(confirm('Усыпить ПК?'))api('sleep')">💤 Сон</button></div><br>
+      <div class="m">Выключить через</div>
+      <div class="r"><button onclick="power('30')">30 мин</button><button onclick="power('60')">1 ч</button><button onclick="power('120')">2 ч</button></div><br>
+      <div class="r"><button onclick="power('download')">⬇ Когда скачается</button></div><br>
+      <div class="r"><button class="d" onclick="if(confirm('Закрыть все программы и выключить ПК? Несохранённое пропадёт.'))power('now')">⏻ Закрыть всё и выключить</button><button onclick="power('cancel')">Отмена</button></div>
+      <p class="m">Перед выключением программы закрываются сами — несохранённое пропадёт.</p></div>
+    <div class="c" id="tvBox"><div class="m">Экран и телевизор</div>
+      <div class="r"><button onclick="project('internal')">💻 Только ПК</button><button onclick="project('clone')">⧉ Дублировать</button><button onclick="project('extend')">⊞ Расширить</button><button onclick="project('external')">📺 Только ТВ</button></div>
+      <div id="scrs"></div><br><div class="m">Звук идёт в</div><select id="aout" onchange="api('audioOut',this.value)"></select></div>
+  </section>
+
+  <section id="t-media" hidden>
+    <div class="c"><div class="r" id="svc"></div></div>
+    <div class="c"><input id="mq" type="search" placeholder="Найти видео или фильм" enterkeyhint="search" onkeydown="if(event.key==='Enter')find('yt')"><br><br>
+      <div class="r"><button onclick="find('yt')">YouTube</button><button onclick="find('vk')">VK Видео</button><button onclick="find('kp')">Кинопоиск</button><button onclick="find('rutube')">Rutube</button></div>
+      <p class="m">Для YouTube Mishka сначала сам включит VPN и дождётся подключения.</p></div>
+    <div class="c" id="subsBox" hidden><div class="m">Подписки YouTube</div><div id="subs" class="r"></div><p id="subsMsg" class="m"></p>
+      <div class="r"><button id="subsLogin" onclick="api('ytLogin')" hidden>Войти в YouTube на ПК</button><button onclick="loadSubs(true)">↻ Обновить</button></div></div>
+    <div class="c"><div class="m">Мои каналы и ссылки</div><div id="chans"></div><br>
+      <input id="cn" placeholder="Название, например «Мультики»"><br><br><input id="cu" type="url" placeholder="https://www.youtube.com/@канал"><br><br>
+      <button onclick="addChan()">Добавить</button></div>
+    <p class="m">После выбора откроется тачпад — им и клавиатурой управляешь браузером на ПК.</p>
   </section>
 
   <section id="t-pad" hidden>
     <div id="pad"><div id="wheel"></div></div><br>
     <div class="r"><button id="lb">ЛКМ</button><button onclick="api('click','double')">Двойной</button><button id="rb">ПКМ</button></div>
     <p class="m">Води пальцем — курсор, тап — клик, полоса справа — прокрутка.</p>
+    <div class="r"><button onclick="key('left')">⏪</button><button onclick="api('play')">⏯</button><button onclick="key('right')">⏩</button><button onclick="key('f')">⛶</button><button onclick="key('esc')">Esc</button></div><br>
+    <div class="r"><button onclick="api('volStep','-5')">🔉</button><button onclick="api('mute')">🔇</button><button onclick="api('volStep','5')">🔊</button></div><br>
+    <input id="ptxt" type="text" placeholder="Ввод текста на ПК — Enter отправит" enterkeyhint="send" autocomplete="off"
+      onkeydown="if(event.key==='Enter'&&this.value){api('type',this.value);setTimeout(()=>key('enter'),150);this.value=''}">
   </section>
 
   <section id="t-kb" hidden>
@@ -94,7 +123,7 @@ nav button{border-radius:0;background:none;padding:14px 4px;font-size:13px}nav b
 </div>
 
 <nav id="nav" hidden>
-  <button data-t="main" class="on">Пульт</button><button data-t="pad">Тачпад</button><button data-t="kb">Клава</button><button data-t="scr">Экран</button><button data-t="files">Файлы</button>
+  <button data-t="main" class="on">Пульт</button><button data-t="media">Медиа</button><button data-t="pad">Тачпад</button><button data-t="kb">Клава</button><button data-t="scr">Экран</button><button data-t="files">Файлы</button>
 </nav>
 
 <script>
@@ -144,12 +173,77 @@ function render(s) {
   $('cpu').textContent = 'CPU ' + s.cpu + '°'; $('ram').textContent = 'RAM ' + s.ram + '%';
   $('bat').textContent = s.battery >= 0 ? (s.ac ? '⚡' : '🔋') + s.battery + '%' : '';
   $('jv').hidden = !s.jarvis;
+  $('subsBox').hidden = BLE || !s.jarvis;   // reading subscriptions uses the full edition's built-in browser
   if (!$('prof').childElementCount) for (const p of s.profiles) { const b = document.createElement('button'); b.textContent = p; b.onclick = () => api('profile', p); $('prof').append(b); }
   $('np').textContent = s.playing ? '♪ ' + s.playing : '';
   if (s.apps && s.apps.length && !$('apps').childElementCount) {
     $('appsBox').hidden = false;
     s.apps.forEach((n, i) => { const b = document.createElement('button'); b.textContent = n; b.onclick = () => api('launch', String(i)); $('apps').append(b); });
   }
+  if (s.focus) renderFocus(s.focus);
+  if (s.power !== undefined) $('pw').textContent = s.power ? '· ' + s.power : '';
+}
+
+function btn(text, fn) { const b = document.createElement('button'); b.textContent = text; b.onclick = fn; return b; }
+
+// ---- game mode ----
+function renderFocus(f) {
+  $('gst').textContent = f.on ? '· включён' : '';
+  $('gbtn').textContent = f.on ? '⏹ Выключить' : '🎮 Включить';
+  $('gbtn').classList.toggle('on', f.on);
+  const hw = `CPU ${f.cpu}% ${f.cpuTemp}° · GPU ${f.gpu}% ${f.gpuTemp}° · RAM ${f.ram}%`;
+  $('gstats').textContent = f.on
+    ? `${f.app} · ${f.minutes} мин в игре · сегодня ${f.today} мин\n${hw}` + (f.held ? `\nУведомлений ждёт: ${f.held}` : '')
+    : hw;
+  $('gstats').style.whiteSpace = 'pre-line';
+}
+
+// ---- power ----
+async function power(a) { const j = await api('power', a); if (j) { $('pw').textContent = j.power ? '· ' + j.power : ''; if (j.say) $('ans').textContent = j.say; } }
+
+// ---- TV ----
+async function loadScreens() {
+  if (BLE) return;
+  const j = await api('screens'); if (!j) return;
+  $('scrs').replaceChildren(...j.screens.map(m => {
+    const d = document.createElement('div'); d.innerHTML = '<br><div class="m"></div>';
+    d.firstElementChild.nextElementSibling.textContent = m.Name + (m.Primary ? ' · основной' : '');
+    const sel = document.createElement('select');
+    for (const mode of m.Modes) { const o = new Option(mode.replace('x', '×').replace('@', ' · ') + ' Гц', mode, false, mode === m.Mode); sel.append(o); }
+    if (!m.Modes.includes(m.Mode)) sel.prepend(new Option(m.Mode.replace('x', '×').replace('@', ' · ') + ' Гц', m.Mode, true, true));
+    sel.onchange = async () => { const r = await api('screenMode', m.Device + '|' + sel.value); if (r && r.say) alert(r.say); setTimeout(loadScreens, 1500); };
+    d.append(sel); return d;
+  }));
+  $('aout').replaceChildren(...j.outputs.map(o => new Option(o.Name, o.Id, false, o.IsDefault)));
+}
+async function project(mode) { await api('project', mode); setTimeout(loadScreens, 4000); }
+
+// ---- media ----
+async function loadMedia() {
+  const j = await api('media'); if (!j) return;
+  $('svc').replaceChildren(); $('chans').replaceChildren();
+  j.media.forEach((m, i) => {
+    if (!m.channel) { $('svc').append(btn(m.name, () => openMedia(i))); return; }
+    const row = document.createElement('div'); row.className = 'r'; row.style.marginTop = '8px';
+    const x = btn('✕', async () => { if (confirm('Убрать «' + m.name + '»?')) { await api('mediaDel', String(i)); loadMedia(); } }); x.style.flex = '0 0 52px'; x.style.minWidth = '52px';
+    row.append(btn(m.name, () => openMedia(i)), x); $('chans').append(row);
+  });
+}
+function openMedia(i) { api('open', String(i)); go('pad'); }
+function find(site) { const q = $('mq').value.trim(); if (!q) return; api('search', site + '|' + q); $('mq').value = ''; go('pad'); }
+async function addChan() {
+  const j = await api('mediaAdd', $('cn').value.trim() + '\n' + $('cu').value.trim());
+  if (j && j.say) { alert(j.say); return; }
+  $('cn').value = $('cu').value = ''; loadMedia();
+}
+let subsLoaded = false;
+async function loadSubs(refresh) {
+  $('subsMsg').textContent = 'Читаю подписки…';
+  const j = await api('ytSubs', refresh ? 'refresh' : ''); if (!j) { $('subsMsg').textContent = 'Не получилось'; return; }
+  subsLoaded = true;
+  $('subs').replaceChildren(...j.subs.map(s => btn(s.name, () => { api('openUrl', s.url); go('pad'); })));
+  $('subsLogin').hidden = !j.login;
+  $('subsMsg').textContent = j.login ? 'Нужно один раз войти в YouTube в окне Mishka на ПК.' : j.say || '';
 }
 
 // ---- files & clipboard (Wi-Fi) ----
@@ -213,11 +307,14 @@ for (const [id, cmd, label] of [['vol', 'volume', 'vv'], ['bri', 'brightness', '
 }
 
 // ---- tabs ----
-for (const b of document.querySelectorAll('nav button')) b.onclick = () => {
-  for (const x of document.querySelectorAll('nav button')) x.classList.toggle('on', x === b);
-  for (const t of ['main', 'pad', 'kb', 'scr', 'files']) $('t-' + t).hidden = t !== b.dataset.t;
-  if (b.dataset.t === 'scr' && !BLE) refreshScreen();
-};
+function go(t) {
+  for (const x of document.querySelectorAll('nav button')) x.classList.toggle('on', x.dataset.t === t);
+  for (const s of ['main', 'media', 'pad', 'kb', 'scr', 'files']) $('t-' + s).hidden = s !== t;
+  if (t === 'scr' && !BLE) refreshScreen();
+  if (t === 'media') { loadMedia(); if (!$('subsBox').hidden && !subsLoaded) loadSubs(false); }
+  scrollTo(0, 0);
+}
+for (const b of document.querySelectorAll('nav button')) b.onclick = () => go(b.dataset.t);
 
 // ---- touchpad ----
 let acc = [0, 0], last = null, downAt = 0, moved = 0, wheelY = null, wheelAcc = 0;
@@ -262,10 +359,12 @@ if (BLE) {
   $('bleBox').hidden = false; $('go').textContent = 'Подключиться по Bluetooth';
   $('scrNet').hidden = true; $('scrBle').hidden = false;
   $('filesNet').hidden = true; $('filesBle').hidden = false;
+  // These need answers from the PC, which Bluetooth only sends for a few commands.
+  $('tvBox').hidden = true; document.querySelector('nav [data-t=media]').hidden = true;
   if (!navigator.bluetooth) $('err').textContent = 'Этот браузер не умеет Bluetooth. Android — Chrome, iPhone — Bluefy.';
   $('pin').value = pin; show(false);
 } else {
-  pin ? api('status') : show(false);
+  pin ? api('status').then(loadScreens) : show(false);
   setInterval(() => { if (pin && !document.hidden && !$('t-main').hidden) api('status'); }, 5000);
 }
 </script>

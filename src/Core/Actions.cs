@@ -38,6 +38,7 @@ public static class Actions
                     Osd.Show("", Display.NightLight == true ? "Ночной свет: вкл" : "Ночной свет: выкл");
                     break;
                 case "widgets": Widgets.ToggleAll(); break;
+                case "focus": Focus.Toggle(); break;
                 case "boost":
                     Osd.Show("", "Ускоряю…");
                     var freed = await Cleaner.BoostAll();

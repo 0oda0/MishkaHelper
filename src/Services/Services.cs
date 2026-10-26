@@ -33,6 +33,7 @@ public static class Services
         {
             _tick++;
             Try(Profiles.CheckApps);
+            Try(Focus.Check);
             if (_tick % 12 == 3) Try(AutoTheme);                         // every minute
             if (_tick % 60 == 1) await Devices.CheckBatteries();          // every 5 min
             if (_tick % 360 == 2) await Scheduled();                     // every 30 min

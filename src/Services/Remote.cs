@@ -273,7 +273,74 @@ public static class Remote
             case "clipGet":
                 var clip = System.Windows.Clipboard.ContainsText() ? System.Windows.Clipboard.GetText() : "";
                 return new { clip = clip.Length > 20000 ? clip[..20000] : clip };
-            case "clipSet": System.Windows.Clipboard.SetText(arg); return new { say = "Текст в буфере ПК" };
+            case "clipSet":
+                try { System.Windows.Clipboard.SetText(arg); } catch { return new { say = "Буфер ПК занят другой программой — попробуй ещё раз" }; }
+                return new { say = "Текст в буфере ПК" };
+            // ---- couch scenarios ----
+            case "focus": Focus.Set(arg == "on" || arg != "off" && !Focus.On); return new { focus = Focus.Status() };
+            case "focusStatus": return new { focus = Focus.Status() };
+            case "power":
+                var say = arg switch
+                {
+                    "now" => PowerTimer.Now(),
+                    "download" => PowerTimer.AfterDownload(),
+                    "cancel" => PowerTimer.Cancel(),
+                    _ when int.TryParse(arg, out var min) => PowerTimer.In(min),
+                    _ => "",
+                };
+                return new { say, power = PowerTimer.Describe() };
+            case "screens":
+                return new
+                {
+                    screens = Display.Monitors().Select(m => new { m.Device, m.Name, m.Primary, m.Mode, m.Modes }),
+                    outputs = Audio.Devices(NAudio.CoreAudioApi.DataFlow.Render).Select(d => new { d.Id, d.Name, d.IsDefault }),
+                };
+            case "project": Display.Project(arg); return new { say = "Готово — экран переключится за пару секунд" };
+            case "screenMode":
+            {
+                var p = arg.Split('|');
+                return new { say = p.Length == 2 && Display.SetMonitorMode(p[0], p[1]) ? $"Разрешение {p[1].Replace('x', '×')}" : "Этот режим экран не поддерживает" };
+            }
+            case "audioOut":
+                if (Audio.Devices(NAudio.CoreAudioApi.DataFlow.Render).Any(d => d.Id == arg)) { Audio.SetDefault(arg); Osd.Show("", Audio.DefaultName(NAudio.CoreAudioApi.DataFlow.Render)); }
+                return new { say = "Звук: " + Audio.DefaultName(NAudio.CoreAudioApi.DataFlow.Render) };
+            case "media": return Media();
+            case "open":
+                if (int.TryParse(arg, out var mi) && mi >= 0 && mi < Settings.Current.MediaLinks.Count) return await OpenUrl(Settings.Current.MediaLinks[mi].Url);
+                return new { };
+            case "search":
+            {
+                var (site, q) = (arg.Split('|', 2)[0], arg.Contains('|') ? arg.Split('|', 2)[1].Trim() : "");
+                if (q.Length == 0) return new { };
+                var e = Uri.EscapeDataString(q);
+                return await OpenUrl(site switch
+                {
+                    "kp" => "https://www.kinopoisk.ru/index.php?kp_query=" + e,
+                    "vk" => "https://vkvideo.ru/search?q=" + e,
+                    "rutube" => "https://rutube.ru/search/?query=" + e,
+                    _ => "https://www.youtube.com/results?search_query=" + e,
+                });
+            }
+            case "openUrl":   // a channel from the subscriptions list
+                if (Uri.TryCreate(arg, UriKind.Absolute, out var yu) && yu.Scheme == "https" && yu.Host == "www.youtube.com") return await OpenUrl(yu.AbsoluteUri);
+                return new { };
+            case "mediaAdd":
+            {
+                var p = arg.Split('\n', 2);
+                if (p.Length < 2 || !Uri.TryCreate(p[1].Trim(), UriKind.Absolute, out var u) || u.Scheme is not ("https" or "http")) return new { say = "Нужна ссылка вида https://…" };
+                Settings.Current.MediaLinks.Add(new() { Name = p[0].Trim().Length > 0 ? p[0].Trim()[..Math.Min(40, p[0].Trim().Length)] : u.Host, Url = u.AbsoluteUri, Channel = true });
+                Settings.Save();
+                return Media();
+            }
+            case "mediaDel":
+                if (int.TryParse(arg, out var di) && di >= 0 && di < Settings.Current.MediaLinks.Count) { Settings.Current.MediaLinks.RemoveAt(di); Settings.Save(); }
+                return Media();
+#if !LITE
+            case "ytSubs": return await YouTubeSubs(arg == "refresh");
+            case "ytLogin":
+                WebReader.OpenWindow("https://accounts.google.com/ServiceLogin?service=youtube&continue=https%3A%2F%2Fwww.youtube.com%2Ffeed%2Fchannels", "Вход в YouTube");
+                return new { say = "Окно входа открыто на экране ПК — войди тачпадом и клавиатурой, потом нажми «Обновить»" };
+#endif
             case "launch": Actions.Run("launch:" + arg); return new { };
             // Same OSD as the keyboard keys: without it a volume change with nothing playing looks like "didn't work".
             case "volume": if (int.TryParse(arg, out var v)) { Audio.Volume = Math.Clamp(v, 0, 100); Osd.Show("", "Громкость", Audio.Volume); } break;
@@ -307,7 +374,52 @@ public static class Remote
             cpu = st.CpuTemp, ram = Math.Round(st.Ram), battery = bat.Present ? bat.Percent : -1, ac = bat.OnAc,
             profiles = Settings.Current.Profiles.Select(p => p.Name), jarvis = Edition.HasJarvis,
             apps = Settings.Current.Launchers.Select(l => l.Name), playing = await NowPlaying(),
+            focus = Focus.Status(), power = PowerTimer.Describe(),
         };
+    }
+
+    /// <summary>Default browser, unelevated (Shell.Open goes through Explorer); VPN sites wait for the VPN first.</summary>
+    static async Task<object> OpenUrl(string url)
+    {
+        if (await Vpn.EnsureFor(url) is { } problem) return new { say = problem, vpn = false };
+        Shell.Open(url);
+        return new { opened = true };
+    }
+
+    static object Media() => new { media = Settings.Current.MediaLinks.Select(m => new { name = m.Name, channel = m.Channel }) };
+
+#if !LITE
+    static (DateTime At, object Result)? _subs;
+
+    /// <summary>
+    /// YouTube subscriptions without Google API keys: the user signs in once in Mishka's own browser window (WebReader),
+    /// then the channels page is read invisibly; "@handle" lines become links. Cached for an hour.
+    /// </summary>
+    static async Task<object> YouTubeSubs(bool refresh)
+    {
+        if (!refresh && _subs is { } c && DateTime.Now - c.At < TimeSpan.FromHours(1)) return c.Result;
+        if (await Vpn.EnsureFor("https://www.youtube.com/") is { } problem) return new { subs = Array.Empty<object>(), say = problem };
+        var text = await WebReader.ReadText("https://www.youtube.com/feed/channels", 60000);
+        var subs = ParseSubs(text);
+        object r = subs.Count > 0 ? new { subs = subs.Select(s => new { name = s.Name, url = s.Url }) } : new { subs = Array.Empty<object>(), login = true };
+        if (subs.Count > 0) _subs = (DateTime.Now, r);
+        return r;
+    }
+#endif
+
+    /// <summary>Channel name is the line just above its "@handle" line.</summary>
+    internal static List<(string Name, string Url)> ParseSubs(string text)
+    {
+        var lines = text.Split('\n').Select(l => l.Trim()).Where(l => l.Length > 0).ToArray();
+        var res = new List<(string, string)>();
+        for (int i = 1; i < lines.Length; i++)
+        {
+            var m = System.Text.RegularExpressions.Regex.Match(lines[i], @"^(@[\w.\-]{3,40})(\s|•|$)");
+            if (!m.Success || lines[i - 1].StartsWith('@') || System.Text.RegularExpressions.Regex.IsMatch(lines[i - 1], "подписчик|subscriber", System.Text.RegularExpressions.RegexOptions.IgnoreCase)) continue;
+            var url = "https://www.youtube.com/" + Uri.EscapeDataString(m.Groups[1].Value).Replace("%40", "@");
+            if (res.All(x => x.Item2 != url)) res.Add((lines[i - 1], url));
+        }
+        return res;
     }
 
     // Same page as docs/remote (GitHub Pages serves it for Bluetooth); embedded so Wi-Fi works offline.

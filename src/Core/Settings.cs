@@ -104,6 +104,13 @@ public class ScenarioStep
     public string Arg { get; set; } = "";
 }
 
+public class MediaLink
+{
+    public string Name { get; set; } = "";
+    public string Url { get; set; } = "";
+    public bool Channel { get; set; }   // added from the phone; services are the built-in ones
+}
+
 public class Launcher
 {
     public string Name { get; set; } = "";
@@ -215,6 +222,24 @@ public class AppSettings
     public bool RemoteEnabled { get; set; }
     public bool BleRemoteEnabled { get; set; }
     public bool PhoneNotifications { get; set; } = true;   // show the phone app's notifications as toasts
+    /// <summary>Game mode turns itself on when a full-screen game is in front.</summary>
+    public bool FocusAuto { get; set; } = true;
+    /// <summary>Game mode never mutes these (process names): voice chat must keep working.</summary>
+    public List<string> FocusKeepSound { get; set; } = new() { "discord", "teamspeak", "ts3client_win64", "mumble", "telegram", "zoom" };
+    /// <summary>Couch remote: streaming services and favourite channels, opened in the default browser.</summary>
+    public List<MediaLink> MediaLinks { get; set; } = new()
+    {
+        new() { Name = "YouTube", Url = "https://www.youtube.com/" },
+        new() { Name = "Подписки YouTube", Url = "https://www.youtube.com/feed/subscriptions" },
+        new() { Name = "Кинопоиск", Url = "https://hd.kinopoisk.ru/" },
+        new() { Name = "VK Видео", Url = "https://vkvideo.ru/" },
+        new() { Name = "Rutube", Url = "https://rutube.ru/" },
+        new() { Name = "Twitch", Url = "https://www.twitch.tv/" },
+    };
+    /// <summary>Sites that open only through the VPN: before them the VPN app is started and awaited.</summary>
+    public List<string> VpnSites { get; set; } = new() { "youtube.com", "youtu.be" };
+    /// <summary>VPN program; empty = find Happ / v2rayN / Hiddify / AmneziaVPN in Program Files.</summary>
+    public string VpnApp { get; set; } = "";
     public int RemotePort { get; set; } = 8770;
     public string RemotePin { get; set; } = "";
     public bool ScreenTime { get; set; } = true;

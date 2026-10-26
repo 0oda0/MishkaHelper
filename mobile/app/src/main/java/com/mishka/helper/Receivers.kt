@@ -21,6 +21,8 @@ class NotifListener : NotificationListenerService() {
         if (sbn.packageName == packageName || sbn.isOngoing) return
         val n = sbn.notification
         if (n.flags and Notification.FLAG_GROUP_SUMMARY != 0) return
+        // Apps mark codes and banking alerts "secret" (hidden even on the lock screen) — they don't travel over Wi-Fi.
+        if (n.visibility == Notification.VISIBILITY_SECRET) return
         if (n.category == Notification.CATEGORY_PROGRESS || n.category == Notification.CATEGORY_TRANSPORT) return
         val title = n.extras.getCharSequence(Notification.EXTRA_TITLE)?.toString() ?: return
         val text = (n.extras.getCharSequence(Notification.EXTRA_BIG_TEXT) ?: n.extras.getCharSequence(Notification.EXTRA_TEXT))?.toString() ?: ""

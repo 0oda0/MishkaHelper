@@ -57,6 +57,16 @@ public class ParsingTests
     [InlineData("8.8.8.8", false)]
     [InlineData("::ffff:192.168.0.10", true)]
     public void RemotePrivateOnly(string ip, bool ok) => Assert.Equal(ok, Remote.IsPrivate(IPAddress.Parse(ip)));
+
+    [Fact]
+    public void YouTubeSubsFromPageText()
+    {
+        var text = "Подписки\nВсе\nВсё о Linux\n@vsyo.o.linux•120 тыс. подписчиков\nОписание канала\nМуд Мишка\n@mud_mishka\n1 млн подписчиков\n@lonely\n";
+        var subs = Remote.ParseSubs(text);
+        Assert.Equal(2, subs.Count);
+        Assert.Equal(("Всё о Linux", "https://www.youtube.com/@vsyo.o.linux"), subs[0]);
+        Assert.Equal(("Муд Мишка", "https://www.youtube.com/@mud_mishka"), subs[1]);
+    }
 }
 
 public class EdgeGecTests

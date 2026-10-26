@@ -67,7 +67,8 @@ public static class Phone
         var ws = wsCtx.WebSocket;
         var old = _ws;
         _ws = ws;
-        try { if (old != null) await old.CloseAsync(WebSocketCloseStatus.NormalClosure, "replaced", CancellationToken.None); } catch { }
+        // Output-only close: the old socket's own loop is still inside ReceiveAsync, and CloseAsync would race it.
+        try { if (old != null) await old.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "replaced", CancellationToken.None); } catch { }
         Fire();
         var buf = new byte[64 * 1024];
         using var msg = new MemoryStream();
@@ -116,7 +117,8 @@ public static class Phone
             case "notif":
                 var n = new Notification(S(m, "app"), S(m, "title"), S(m, "text"), DateTime.Now);
                 lock (Notifications) { Notifications.Insert(0, n); if (Notifications.Count > 50) Notifications.RemoveAt(50); }
-                if (Settings.Current.PhoneNotifications)
+                if (Focus.On) Interlocked.Increment(ref Focus.HeldNotifications);   // shown as one summary when the game ends
+                else if (Settings.Current.PhoneNotifications)
                     Application.Current?.Dispatcher.BeginInvoke(() => Toast.Show("", $"{n.App}: {n.Title}", n.Text.Length > 160 ? n.Text[..160] + "…" : n.Text));
                 Fire();
                 break;

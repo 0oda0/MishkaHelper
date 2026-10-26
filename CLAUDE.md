@@ -58,6 +58,9 @@ src/
     Profiles.cs        apply profiles, auto by AC/app rules (+process priority)
     Alerts.cs          threshold toasts
     Phone.cs           Android app link: UDP discovery 8771 ("MISHKA?"), WebSocket /api/ws (status, notif, clip ↔ ring, clip, file offers /api/phone/file/{id})
+    Focus.cs           game mode: DND + mute every app except the foreground game and voice chats (Settings.FocusKeepSound), phone toasts held; auto on full-screen + GPU load, auto off when the game exits
+    PowerTimer.cs      shutdown in N min / now / when downloads finish (3 min below 150 KB/s net + 5 MB/s disk); Windows' own shutdown timer
+    Vpn.cs             "VPN first": Settings.VpnSites (YouTube) wait for the VPN, starting Happ/Hiddify/Amnezia/v2rayN from Program Files only
     Remote.cs          phone remote: HttpListener on LAN (port 8770), PIN header, private IPs only, netsh firewall rule (Private)
     BleRemote.cs       Bluetooth LE GATT server (no pairing) for docs/remote page via Web Bluetooth; PIN per device; turns BT radio on
     InputSim.cs        SendInput mouse/keys/unicode text + JPEG screenshot (remotes)

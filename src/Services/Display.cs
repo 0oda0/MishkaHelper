@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Management;
 using System.Runtime.InteropServices;
 using Microsoft.Win32;
@@ -75,6 +76,66 @@ public static class Display
             dm.dmDisplayFrequency = f; dm.dmFields |= Native.DM_DISPLAYFREQUENCY;
         }
         return Native.ChangeDisplaySettingsEx(null, ref dm, IntPtr.Zero, Native.CDS_UPDATEREGISTRY, IntPtr.Zero) == 0;
+    }
+
+    // ---- TV over HDMI: projection mode and per-monitor resolution ----
+
+    /// <summary>"internal" (only PC), "clone", "extend", "external" (only TV) — the same as Win+P.</summary>
+    public static void Project(string mode)
+    {
+        if (mode is not ("internal" or "clone" or "extend" or "external")) return;
+        Process.Start(new ProcessStartInfo(Shell.Sys("DisplaySwitch.exe"), "/" + mode) { UseShellExecute = false, CreateNoWindow = true });
+    }
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    struct DISPLAY_DEVICE
+    {
+        public int cb;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)] public string DeviceName;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)] public string DeviceString;
+        public int StateFlags;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)] public string DeviceID;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)] public string DeviceKey;
+    }
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern bool EnumDisplayDevices(string? device, int i, ref DISPLAY_DEVICE dd, int flags);
+    const int AttachedToDesktop = 1, PrimaryDevice = 4;
+
+    public record Monitor(string Device, string Name, bool Primary, string Mode, string[] Modes);
+
+    /// <summary>Screens in use now, with "1920x1080@60" modes (best rate per resolution, largest first).</summary>
+    public static List<Monitor> Monitors()
+    {
+        var res = new List<Monitor>();
+        for (int i = 0; ; i++)
+        {
+            var dd = new DISPLAY_DEVICE { cb = Marshal.SizeOf<DISPLAY_DEVICE>() };
+            if (!EnumDisplayDevices(null, i, ref dd, 0)) break;
+            if ((dd.StateFlags & AttachedToDesktop) == 0) continue;
+            var mon = new DISPLAY_DEVICE { cb = Marshal.SizeOf<DISPLAY_DEVICE>() };
+            var name = EnumDisplayDevices(dd.DeviceName, 0, ref mon, 0) && mon.DeviceString.Length > 0 ? mon.DeviceString : dd.DeviceName;
+            var cur = new Native.DEVMODE { dmSize = (short)Marshal.SizeOf<Native.DEVMODE>() };
+            Native.EnumDisplaySettings(dd.DeviceName, Native.ENUM_CURRENT_SETTINGS, ref cur);
+            var modes = new List<Native.DEVMODE>();
+            var dm = new Native.DEVMODE { dmSize = (short)Marshal.SizeOf<Native.DEVMODE>() };
+            for (int m = 0; Native.EnumDisplaySettings(dd.DeviceName, m, ref dm); m++) if (dm.dmBitsPerPel == 32) modes.Add(dm);
+            var list = modes.GroupBy(m => (m.dmPelsWidth, m.dmPelsHeight)).OrderByDescending(g => g.Key.dmPelsWidth * g.Key.dmPelsHeight)
+                .Select(g => $"{g.Key.dmPelsWidth}x{g.Key.dmPelsHeight}@{g.Max(m => m.dmDisplayFrequency)}").Take(14).ToArray();
+            res.Add(new(dd.DeviceName, name, (dd.StateFlags & PrimaryDevice) != 0, $"{cur.dmPelsWidth}x{cur.dmPelsHeight}@{cur.dmDisplayFrequency}", list));
+        }
+        return res;
+    }
+
+    /// <summary>"1920x1080@60" on one screen, e.g. the TV. Only modes Windows lists for it.</summary>
+    public static bool SetMonitorMode(string device, string mode)
+    {
+        var mon = Monitors().FirstOrDefault(m => m.Device == device);
+        if (mon == null || !mon.Modes.Contains(mode)) return false;
+        var p = mode.Split('x', '@').Select(int.Parse).ToArray();
+        var dm = new Native.DEVMODE { dmSize = (short)Marshal.SizeOf<Native.DEVMODE>() };
+        Native.EnumDisplaySettings(device, Native.ENUM_CURRENT_SETTINGS, ref dm);
+        dm.dmPelsWidth = p[0]; dm.dmPelsHeight = p[1]; dm.dmDisplayFrequency = p[2];
+        dm.dmFields |= Native.DM_PELSWIDTH | Native.DM_PELSHEIGHT | Native.DM_DISPLAYFREQUENCY;
+        return Native.ChangeDisplaySettingsEx(device, ref dm, IntPtr.Zero, Native.CDS_UPDATEREGISTRY, IntPtr.Zero) == 0;
     }
 
     // Night light: CloudStore blob. Inner record gets "02 01" when on, and its length byte (index 18) grows by 2.

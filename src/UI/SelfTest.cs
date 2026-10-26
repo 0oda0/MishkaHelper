@@ -38,7 +38,7 @@ public static class SelfTest
             Settings.Current.RemotePin = "432198"; Settings.Current.PhoneNotifications = true;   // show them, so the owner sees phone notifications arrive
             Remote.StartLocal();
             L("phonelive: waiting for the phone (PIN 432198)…");
-            int seenNotifs = 0; bool pushed = false; var until = DateTime.Now.AddMinutes(6);
+            int seenNotifs = 0; bool pushed = false; var until = DateTime.Now.AddMinutes(20);   // the owner tries things by hand meanwhile; <report>.stop ends it early
             while (DateTime.Now < until)
             {
                 await Task.Delay(1000);

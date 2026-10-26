@@ -83,6 +83,9 @@ class LinkService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP_RING) stopRing()
+        // Paired again (new PIN or PC): a running service gave up after 401, so start over now.
+        else if (!connected.value && onCreateDone) { ws?.cancel(); main.removeCallbacksAndMessages(null); main.postDelayed(tick, 60_000); retry = 1000; connect() }
+        onCreateDone = true
         return START_STICKY
     }
 
@@ -123,26 +126,45 @@ class LinkService : Service() {
         val req = Request.Builder().url("ws://${Link.host(this)}:${Link.port(this)}/api/ws").header("X-Pin", Link.pin(this)).build()
         ws = Link.http.newWebSocket(req, object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
-                retry = 1000; connected.value = true; lastError.value = ""
+                retry = 1000; fails = 0; connected.value = true; lastError.value = ""
                 sendStatus()
             }
             override fun onMessage(webSocket: WebSocket, text: String) {
                 val m = runCatching { JSONObject(text) }.getOrNull() ?: return
                 main.post { handle(m) }
             }
-            override fun onClosed(webSocket: WebSocket, code: Int, reason: String) = lost(reason)
-            override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) =
-                lost(if (response?.code == 401) "Неверный PIN — подключись заново" else t.message ?: "нет связи")
+            // A socket we already replaced must not schedule its own reconnect (that would double the connections).
+            override fun onClosed(webSocket: WebSocket, code: Int, reason: String) { if (webSocket === ws) lost(reason) }
+            override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) = if (webSocket !== ws) Unit else when (response?.code) {
+                // Retrying a wrong PIN would trip the PC's brute-force lock and its "someone is guessing" alert.
+                401 -> { connected.value = false; lastError.value = "PIN на ПК сменился — подключись заново на вкладке «ПК»" }
+                429 -> later("ПК временно заблокировал вход после неверных PIN", 5 * 60_000L)
+                else -> lost(t.message ?: "нет связи")
+            }
         })
     }
 
+    private var fails = 0
+    private var onCreateDone = false
+
     /** PC asleep, Wi-Fi switched, Mishka restarted: try again, waiting up to a minute between attempts. */
     private fun lost(why: String) {
+        // Every 3rd miss, look the PC up again: the router may have given it a new address.
+        if (++fails % 3 == 0) Thread { rediscover() }.start()
+        later(why, retry)
+        retry = (retry * 2).coerceAtMost(60_000)
+    }
+
+    private fun later(why: String, delay: Long) {
         connected.value = false
         lastError.value = why
-        if (stopped) return
-        main.postDelayed({ connect() }, retry)
-        retry = (retry * 2).coerceAtMost(60_000)
+        if (!stopped) main.postDelayed({ connect() }, delay)
+    }
+
+    /** Same PC name at a new address → remember it. Another name is never picked silently. */
+    private fun rediscover() {
+        val pc = runCatching { Link.discover() }.getOrDefault(emptyList()).firstOrNull { it.name == Link.pcName(this) } ?: return
+        if (pc.host != Link.host(this)) Link.save(this, pc, Link.pin(this))
     }
 
     private fun handle(m: JSONObject) {
