@@ -45,6 +45,26 @@ jobs:
           Get-ChildItem publish-lite -Exclude *.pdb, *.xml | Compress-Archive -DestinationPath "dist\MishkaHelper-Lite-Portable-$env:APP_VERSION.zip"
           Get-ChildItem dist | Format-Table Name, Length
 
+      # Android app: same version as the PC app, signed with the project key (repository secrets) so updates install over it.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Phone app (APK)
+        shell: pwsh
+        env:
+          MISHKA_KEYSTORE_PASSWORD: ${{ secrets.MISHKA_KEYSTORE_PASSWORD }}
+        run: |
+          # Without the project key an APK can't be updated later (each runner makes its own debug key) — skip, don't ship that.
+          if (-not "${{ secrets.MISHKA_KEYSTORE_B64 }}") { Write-Warning "MISHKA_KEYSTORE_B64 secret missing: phone app not built"; exit 0 }
+          [IO.File]::WriteAllBytes("$env:RUNNER_TEMP\mishka.keystore", [Convert]::FromBase64String("${{ secrets.MISHKA_KEYSTORE_B64 }}"))
+          $env:MISHKA_KEYSTORE = "$env:RUNNER_TEMP\mishka.keystore"
+          Push-Location mobile
+          .\gradlew.bat assembleRelease --no-daemon --console=plain "-PappVersion=$env:APP_VERSION"
+          Pop-Location
+          Copy-Item mobile\app\build\outputs\apk\release\app-release.apk dist\Mishka-Phone.apk
+          Get-Item dist\Mishka-Phone.apk | Format-Table Name, Length
+
       - uses: actions/upload-artifact@v4
         with:
           name: MishkaHelper

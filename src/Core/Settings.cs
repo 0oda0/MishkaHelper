@@ -214,6 +214,7 @@ public class AppSettings
     public bool GoogleCalendar { get; set; } = true;   // open a pre-filled Google Calendar event for dated reminders
     public bool RemoteEnabled { get; set; }
     public bool BleRemoteEnabled { get; set; }
+    public bool PhoneNotifications { get; set; } = true;   // show the phone app's notifications as toasts
     public int RemotePort { get; set; } = 8770;
     public string RemotePin { get; set; } = "";
     public bool ScreenTime { get; set; } = true;

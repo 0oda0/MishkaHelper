@@ -91,7 +91,7 @@ public static class Defaults
             });
 
         foreach (var kind in new[] { "system", "battery", "clock", "network", "profiles", "audio",
-                     "notes", "todo", "timer", "media", "ping", "mic", "disks", "calendar", "currency", "procs", "fans", "worldclock", "countdown", "launcher", "events" })
+                     "notes", "todo", "timer", "media", "ping", "mic", "disks", "calendar", "currency", "procs", "fans", "worldclock", "countdown", "launcher", "events", "phone" })
             if (!s.Widgets.Any(w => w.Kind == kind))
                 s.Widgets.Add(new WidgetConfig { Kind = kind, Left = 60, Top = 60 + s.Widgets.Count * 150 });
 

@@ -15,6 +15,8 @@ UI language: **Russian**. Repo: `0oda0/MishkaHelper` (public). Owner talks Russi
 | Unit tests | `dotnet test tests` (xunit; Intents/Ears/Hotkeys/Updater/Remote/Calendar). Also run by CI before release |
 | Self-test | `MishkaHelper.exe --selftest <report.txt> [steps]`, steps: `remote,fullclean,acer modes,fans,keyboard,defender,sweep,cleanup,disk,autostart,brain,ears,voice,update` (comma list; empty = all). Admin-only steps need the real (elevated) exe |
 | Install on this PC | elevated: `tools\install-local.ps1 -Source publish [-SelfTest report] [-Only steps]` |
+| Phone app (APK) | `cd mobile; $env:JAVA_HOME='C:\Users\0airo\android-tools\jdk-21.0.12.1+1'; .\gradlew.bat assembleRelease '-PbuildTools=36.0.0' '-PappVersion=X.Y.Z'` + proxy args `'-Dhttps.proxyHost=127.0.0.1' '-Dhttps.proxyPort=10809'` (owner's VPN proxy; quote -D args in PowerShell). Signed when `MISHKA_KEYSTORE`/`MISHKA_KEYSTORE_PASSWORD` env set (key: C:\Users\0airo\android-tools\mishka-release.keystore, never commit) |
+| Phone test | own emulator `mishka_test` (headless, -no-audio); never touch the owner's AVDs (HSKLearn, 9T). Real phone: `adb devices` |
 | Release | bump `<Version>` in csproj → commit → `git tag -a vX.Y.Z` → push tag → **`gh workflow run release.yml --ref vX.Y.Z`** (tag-push trigger fires 20–60 min late; cancel the late duplicate run if it appears) |
 
 The app is `requireAdministrator`; autostart = scheduled task `MishkaHelper` (HighestAvailable, no UAC at logon).
@@ -55,6 +57,7 @@ src/
     Hotkeys.cs         RegisterHotKey, Pretty(), scenario hotkeys
     Profiles.cs        apply profiles, auto by AC/app rules (+process priority)
     Alerts.cs          threshold toasts
+    Phone.cs           Android app link: UDP discovery 8771 ("MISHKA?"), WebSocket /api/ws (status, notif, clip ↔ ring, clip, file offers /api/phone/file/{id})
     Remote.cs          phone remote: HttpListener on LAN (port 8770), PIN header, private IPs only, netsh firewall rule (Private)
     BleRemote.cs       Bluetooth LE GATT server (no pairing) for docs/remote page via Web Bluetooth; PIN per device; turns BT radio on
     InputSim.cs        SendInput mouse/keys/unicode text + JPEG screenshot (remotes)
@@ -82,7 +85,7 @@ src/
     Calendar.cs        ICS links → events per day (DAILY/WEEKLY RRULE, EXDATE, COUNT/UNTIL); intent + Brain tool
     Scenarios.cs       scenario engine: steps + triggers (voice/hotkey/time/events)
   Pages/               one UserControl per section (XAML shell + code-built cards)
-    Home, Jarvis, Scenarios, Controls, System, Devices, Nitro, Boost (+BoostPage.Full = cleanup wizard), Security, Tools, Profiles, Hotkeys, Radial (wheel editor), Widgets, Settings
+    Home, Jarvis, Scenarios, Controls, System, Devices, Phone, Nitro, Boost (+BoostPage.Full = cleanup wizard), Security, Tools, Profiles, Hotkeys, Radial (wheel editor), Widgets, Settings
   UI/
     UiKit.cs           shared builders (tiles, cards, ask/confirm dialogs)
     Controls.cs        Sparkline, Ring
@@ -95,6 +98,7 @@ src/
     Widgets.cs / WidgetsExtra.cs  20 desktop widgets (partial class)
     JarvisUi.cs        orb + chat window + JarvisInput (Ctrl+Alt+Enter typed request, silent answer)
     Shots.cs / SelfTest.cs  dev tooling
+mobile/                Android app «Mishka» (Kotlin + Compose, minSdk 26): Link (discovery, HTTP), LinkService (foreground WS, ring, files), NotifListener, ShareActivity, Cleaner (big/APK/dupes/old downloads), MainActivity tabs ПК/Пульт(WebView of the remote page)/Чистка. CI builds Mishka-Phone.apk only if repo secrets MISHKA_KEYSTORE_B64 + MISHKA_KEYSTORE_PASSWORD exist
 docs/remote/           phone remote page: served by Remote.cs (embedded) over Wi-Fi, and by GitHub Pages (HTTPS → Web Bluetooth)
 docs/features/         landing page (index.html + img/*.png) shipped as <app>\docs
 installer/MishkaHelper.iss   Inno Setup, FLAVOR env = ""/Lite, one AppId for both; uninstall asks to delete AppData/models

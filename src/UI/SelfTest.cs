@@ -32,6 +32,80 @@ public static class SelfTest
             foreach (var b in await Task.Run(FullClean.Background)) L($"bg      {b.Verdict,-4} {b.Name} x{b.Count} {Cleaner.Size(b.Bytes)}");
         });
 
+        await Step("phonelive", async () =>   // real phone over `adb reverse tcp:8770 tcp:8770`: log everything it sends, push clip + file, no ringing
+        {
+            var pin = Settings.Current.RemotePin; var notifs = Settings.Current.PhoneNotifications;
+            Settings.Current.RemotePin = "432198"; Settings.Current.PhoneNotifications = true;   // show them, so the owner sees phone notifications arrive
+            Remote.StartLocal();
+            L("phonelive: waiting for the phone (PIN 432198)…");
+            int seenNotifs = 0; bool pushed = false; var until = DateTime.Now.AddMinutes(6);
+            while (DateTime.Now < until)
+            {
+                await Task.Delay(1000);
+                if (Phone.Connected && Phone.Last != null && !pushed)
+                {
+                    pushed = true;
+                    L($"phonelive: connected, status {Phone.Last}");
+                    L($"phonelive: clip → {await Phone.SendClipboard("Привет с ПК — Mishka 1.0")}");
+                    var tmp = Path.Combine(Path.GetTempPath(), "Mishka-test.txt");
+                    File.WriteAllText(tmp, "Файл с ПК: проверка Mishka 1.0");
+                    L($"phonelive: file → {await Phone.SendFile(tmp)}");
+                }
+                List<Phone.Notification> ns;
+                lock (Phone.Notifications) ns = Phone.Notifications.ToList();
+                foreach (var n in ns.Take(ns.Count - seenNotifs).Reverse()) L($"phonelive: notification {n.App}: {n.Title} — {n.Text}");
+                seenNotifs = ns.Count;
+                if (File.Exists(file + ".stop")) break;
+            }
+            L($"phonelive: end, connected={Phone.Connected} last={Phone.Last}");
+            Remote.Stop();
+            Settings.Current.RemotePin = pin; Settings.Current.PhoneNotifications = notifs;
+        });
+
+        await Step("phone", async () =>   // plays the phone app on this PC: discovery, websocket, status, ring, file
+        {
+            var pin = Settings.Current.RemotePin; var notifs = Settings.Current.PhoneNotifications;
+            Settings.Current.RemotePin = "432198"; Settings.Current.PhoneNotifications = false;
+            Remote.StartLocal(); Phone.StartDiscovery();
+            using (var udp = new System.Net.Sockets.UdpClient())
+            {
+                udp.Client.ReceiveTimeout = 2000;
+                var ask = Encoding.UTF8.GetBytes("MISHKA?");
+                await udp.SendAsync(ask, ask.Length, "127.0.0.1", Phone.DiscoveryPort);
+                var from = new System.Net.IPEndPoint(System.Net.IPAddress.Any, 0);
+                try { L("phone discovery: " + Encoding.UTF8.GetString(udp.Receive(ref from))); } catch (Exception e) { L("phone discovery FAIL: " + e.Message); }
+            }
+            using var ws = new System.Net.WebSockets.ClientWebSocket();
+            ws.Options.SetRequestHeader("X-Pin", Settings.Current.RemotePin);
+            await ws.ConnectAsync(new Uri($"ws://localhost:{Settings.Current.RemotePort}/api/ws"), CancellationToken.None);
+            async Task SendJ(string j) => await ws.SendAsync(Encoding.UTF8.GetBytes(j), System.Net.WebSockets.WebSocketMessageType.Text, true, CancellationToken.None);
+            async Task<string> Recv() { var b = new byte[8192]; var r = await ws.ReceiveAsync(b, new CancellationTokenSource(3000).Token); return Encoding.UTF8.GetString(b, 0, r.Count); }
+            await SendJ("{\"t\":\"status\",\"name\":\"TestPhone\",\"battery\":77,\"charging\":true,\"free\":1000000000,\"total\":64000000000}");
+            await SendJ("{\"t\":\"notif\",\"app\":\"Telegram\",\"title\":\"Мама\",\"text\":\"Ты где?\"}");
+            await Task.Delay(500);
+            L($"phone connected={Phone.Connected} status={Phone.Last} notif={Phone.Notifications.FirstOrDefault()}");
+            await Phone.Ring();
+            L("phone ring → " + await Recv());
+            var tmp = Path.Combine(Path.GetTempPath(), "mishka-phone-test.txt");
+            File.WriteAllText(tmp, "привет с ПК");
+            await Phone.SendFile(tmp);
+            var offer = await Recv();
+            L("phone file offer → " + offer);
+            var id = System.Text.Json.JsonDocument.Parse(offer).RootElement.GetProperty("id").GetString();
+            using var http = new System.Net.Http.HttpClient();
+            var req = new System.Net.Http.HttpRequestMessage(System.Net.Http.HttpMethod.Get, $"http://localhost:{Settings.Current.RemotePort}/api/phone/file/{id}");
+            req.Headers.Add("X-Pin", Settings.Current.RemotePin);
+            var got = await (await http.SendAsync(req)).Content.ReadAsStringAsync();
+            L($"phone file download: «{got}» {(got == "привет с ПК" ? "OK" : "MISMATCH")}");
+            File.Delete(tmp);
+            await ws.CloseAsync(System.Net.WebSockets.WebSocketCloseStatus.NormalClosure, "", CancellationToken.None);
+            await Task.Delay(300);
+            L($"phone after close connected={Phone.Connected}");
+            Remote.Stop();
+            lock (Phone.Notifications) Phone.Notifications.Clear();
+            Settings.Current.RemotePin = pin; Settings.Current.PhoneNotifications = notifs;
+        });
+
         await Step("plan", async () =>   // silent: typed path, no ducking, no browser; everything created is removed after
         {
             var j = Settings.Current.Jarvis;

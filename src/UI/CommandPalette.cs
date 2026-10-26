@@ -31,7 +31,7 @@ public static class CommandPalette
     static readonly (string Page, string Name)[] Pages =
     {
         ("Home", "Главная"), ("Jarvis", "Джарвис"), ("Scenarios", "Сценарии"), ("Controls", "Управление"), ("System", "Система"), ("Devices", "Устройства"), ("Nitro", "Nitro"),
-        ("Boost", "Ускорение"), ("Security", "Защита"), ("Tools", "Инструменты"), ("Profiles", "Профили"), ("Hotkeys", "Горячие клавиши"), ("Radial", "Колесо"),
+        ("Boost", "Ускорение"), ("Security", "Защита"), ("Tools", "Инструменты"), ("Profiles", "Профили"), ("Hotkeys", "Горячие клавиши"), ("Radial", "Колесо"), ("Phone", "Телефон"),
         ("Widgets", "Виджеты"), ("Settings", "Настройки"),
     };
 

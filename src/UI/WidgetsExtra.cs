@@ -23,7 +23,7 @@ public static partial class Widgets
         ["profiles"] = "", ["audio"] = "", ["launcher"] = "",
         ["notes"] = "", ["todo"] = "", ["timer"] = "", ["media"] = "", ["ping"] = "", ["mic"] = "",
         ["disks"] = "", ["calendar"] = "", ["currency"] = "", ["procs"] = "", ["fans"] = "",
-        ["worldclock"] = "", ["countdown"] = "", ["events"] = "\uE787",
+        ["worldclock"] = "", ["countdown"] = "", ["events"] = "\uE787", ["phone"] = "\uE8EA",
     };
 
     static Brush B(string key) => (Brush)Application.Current.Resources[key];
@@ -497,6 +497,25 @@ public static partial class Widgets
     }
 
     // ---------- countdown ----------
+    /// <summary>The phone app: battery, storage, "find my phone".</summary>
+    static (UIElement, Action<Sample>?, Action?) PhoneWidget()
+    {
+        var main = UiKit.Text("", 15, weight: FontWeights.SemiBold);
+        var sub = UiKit.Text("", 12, true);
+        var ring = new Button { Content = "Найти телефон", Margin = new Thickness(0, 8, 0, 0), HorizontalAlignment = HorizontalAlignment.Left };
+        ring.Click += (_, _) => { _ = Phone.Ring(); Osd.Show("\uE8EA", "Телефон звонит"); };
+        var root = Header("\uE8EA", "Телефон", main);
+        root.Children.Add(sub); root.Children.Add(ring);
+        void Load()
+        {
+            if (!Phone.Connected) { main.Text = "Не подключён"; sub.Text = "Приложение Mishka на телефоне → «ПК»"; ring.Visibility = Visibility.Collapsed; return; }
+            ring.Visibility = Visibility.Visible;
+            var s = Phone.Last;
+            main.Text = s == null ? "На связи" : $"{(s.Charging ? "⚡" : "🔋")} {s.Battery}% · {s.Name}";
+            sub.Text = s is { StorageTotal: > 0 } ? $"Память: свободно {Cleaner.Size(s.StorageFree)} из {Cleaner.Size(s.StorageTotal)}" : "";
+        }
+        return (root, null, Load);
+    }
     /// <summary>Upcoming week: Jarvis reminders + calendar events (ICS, e.g. Google's secret iCal link). ✓ marks a reminder done.</summary>
     static (UIElement, Action<Sample>?, Action?) EventsWidget()
     {

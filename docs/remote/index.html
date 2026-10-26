@@ -42,9 +42,10 @@ nav button{border-radius:0;background:none;padding:14px 4px;font-size:13px}nav b
 <div id="app" hidden>
   <section id="t-main">
     <div class="c" id="st"><span id="cpu"></span><span id="ram"></span><span id="bat"></span></div>
-    <div class="c"><div class="m">Громкость <span id="vv"></span></div><div id="np" class="m" style="color:var(--b)"></div><input id="vol" type="range" min="0" max="100" onchange="api('volume',this.value)">
+    <div class="c"><div class="m">Громкость <span id="vv"></span></div><div id="np" class="m" style="color:var(--b)"></div><input id="vol" type="range" min="0" max="100">
+      <div class="r"><button onclick="api('volStep','-5')">🔉 −5</button><button onclick="api('volStep','5')">🔊 +5</button></div><br>
       <div class="r"><button onclick="api('prev')">⏮</button><button onclick="api('play')">⏯</button><button onclick="api('next')">⏭</button><button onclick="api('mute')">🔇</button></div></div>
-    <div class="c"><div class="m">Яркость <span id="bv"></span></div><input id="bri" type="range" min="0" max="100" onchange="api('brightness',this.value)"></div>
+    <div class="c"><div class="m">Яркость <span id="bv"></span></div><input id="bri" type="range" min="0" max="100"></div>
     <div class="c"><div class="m">Профили</div><div class="r" id="prof"></div><br><div class="r"><button onclick="api('boost')">🚀 Ускорить</button></div></div>
     <div class="c" id="appsBox" hidden><div class="m">Программы</div><div class="r" id="apps"></div></div>
     <div class="c" id="jv" hidden><div class="m">Сказать Джарвису</div><input id="q" type="text" placeholder="что у меня завтра?" onkeydown="if(event.key==='Enter')say()">
@@ -138,8 +139,8 @@ function handle(j) {
 }
 
 function render(s) {
-  show(true); $('pc').textContent = s.pc; $('vol').value = s.volume; $('vv').textContent = s.volume + '%';
-  $('bri').value = s.brightness; $('bv').textContent = s.brightness + '%';
+  show(true); $('pc').textContent = s.pc; if (held !== 'vol') $('vol').value = s.volume; $('vv').textContent = s.volume + '%' + (s.output ? ' · ' + s.output : '');
+  if (held !== 'bri') $('bri').value = s.brightness; $('bv').textContent = s.brightness + '%';
   $('cpu').textContent = 'CPU ' + s.cpu + '°'; $('ram').textContent = 'RAM ' + s.ram + '%';
   $('bat').textContent = s.battery >= 0 ? (s.ac ? '⚡' : '🔋') + s.battery + '%' : '';
   $('jv').hidden = !s.jarvis;
@@ -196,6 +197,20 @@ async function login() {
 async function say() { $('ans').textContent = '…'; const j = await api('say', $('q').value); if (j && j.say) $('ans').textContent = j.say; $('q').value = ''; }
 function key(k) { api('key', k); }
 function typeText(enter) { const t = $('txt').value; if (t) api('type', t); if (enter) setTimeout(() => key('enter'), 150); $('txt').value = ''; }
+
+// ---- sliders: follow the finger (throttled), and the 5 s refresh never yanks a slider that is being held ----
+let held = null;
+for (const [id, cmd, label] of [['vol', 'volume', 'vv'], ['bri', 'brightness', 'bv']]) {
+  const el = $(id); let last = 0, timer = null;
+  const push = () => { last = Date.now(); api(cmd, el.value); };
+  el.addEventListener('pointerdown', () => held = id);
+  ['pointerup', 'pointercancel', 'change'].forEach(e => el.addEventListener(e, () => { held = null; clearTimeout(timer); push(); }));
+  el.addEventListener('input', () => {
+    $(label).textContent = el.value + '%';
+    clearTimeout(timer);
+    if (Date.now() - last > 160) push(); else timer = setTimeout(push, 160);
+  });
+}
 
 // ---- tabs ----
 for (const b of document.querySelectorAll('nav button')) b.onclick = () => {

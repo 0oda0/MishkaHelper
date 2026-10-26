@@ -59,6 +59,7 @@
                         <RadioButton Style="{StaticResource NavItem}" Tag="&#xE9E9;" Content="Управление" x:Name="NavControls" Checked="Nav_Checked"/>
                         <RadioButton Style="{StaticResource NavItem}" Tag="&#xE7F8;" Content="Система" x:Name="NavSystem" Checked="Nav_Checked"/>
                         <RadioButton Style="{StaticResource NavItem}" Tag="&#xE772;" Content="Устройства" x:Name="NavDevices" Checked="Nav_Checked"/>
+                        <RadioButton Style="{StaticResource NavItem}" Tag="&#xE8EA;" Content="Телефон" x:Name="NavPhone" Checked="Nav_Checked"/>
                         <RadioButton Style="{StaticResource NavItem}" Tag="&#xE7FC;" Content="Nitro" x:Name="NavNitro" Checked="Nav_Checked" Visibility="Collapsed"/>
                         <RadioButton Style="{StaticResource NavItem}" Tag="&#xE945;" Content="Ускорение" x:Name="NavBoost" Checked="Nav_Checked"/>
                         <RadioButton Style="{StaticResource NavItem}" Tag="&#xEA18;" Content="Защита" x:Name="NavSecurity" Checked="Nav_Checked"/>

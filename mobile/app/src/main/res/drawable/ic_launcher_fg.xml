@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Neon "M" on dark: the same mark as the PC app, simplified for an adaptive icon. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFF3DA8"
+        android:strokeWidth="7"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M34,72 L34,38 L54,58 L74,38 L74,72" />
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FF3DC8FF"
+        android:strokeWidth="3"
+        android:strokeLineCap="round"
+        android:pathData="M30,80 L78,80" />
+</vector>

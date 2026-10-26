@@ -43,12 +43,14 @@ public static class Remote
         _http.Prefixes.Add($"http://+:{s.RemotePort}/");   // "+" needs admin — the app is elevated
         _http.Start();
         _ = Task.Run(Loop);
+        Phone.StartDiscovery();
     }
 
     public static void Stop()
     {
         try { _http?.Stop(); _http?.Close(); } catch { }
         _http = null;
+        Phone.StopDiscovery();
     }
 
     public static void Disable() { Stop(); Firewall(false); }
@@ -57,8 +59,11 @@ public static class Remote
     {
         var del = $"advfirewall firewall delete rule name=\"{Rule}\"";
         var add = $"advfirewall firewall add rule name=\"{Rule}\" dir=in action=allow protocol=TCP localport={Settings.Current.RemotePort} profile=private";
+        var addUdp = $"advfirewall firewall add rule name=\"{Rule}\" dir=in action=allow protocol=UDP localport={Phone.DiscoveryPort} profile=private";   // phone app finds the PC
         try { Process.Start(new ProcessStartInfo(Shell.Sys("netsh"), del) { CreateNoWindow = true, UseShellExecute = false })?.WaitForExit(5000); } catch { }
-        if (on) try { Process.Start(new ProcessStartInfo(Shell.Sys("netsh"), add) { CreateNoWindow = true, UseShellExecute = false })?.WaitForExit(5000); } catch (Exception e) { Log.Error(e); }
+        if (on)
+            foreach (var a in new[] { add, addUdp })
+                try { Process.Start(new ProcessStartInfo(Shell.Sys("netsh"), a) { CreateNoWindow = true, UseShellExecute = false })?.WaitForExit(5000); } catch (Exception e) { Log.Error(e); }
     }
 
     static readonly System.Text.RegularExpressions.Regex VirtualNic = new(@"virtual|hyper-v|vethernet|vmware|virtualbox|docker|wsl|tap|tun|wireguard|vpn|loopback|xray|v2ray|outline|zerotier|tailscale|radmin|hamachi", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
@@ -123,6 +128,8 @@ public static class Remote
 
             var cmd = path[5..];
             if (cmd == "upload") { await Upload(req, resp); return; }
+            if (cmd == "ws" && req.IsWebSocketRequest) { await Phone.Accept(ctx); return; }   // the phone app's live channel
+            if (cmd.StartsWith("phone/file/")) { await Phone.ServeFile(cmd[11..], resp); return; }
             if (cmd == "screen")
             {
                 var jpg = await Task.Run(() => InputSim.Screenshot(int.TryParse(req.QueryString["w"], out var w) ? Math.Clamp(w, 320, 1920) : 1280));
@@ -268,8 +275,10 @@ public static class Remote
                 return new { clip = clip.Length > 20000 ? clip[..20000] : clip };
             case "clipSet": System.Windows.Clipboard.SetText(arg); return new { say = "Текст в буфере ПК" };
             case "launch": Actions.Run("launch:" + arg); return new { };
-            case "volume": if (int.TryParse(arg, out var v)) Audio.Volume = v; break;
-            case "mute": Audio.Muted = !Audio.Muted; break;
+            // Same OSD as the keyboard keys: without it a volume change with nothing playing looks like "didn't work".
+            case "volume": if (int.TryParse(arg, out var v)) { Audio.Volume = Math.Clamp(v, 0, 100); Osd.Show("", "Громкость", Audio.Volume); } break;
+            case "volStep": if (int.TryParse(arg, out var dv)) { Audio.Volume = Math.Clamp(Audio.Volume + dv, 0, 100); Osd.Show("", "Громкость", Audio.Volume); } break;
+            case "mute": Audio.Muted = !Audio.Muted; Osd.Show("", Audio.Muted ? "Звук выключен" : "Звук включён"); break;
             case "brightness": if (int.TryParse(arg, out var br)) Display.Brightness = br; break;
             case "play": InputSim.Key("play"); break;
             case "next": InputSim.Key("next"); break;
@@ -294,7 +303,7 @@ public static class Remote
         var st = SysMon.Last; var bat = Power.Battery();
         return new
         {
-            pc = Environment.MachineName, volume = Audio.Volume, muted = Audio.Muted, brightness = Display.Brightness,
+            pc = Environment.MachineName, volume = Audio.Volume, muted = Audio.Muted, output = Audio.DefaultName(NAudio.CoreAudioApi.DataFlow.Render), brightness = Display.Brightness,
             cpu = st.CpuTemp, ram = Math.Round(st.Ram), battery = bat.Present ? bat.Percent : -1, ac = bat.OnAc,
             profiles = Settings.Current.Profiles.Select(p => p.Name), jarvis = Edition.HasJarvis,
             apps = Settings.Current.Launchers.Select(l => l.Name), playing = await NowPlaying(),

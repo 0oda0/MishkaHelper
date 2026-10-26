@@ -36,6 +36,7 @@ public static partial class Widgets
         ["worldclock"] = "Мировое время",
         ["countdown"] = "Обратный отсчёт",
         ["events"] = "Ближайшие дела",
+        ["phone"] = "Телефон",
     };
 
     /// <summary>Widgets with text input need real focus; the rest never steal it.</summary>
@@ -148,6 +149,7 @@ public static partial class Widgets
                 "ping" or "procs" => 2,
                 "currency" => 3600,
                 "events" => 60,
+                "phone" => 5,
                 _ => 30,
             }) };
             t.Tick += (_, _) => slow();
@@ -254,6 +256,7 @@ public static partial class Widgets
         "worldclock" => WorldClockWidget(),
         "countdown" => CountdownWidget(),
         "events" => EventsWidget(),
+        "phone" => PhoneWidget(),
         _ => (new TextBlock(), null, null),
     };
 
