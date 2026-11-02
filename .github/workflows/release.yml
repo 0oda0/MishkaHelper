@@ -74,9 +74,17 @@ jobs:
           name: MishkaHelper
           path: dist/*
 
+      # What's new in this version, then which file is which: people get lost among eight downloads.
+      - name: Release text
+        shell: pwsh
+        run: |
+          $utf8 = New-Object Text.UTF8Encoding($false)
+          $body = [IO.File]::ReadAllText("RELEASE_NOTES.md", $utf8).TrimEnd() + "`n`n" + [IO.File]::ReadAllText("docs/EDITIONS.md", $utf8)
+          [IO.File]::WriteAllText("release-body.md", $body, $utf8)
+
       - name: GitHub release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
           files: dist/*
-          body_path: RELEASE_NOTES.md
+          body_path: release-body.md

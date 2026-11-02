@@ -17,7 +17,7 @@ UI language: **Russian**. Repo: `0oda0/MishkaHelper` (public). Owner talks Russi
 | Install on this PC | elevated: `tools\install-local.ps1 -Source publish [-SelfTest report] [-Only steps]` |
 | Phone app (APK) | `cd mobile; $env:JAVA_HOME='C:\Users\0airo\android-tools\jdk-21.0.12.1+1'; .\gradlew.bat assembleRelease '-PbuildTools=36.0.0' '-PappVersion=X.Y.Z'` + proxy args `'-Dhttps.proxyHost=127.0.0.1' '-Dhttps.proxyPort=10809'` (owner's VPN proxy; quote -D args in PowerShell). Signed when `MISHKA_KEYSTORE`/`MISHKA_KEYSTORE_PASSWORD` env set (key: C:\Users\0airo\android-tools\mishka-release.keystore, never commit) |
 | Phone test | own emulator `mishka_test` (headless, -no-audio); never touch the owner's AVDs (HSKLearn, 9T). Real phone: `adb devices` |
-| Release notes | `RELEASE_NOTES.md` = **only what this version adds** (owner's rule); move the old text to `docs/CHANGELOG.md` first |
+| Release notes | `RELEASE_NOTES.md` = **only what this version adds** (owner's rule); move the old text to `docs/CHANGELOG.md` first. CI appends `docs/EDITIONS.md` at the end of every release: don't paste it by hand |
 | Release | bump `<Version>` in csproj → commit → `git tag -a vX.Y.Z` → push tag → **`gh workflow run release.yml --ref vX.Y.Z`** (tag-push trigger fires 20–60 min late; cancel the late duplicate run if it appears) |
 
 The app is `requireAdministrator`; autostart = scheduled task `MishkaHelper` (HighestAvailable, no UAC at logon).
