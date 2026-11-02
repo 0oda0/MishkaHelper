@@ -40,9 +40,9 @@ public static class Notes
     /// <summary>Keyword search with loose word stems (Russian endings vary: "молоко"/"молока").</summary>
     public static List<Note> Search(string query)
     {
-        var words = Ears.Clean(query).Split(' ', StringSplitOptions.RemoveEmptyEntries).Where(w => w.Length > 2).Select(Stem).ToList();
+        var words = RuText.Clean(query).Split(' ', StringSplitOptions.RemoveEmptyEntries).Where(w => w.Length > 2).Select(Stem).ToList();
         if (words.Count == 0) return All.OrderByDescending(n => n.When).Take(5).ToList();
-        return All.Select(n => (n, score: words.Count(w => Ears.Clean(n.Text).Contains(w))))
+        return All.Select(n => (n, score: words.Count(w => RuText.Clean(n.Text).Contains(w))))
             .Where(x => x.score > 0).OrderByDescending(x => x.score).ThenByDescending(x => x.n.When).Select(x => x.n).Take(5).ToList();
     }
 

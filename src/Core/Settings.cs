@@ -111,6 +111,31 @@ public class MediaLink
     public bool Channel { get; set; }   // added from the phone; services are the built-in ones
 }
 
+/// <summary>The secretary: off until the user turns it on; every feature has its own switch.</summary>
+public class SecretarySettings
+{
+    public bool Enabled { get; set; }
+    public bool AppNotes { get; set; } = true;
+    public bool AppHints { get; set; } = true;
+    public bool Capture { get; set; } = true;
+    public bool Voice { get; set; } = true;
+    public bool Remember { get; set; } = true;
+    public bool Mail { get; set; }
+    public int MailMinutes { get; set; } = 10;
+    public List<string> MailImportant { get; set; } = new();   // empty = tell about every letter
+    public bool Deadlines { get; set; } = true;
+    public bool Morning { get; set; } = true;
+    public bool Evening { get; set; } = true;
+    public int EveningHour { get; set; } = 20;
+    public bool Workspace { get; set; } = true;
+    public bool Downloads { get; set; } = true;
+    public bool Meetings { get; set; } = true;
+    public bool Breaks { get; set; }
+    public int BreakMinutes { get; set; } = 90;
+    public bool ToPhone { get; set; }
+    public bool QuietInGame { get; set; } = true;
+}
+
 public class Launcher
 {
     public string Name { get; set; } = "";
@@ -216,6 +241,10 @@ public class AppSettings
     public string DarkAt { get; set; } = "21:00";
     public bool LockKeysOsd { get; set; } = true;
     public bool CheckUpdates { get; set; } = true;
+    public SecretarySettings Secretary { get; set; } = new();
+    public bool SetupDone { get; set; }                  // first-run setup was finished or skipped
+    public List<string> HiddenSections { get; set; } = new();   // sidebar sections the user doesn't need
+    public string SupportSession { get; set; } = "";     // support chat login, encrypted (Secrets)
     public bool Onboarded { get; set; }   // «С чего начать» on Home was dismissed
     public List<Reminder> Reminders { get; set; } = new();
     public bool GoogleCalendar { get; set; } = true;   // open a pre-filled Google Calendar event for dated reminders

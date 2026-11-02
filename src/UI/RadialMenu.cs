@@ -44,7 +44,7 @@ public static class RadialMenu
         var l = new List<(string, Item)>
         {
             ("profiles", new("\uE77B", "Профили", Sub: () => Settings.Current.Profiles.Select(p => new Item(p.Icon, p.Name, () => Profiles.Apply(p))).ToList())),
-#if !LITE
+#if JARVIS
             // Labels show the state the click switches to, so the wheel doubles as an indicator.
             ("jarvis", new("\uE720", "Джарвис", Sub: () => new List<Item>
             {

@@ -39,6 +39,13 @@ public static class Actions
                     break;
                 case "widgets": Widgets.ToggleAll(); break;
                 case "focus": Focus.Toggle(); break;
+                case "setup": SetupWizard.Open(); break;
+#if SECRETARY
+                case "secNote": SecCapture.AppNote(); break;
+                case "secQuick": SecCapture.Quick(); break;
+                case "secVoice": SecCapture.Quick(voice: true); break;
+                case "secRemember": SecCapture.Remember(); break;
+#endif
                 case "boost":
                     Osd.Show("", "Ускоряю…");
                     var freed = await Cleaner.BoostAll();
@@ -66,7 +73,7 @@ public static class Actions
                 case "palette": CommandPalette.Toggle(); break;
                 case "clipboard": ClipHistory.Toggle(); break;
                 case "features": Features.Open(); break;
-#if !LITE
+#if JARVIS
                 case "jarvis": Jarvis.Listen(); break;
                 case "jarvisChat": JarvisChat.Open(); break;
                 case "jarvisType": JarvisInput.Toggle(); break;
@@ -123,7 +130,7 @@ public static class Actions
                     }
                     else if (action.StartsWith("audio:")) { Audio.SetDefault(action[6..]); Osd.Show("", Audio.DefaultName(DataFlow.Render)); }
                     else if (action.StartsWith("page:")) App.Current.Navigate(action[5..]);
-#if !LITE
+#if JARVIS
                     else if (action.StartsWith("scenario:") && Settings.Current.Scenarios.FirstOrDefault(s => s.Id == action[9..]) is { } sc) _ = Scenarios.Run(sc);
 #endif
                     break;

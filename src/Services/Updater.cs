@@ -38,12 +38,9 @@ public static class Updater
     }
 
     /// <summary>Latest release newer than us, or null.</summary>
-    /// <summary>"MishkaHelper-Setup-0.4.0.exe" must not match the Lite edition and vice versa.</summary>
-    internal static bool AssetMatches(string n, string kind, string ext, bool full)
-    {
-        bool lite = n.StartsWith("MishkaHelper-Lite-", StringComparison.OrdinalIgnoreCase);
-        return lite == !full && n.StartsWith((full ? "MishkaHelper-" : "MishkaHelper-Lite-") + kind, StringComparison.OrdinalIgnoreCase) && n.EndsWith(ext, StringComparison.OrdinalIgnoreCase);
-    }
+    /// <summary>"MishkaHelper-Setup-1.2.0.exe" is the Full edition's; "MishkaHelper-Lite-Setup-…" is Lite's, and so on.</summary>
+    internal static bool AssetMatches(string n, string kind, string ext, string prefix) =>
+        n.StartsWith(prefix + kind, StringComparison.OrdinalIgnoreCase) && n.EndsWith(ext, StringComparison.OrdinalIgnoreCase);
 
     public static async Task<UpdateInfo?> Check()
     {
@@ -56,7 +53,7 @@ public static class Updater
         {
             foreach (var a in r.GetProperty("assets").EnumerateArray())
             {
-                if (AssetMatches(a.GetProperty("name").GetString()!, kind, ext, Edition.HasJarvis))
+                if (AssetMatches(a.GetProperty("name").GetString()!, kind, ext, Edition.AssetPrefix))
                 {
                     var u = a.GetProperty("browser_download_url").GetString()!;
                     if (a.TryGetProperty("digest", out var d) && d.GetString() is { } dg && dg.StartsWith("sha256:")) Digests[u] = dg[7..];

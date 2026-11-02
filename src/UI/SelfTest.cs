@@ -62,6 +62,44 @@ public static class SelfTest
             Settings.Current.RemotePin = pin; Settings.Current.PhoneNotifications = notifs;
         });
 
+#if SECRETARY
+        await Step("secretary", async () =>   // nothing is opened, moved or saved; no microphone
+        {
+            foreach (var name in new[] { "chrome", "msedge", "browser", "firefox" })
+                foreach (var p in System.Diagnostics.Process.GetProcessesByName(name).Where(p => p.MainWindowHandle != IntPtr.Zero).Take(1))
+                    L($"secretary: {name} address → {(SecCapture.BrowserUrl(p.MainWindowHandle, name) is { } u ? new Uri(u).Host : "не прочитан")}");
+            var snap = await SecWorkspace.Snapshot();
+            L($"secretary: workspace {string.Join(", ", snap.GroupBy(s => s.Kind).Select(g => g.Key + "=" + g.Count()))}");
+            L($"secretary: downloads {string.Join(", ", SecDownloads.Pending().GroupBy(i => i.Category).Select(g => g.Key + "=" + g.Count()))}");
+            L($"secretary: secrets round trip {Secrets.Unprotect(Secrets.Protect("проверка")) == "проверка"}");
+            if (Models.Has(Models.Vosk))
+            {
+                using var model = new Vosk.Model(Models.PathOf(Models.Vosk));
+                using var rec = new Vosk.VoskRecognizer(model, 16000);
+                rec.AcceptWaveform(new byte[32000], 32000);
+                L("secretary: vosk on silence → " + rec.FinalResult().Replace("\n", " "));
+            }
+            else L("secretary: vosk model not downloaded");
+        });
+#endif
+
+        await Step("support", async () =>   // real server: sends one test message, then waits up to 15 min for an answer in the page
+        {
+            if (!filter.Contains("support")) return;   // writes to the live server: only when asked by name
+            var at = DateTime.Now.ToString("HH:mm:ss");
+            await Support.Send("Проверка чата из самотеста " + at);
+            L("support: sent, messages " + (await Support.Messages()).Count);
+            main.Navigate("Support");
+            for (int i = 0; i < 180; i++)
+            {
+                await Task.Delay(5000);
+                await Support.CheckReplies();
+                var reply = (await Support.Messages()).LastOrDefault(m => m.FromAdmin);
+                if (reply != null) { L("support: reply arrived: " + reply.Body); await Task.Delay(15000); return; }
+            }
+            L("support: no reply in 15 min");
+        });
+
         await Step("phone", async () =>   // plays the phone app on this PC: discovery, websocket, status, ring, file
         {
             var pin = Settings.Current.RemotePin; var notifs = Settings.Current.PhoneNotifications;

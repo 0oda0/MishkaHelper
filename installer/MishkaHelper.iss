@@ -1,20 +1,22 @@
-; Inno Setup script. Built by CI (.github/workflows/release.yml) for both editions:
-;   FLAVOR=""     → Mishka Helper (with Jarvis), from ..\publish
-;   FLAVOR="Lite" → Mishka Helper Lite, from ..\publish-lite
-; Both share one AppId, so switching editions upgrades in place.
+; Inno Setup script. Built by CI (.github/workflows/release.yml) for each edition:
+;   FLAVOR=""          -> Mishka Helper (everything), from ..\publish
+;   FLAVOR="Jarvis"    -> with Jarvis, from ..\publish-jarvis
+;   FLAVOR="Secretary" -> with the secretary, from ..\publish-secretary
+;   FLAVOR="Lite"      -> tools only, from ..\publish-lite
+; All share one AppId, so switching editions upgrades in place.
 #define AppVersion GetEnv("APP_VERSION")
 #if AppVersion == ""
   #define AppVersion "0.0.0"
 #endif
 #define Flavor GetEnv("FLAVOR")
-#if Flavor == "Lite"
-  #define AppTitle "Mishka Helper Lite"
-  #define PubDir "..\publish-lite"
-  #define OutName "MishkaHelper-Lite-Setup-" + AppVersion
-#else
+#if Flavor == ""
   #define AppTitle "Mishka Helper"
   #define PubDir "..\publish"
   #define OutName "MishkaHelper-Setup-" + AppVersion
+#else
+  #define AppTitle "Mishka Helper " + Flavor
+  #define PubDir "..\publish-" + Lowercase(Flavor)
+  #define OutName "MishkaHelper-" + Flavor + "-Setup-" + AppVersion
 #endif
 
 [Setup]

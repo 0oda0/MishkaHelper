@@ -15,12 +15,26 @@ public partial class MainWindow : Window
         Height = Math.Min(840, SystemParameters.WorkArea.Height - 24);   // tall enough for the whole menu, never taller than the screen
         // Maximized WindowChrome windows overhang the screen by the resize border.
         StateChanged += (_, _) => Root.Margin = WindowState == WindowState.Maximized ? new Thickness(7) : new Thickness(0);
-        if (Acer.Available) NavNitro.Visibility = Visibility.Visible;
-#if LITE
-        NavJarvis.Visibility = Visibility.Collapsed;
-        NavScenarios.Visibility = Visibility.Collapsed;
-#endif
+        ApplySections();
         NavHome.IsChecked = true;
+        Loaded += (_, _) => { if (!Settings.Current.SetupDone && !App.DevRun) SetupWizard.Open(); };
+    }
+
+    /// <summary>What this edition has, minus what the user hid in the setup. Home and Settings always stay.</summary>
+    public void ApplySections()
+    {
+        foreach (var rb in NavPanel.Children.OfType<RadioButton>())
+        {
+            var name = rb.Name[3..];
+            bool has = name switch
+            {
+                "Jarvis" or "Scenarios" => Edition.HasJarvis,
+                "Secretary" => Edition.HasSecretary,
+                "Nitro" => Acer.Available,
+                _ => true,
+            };
+            rb.Visibility = has && !Settings.Current.HiddenSections.Contains(name) ? Visibility.Visible : Visibility.Collapsed;
+        }
     }
 
     public void Navigate(string page)
@@ -41,7 +55,7 @@ public partial class MainWindow : Window
             "Boost" => new BoostPage(),
             "Security" => new SecurityPage(),
             "Tools" => new ToolsPage(),
-#if !LITE
+#if JARVIS
             "Jarvis" => new JarvisPage(),
             "Scenarios" => new ScenariosPage(),
 #endif
@@ -49,6 +63,10 @@ public partial class MainWindow : Window
             "Hotkeys" => new HotkeysPage(),
             "Radial" => new RadialPage(),
             "Phone" => new PhonePage(),
+            "Support" => new SupportPage(),
+#if SECRETARY
+            "Secretary" => new SecretaryPage(),
+#endif
             "Widgets" => new WidgetsPage(),
             "Settings" => new SettingsPage(),
             _ => new TextBlock { Text = "?" },

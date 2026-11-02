@@ -335,7 +335,7 @@ public static class Remote
             case "mediaDel":
                 if (int.TryParse(arg, out var di) && di >= 0 && di < Settings.Current.MediaLinks.Count) { Settings.Current.MediaLinks.RemoveAt(di); Settings.Save(); }
                 return Media();
-#if !LITE
+#if JARVIS
             case "ytSubs": return await YouTubeSubs(arg == "refresh");
             case "ytLogin":
                 WebReader.OpenWindow("https://accounts.google.com/ServiceLogin?service=youtube&continue=https%3A%2F%2Fwww.youtube.com%2Ffeed%2Fchannels", "Вход в YouTube");
@@ -357,7 +357,7 @@ public static class Remote
             case "sleep": _ = Task.Delay(500).ContinueWith(_ => System.Windows.Forms.Application.SetSuspendState(System.Windows.Forms.PowerState.Suspend, false, false)); break;
             case "shutdown": Process.Start(new ProcessStartInfo(Shell.Sys("shutdown"), "/s /t 30") { CreateNoWindow = true, UseShellExecute = false }); return new { say = "Выключение через 30 с" };
             case "cancelShutdown": Process.Start(new ProcessStartInfo(Shell.Sys("shutdown"), "/a") { CreateNoWindow = true, UseShellExecute = false }); return new { say = "Выключение отменено" };
-#if !LITE
+#if JARVIS
             case "say":
                 var tcs = new TaskCompletionSource<string>();
                 void OnMsg(string t, bool user) { if (!user) tcs.TrySetResult(t); }
@@ -388,7 +388,7 @@ public static class Remote
 
     static object Media() => new { media = Settings.Current.MediaLinks.Select(m => new { name = m.Name, channel = m.Channel }) };
 
-#if !LITE
+#if JARVIS
     static (DateTime At, object Result)? _subs;
 
     /// <summary>

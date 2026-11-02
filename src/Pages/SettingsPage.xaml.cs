@@ -48,11 +48,13 @@ public partial class SettingsPage : UserControl
         Thresholds.Children.Add(Threshold("Наушники/мышь ниже", a.HeadsetBattery, 5, 50, "%", v => a.HeadsetBattery = v));
 
         About.Text = $"{Edition.Display} {Edition.Version} · {(Updater.IsInstalled ? "установлена" : "портативная")}\n" +
-                     (Edition.HasJarvis ? "Полная редакция с Джарвисом." : "Редакция Lite — без Джарвиса (голоса и ИИ). Полная — на GitHub.") +
+                     (Edition.Name switch { "Full" => "Полная редакция: инструменты, Джарвис и секретарша.", "Jarvis" => "Редакция с Джарвисом, без секретарши. Другие — на GitHub.", "Secretary" => "Редакция с секретаршей, без Джарвиса. Другие — на GitHub.", _ => "Редакция Lite — только инструменты. Другие — на GitHub." }) +
                      $"\nДанные: {Settings.Dir}";
         if (Updater.Available is { } u) ShowUpdate(u);
         Loaded += async (_, _) => { Autostart.IsChecked = await Task.Run(() => Core.Autostart.Enabled); _loading = false; };
     }
+
+    void Setup_Click(object s, RoutedEventArgs e) => SetupWizard.Open();
 
     void ShowUpdate(UpdateInfo u)
     {

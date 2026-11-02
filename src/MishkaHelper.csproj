@@ -12,7 +12,7 @@
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
     <AssemblyName>MishkaHelper</AssemblyName>
     <RootNamespace>MishkaHelper</RootNamespace>
-    <Version>1.1.0</Version>
+    <Version>1.2.0</Version>
     <Product>Mishka Helper</Product>
     <Company>Mishka</Company>
     <!-- WinForms is only used for NotifyIcon; avoid ambiguous usings -->
@@ -24,10 +24,15 @@
     <Using Remove="System.Drawing" />
   </ItemGroup>
 
-  <!-- Two editions from one codebase: full (default, with Jarvis) and Lite (dotnet publish -p:Flavor=Lite). -->
-  <PropertyGroup Condition="'$(Flavor)' == 'Lite'">
-    <DefineConstants>$(DefineConstants);LITE</DefineConstants>
-    <Product>Mishka Helper Lite</Product>
+  <!-- Four editions from one codebase (dotnet publish -p:Flavor=...): Full (default, everything), Jarvis, Secretary, Lite (tools only). -->
+  <PropertyGroup>
+    <HasJarvis Condition="'$(Flavor)' != 'Lite' And '$(Flavor)' != 'Secretary'">true</HasJarvis>
+    <HasSecretary Condition="'$(Flavor)' != 'Lite' And '$(Flavor)' != 'Jarvis'">true</HasSecretary>
+    <DefineConstants Condition="'$(HasJarvis)' == 'true'">$(DefineConstants);JARVIS</DefineConstants>
+    <DefineConstants Condition="'$(HasSecretary)' == 'true'">$(DefineConstants);SECRETARY</DefineConstants>
+    <Product Condition="'$(Flavor)' == 'Lite'">Mishka Helper Lite</Product>
+    <Product Condition="'$(Flavor)' == 'Secretary'">Mishka Helper Secretary</Product>
+    <Product Condition="'$(Flavor)' == 'Jarvis'">Mishka Helper Jarvis</Product>
   </PropertyGroup>
 
   <ItemGroup>
@@ -35,11 +40,11 @@
     <PackageReference Include="NAudio.WinMM" Version="2.2.1" />
     <PackageReference Include="QRCoder" Version="1.8.1" />
     <PackageReference Include="System.Management" Version="9.0.0" />
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="9.0.0" />
   </ItemGroup>
 
-  <ItemGroup Condition="'$(Flavor)' != 'Lite'">
-    <!-- Jarvis: offline speech (Vosk / Whisper, Vulkan GPU). The LLM runs in llama.cpp's own server, downloaded on demand. -->
-    <PackageReference Include="Vosk" Version="0.3.38" />
+  <ItemGroup Condition="'$(HasJarvis)' == 'true'">
+    <!-- Jarvis: offline speech (Whisper, Vulkan GPU). The LLM runs in llama.cpp's own server, downloaded on demand. -->
     <PackageReference Include="Whisper.net" Version="1.9.1" />
     <PackageReference Include="Whisper.net.Runtime" Version="1.9.1" />
     <PackageReference Include="Whisper.net.Runtime.Vulkan" Version="1.9.1" />
@@ -47,10 +52,31 @@
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4191.47" />
   </ItemGroup>
 
-  <ItemGroup Condition="'$(Flavor)' == 'Lite'">
+  <ItemGroup Condition="'$(HasJarvis)' == 'true' Or '$(HasSecretary)' == 'true'">
+    <!-- Offline speech for Jarvis' light mode and the secretary's voice notes; the model is downloaded on demand. -->
+    <PackageReference Include="Vosk" Version="0.3.38" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(HasSecretary)' == 'true'">
+    <!-- IMAP with TLS and MIME decoding: not something to hand-write for an app that holds a mail password. -->
+    <PackageReference Include="MailKit" Version="4.8.0" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(HasJarvis)' != 'true'">
     <Compile Remove="Jarvis\**" />
     <Compile Remove="UI\JarvisUi.cs;UI\SelfTest.cs;Pages\JarvisPage.xaml.cs;Pages\ScenariosPage.xaml.cs" />
     <Page Remove="Pages\JarvisPage.xaml;Pages\ScenariosPage.xaml" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(HasJarvis)' != 'true' And '$(HasSecretary)' == 'true'">
+    <!-- What the secretary shares with Jarvis: dates, notes, calendar, model downloads. -->
+    <Compile Include="Jarvis\When.cs;Jarvis\Notes.cs;Jarvis\Calendar.cs;Jarvis\Models.cs" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(HasSecretary)' != 'true'">
+    <Compile Remove="Secretary\**" />
+    <Compile Remove="Pages\SecretaryPage.xaml.cs" />
+    <Page Remove="Pages\SecretaryPage.xaml" />
   </ItemGroup>
 
   <!-- "Что можно сделать": the features landing page ships next to the exe. -->

@@ -240,9 +240,7 @@ public static class Ears
         protected override void Dispose(bool disposing) { }
     }
 
-    public static string Clean(string s) =>
-        new string(s.ToLowerInvariant().Replace('ё', 'е').Select(c => char.IsLetterOrDigit(c) || c == ' ' || c == '%' ? c : ' ').ToArray())
-            .Split(' ', StringSplitOptions.RemoveEmptyEntries).Aggregate("", (a, w) => a.Length == 0 ? w : a + " " + w);
+    public static string Clean(string s) => RuText.Clean(s);
 
     /// <summary>Index of the word that sounds like the wake word (fuzzy: "джервис", "jarvis"…).</summary>
     public static int WakeIndex(string text)

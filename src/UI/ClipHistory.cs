@@ -19,6 +19,8 @@ public static class ClipHistory
 
     static readonly string PinFile = Path.Combine(Settings.Dir, "clipboard-pinned.json");
     public static readonly List<Item> Items = new();
+    /// <summary>New text copied by the user (private copies from password managers never fire this).</summary>
+    public static event Action<string>? Copied;
     static HwndSource? _src;
     static bool _ignoreNext;
     static Window? _w;
@@ -61,6 +63,7 @@ public static class ClipHistory
             Items.Insert(0, new Item { Text = t, Pinned = old?.Pinned == true, When = DateTime.Now });
             var extra = Items.Where(i => !i.Pinned).Skip(100).ToList();
             foreach (var x in extra) Items.Remove(x);
+            Copied?.Invoke(t);
         }
         catch { }   // clipboard busy in another app — skip this copy
     }

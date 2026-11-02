@@ -40,13 +40,17 @@ public class ParsingTests
     }
 
     [Theory]
-    [InlineData("MishkaHelper-Setup-0.5.0.exe", "Setup-", ".exe", true, true)]
-    [InlineData("MishkaHelper-Lite-Setup-0.5.0.exe", "Setup-", ".exe", true, false)]
-    [InlineData("MishkaHelper-Lite-Setup-0.5.0.exe", "Setup-", ".exe", false, true)]
-    [InlineData("MishkaHelper-Setup-0.5.0.exe", "Setup-", ".exe", false, false)]
-    [InlineData("MishkaHelper-Portable-0.5.0.zip", "Portable-", ".zip", true, true)]
-    [InlineData("MishkaHelper-Portable-0.5.0.zip", "Setup-", ".exe", true, false)]
-    public void UpdaterAsset(string name, string kind, string ext, bool full, bool match) => Assert.Equal(match, Updater.AssetMatches(name, kind, ext, full));
+    [InlineData("MishkaHelper-Setup-0.5.0.exe", "Setup-", ".exe", "MishkaHelper-", true)]
+    [InlineData("MishkaHelper-Lite-Setup-0.5.0.exe", "Setup-", ".exe", "MishkaHelper-", false)]
+    [InlineData("MishkaHelper-Secretary-Setup-1.2.0.exe", "Setup-", ".exe", "MishkaHelper-", false)]
+    [InlineData("MishkaHelper-Jarvis-Portable-1.2.0.zip", "Portable-", ".zip", "MishkaHelper-", false)]
+    [InlineData("MishkaHelper-Lite-Setup-0.5.0.exe", "Setup-", ".exe", "MishkaHelper-Lite-", true)]
+    [InlineData("MishkaHelper-Setup-0.5.0.exe", "Setup-", ".exe", "MishkaHelper-Lite-", false)]
+    [InlineData("MishkaHelper-Secretary-Setup-1.2.0.exe", "Setup-", ".exe", "MishkaHelper-Secretary-", true)]
+    [InlineData("MishkaHelper-Jarvis-Setup-1.2.0.exe", "Setup-", ".exe", "MishkaHelper-Secretary-", false)]
+    [InlineData("MishkaHelper-Portable-0.5.0.zip", "Portable-", ".zip", "MishkaHelper-", true)]
+    [InlineData("MishkaHelper-Portable-0.5.0.zip", "Setup-", ".exe", "MishkaHelper-", false)]
+    public void UpdaterAsset(string name, string kind, string ext, string prefix, bool match) => Assert.Equal(match, Updater.AssetMatches(name, kind, ext, prefix));
 
     [Theory]
     [InlineData("192.168.1.5", true)]
@@ -66,6 +70,75 @@ public class ParsingTests
         Assert.Equal(2, subs.Count);
         Assert.Equal(("Всё о Linux", "https://www.youtube.com/@vsyo.o.linux"), subs[0]);
         Assert.Equal(("Муд Мишка", "https://www.youtube.com/@mud_mishka"), subs[1]);
+    }
+}
+
+public class SecretaryTests
+{
+    static readonly DateTime Now = new(2026, 11, 2, 12, 0, 0);
+
+    [Theory]
+    [InlineData("Сдать отчёт до пятницы, срок завтра в 18:00", true)]
+    [InlineData("Встреча с куратором завтра в 15:00", true)]
+    [InlineData("Оплатить квартиру 25.11", true)]
+    [InlineData("Завтра будет солнечно и тепло", false)]            // a date without business words is not an offer
+    [InlineData("Сдать отчёт как можно скорее", false)]             // no date
+    [InlineData("срок", false)]
+    public void Deadlines(string text, bool found) => Assert.Equal(found, Secretary.FindDeadline(text, Now) != null);
+
+    [Fact]
+    public void DeadlinePastIsIgnored() => Assert.Null(Secretary.FindDeadline("Экзамен был 01.11.2020", Now));
+
+    [Theory]
+    [InlineData("https://lms.example.ru/schedule?g=12", true)]
+    [InlineData("vk.com/video", true)]
+    [InlineData("example.org", true)]
+    [InlineData("как приготовить борщ", false)]
+    [InlineData("hello", false)]
+    public void BrowserAddress(string v, bool url) => Assert.Equal(url, SecCapture.LooksLikeUrl(v));
+
+    [Theory]
+    [InlineData("Расписание группы — Google Chrome", "chrome", "Расписание группы")]
+    [InlineData("Журнал - Яндекс Браузер", "browser", "Журнал")]
+    [InlineData("Документ1 - Word", "winword", "Документ1 - Word")]
+    [InlineData("", "chrome", "chrome")]
+    public void Titles(string title, string app, string want) => Assert.Equal(want, SecCapture.CleanTitle(title, app));
+
+    [Theory]
+    [InlineData("Расписание группы", true)]
+    [InlineData("Смешные коты", false)]
+    public void Daily(string s, bool yes) => Assert.Equal(yes, SecCapture.LooksDaily(s));
+
+    [Theory]
+    [InlineData("отчёт.PDF", "Документы")]
+    [InlineData("фото.jpg", "Картинки")]
+    [InlineData("setup.exe", "Установщики")]
+    [InlineData("фильм.mkv.crdownload", null)]   // still downloading: never touched
+    [InlineData("data.xyz", null)]
+    public void DownloadSort(string name, string? category) => Assert.Equal(category, SecDownloads.Sort(name)?.Category);
+
+    [Theory]
+    [InlineData("me@yandex.ru", "imap.yandex.ru")]
+    [InlineData("me@bk.ru", "imap.mail.ru")]
+    [InlineData("me@gmail.com", "imap.gmail.com")]
+    [InlineData("me@company.org", null)]
+    public void MailServer(string email, string? host) => Assert.Equal(host, SecMail.Provider(email)?.Host);
+
+    [Fact]
+    public void VoiceLevel()
+    {
+        Assert.Equal(0, SecVoice.Level(new byte[400], 400));
+        var loud = new byte[400];
+        for (int i = 0; i + 1 < 400; i += 2) BitConverter.TryWriteBytes(loud.AsSpan(i), (short)(i % 4 == 0 ? 8000 : -8000));
+        Assert.True(SecVoice.Level(loud, 400) > 500);
+    }
+
+    [Fact]
+    public void SupportErrorsAreReadable()
+    {
+        Assert.Contains("Подожди", Support.Friendly(400, "{\"message\":\"rate_limit\"}"));
+        Assert.Contains("длинное", Support.Friendly(400, "{\"message\":\"too_long\"}"));
+        Assert.Contains("500", Support.Friendly(500, "boom"));
     }
 }
 

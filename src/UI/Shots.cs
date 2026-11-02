@@ -14,14 +14,14 @@ public static class Shots
         // Dev copies aren't elevated, so the LAN remote can't bind; localhost is enough to show its QR on the Tools page.
         if (!Remote.Running) try { Remote.StartLocal(); } catch { }
         await Task.Delay(1500);
-        foreach (var p in new[] { "Jarvis", "Scenarios", "Home", "Controls", "System", "Devices", "Phone", "Nitro", "Boost", "Security", "Tools", "Profiles", "Hotkeys", "Radial", "Widgets", "Settings" })
+        foreach (var p in new[] { "Jarvis", "Scenarios", "Home", "Controls", "System", "Devices", "Phone", "Nitro", "Boost", "Security", "Tools", "Profiles", "Hotkeys", "Radial", "Widgets", "Settings", "Support", "Secretary" })
         {
-            if (p is "Jarvis" or "Scenarios" && !Edition.HasJarvis) continue;
+            if (p is "Jarvis" or "Scenarios" && !Edition.HasJarvis || p == "Secretary" && !Edition.HasSecretary) continue;
             main.Navigate(p);
             await Task.Delay(p is "Devices" or "Security" or "System" ? 6000 : 2500);
             Save(main, Path.Combine(dir, p + ".png"));
         }
-#if !LITE
+#if JARVIS
         JarvisChat.Open();
         foreach (var q in new[] { "привет", "что ты умеешь", "сколько времени" })
             await Jarvis.Handle(q);
@@ -29,6 +29,11 @@ public static class Shots
         foreach (Window w in Application.Current.Windows)
             if (w.Title == "Джарвис") { Save(w, Path.Combine(dir, "JarvisChat.png")); w.Close(); }
 #endif
+
+        SetupWizard.Open();
+        await Task.Delay(1000);
+        foreach (Window w in Application.Current.Windows)
+            if (w.Title == "Настройка Mishka Helper") { Save(w, Path.Combine(dir, "Setup.png")); w.Close(); }
 
         QuickPanel.Toggle();
         await Task.Delay(1500);

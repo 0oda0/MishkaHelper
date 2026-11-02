@@ -21,7 +21,7 @@ public static class When
     static int? Num(string s) => s switch
     {
         "пару" or "пара" => 2, "полчаса" => 30, "минуту" or "час" or "день" or "неделю" => 1,
-        _ => Intents.Number(s),
+        _ => RuText.Number(s),
     };
 
     /// <summary>Lower case, ё→е, punctuation → spaces, but keeps "." and ":" that dates and clock times need.</summary>

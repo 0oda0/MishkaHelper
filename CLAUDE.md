@@ -7,8 +7,8 @@ UI language: **Russian**. Repo: `0oda0/MishkaHelper` (public). Owner talks Russi
 
 | What | Command |
 |---|---|
-| Build (full edition) | `dotnet build src` |
-| Build Lite (no Jarvis) | `dotnet build src -p:Flavor=Lite` |
+| Build Full (everything) | `dotnet build src` |
+| Other editions | `dotnet build src -p:Flavor=Jarvis` / `Secretary` / `Lite` (tools only). Defines: `JARVIS`, `SECRETARY`. Asset names `MishkaHelper-Setup-` and `MishkaHelper-Lite-` must stay: installed copies look for them when updating |
 | Release folder | `dotnet publish src/MishkaHelper.csproj -c Release -r win-x64 --self-contained [-p:Flavor=Lite] -o publish` |
 | Dev copy without UAC | add `-p:ApplicationManifest=<repo>\tools\app.dev.manifest` (asInvoker) and output to `test-out\dev\bin` |
 | Screenshots of every page | `MishkaHelper.exe --shots <dir>` (dev copy; runs beside the installed copy) |
@@ -17,6 +17,7 @@ UI language: **Russian**. Repo: `0oda0/MishkaHelper` (public). Owner talks Russi
 | Install on this PC | elevated: `tools\install-local.ps1 -Source publish [-SelfTest report] [-Only steps]` |
 | Phone app (APK) | `cd mobile; $env:JAVA_HOME='C:\Users\0airo\android-tools\jdk-21.0.12.1+1'; .\gradlew.bat assembleRelease '-PbuildTools=36.0.0' '-PappVersion=X.Y.Z'` + proxy args `'-Dhttps.proxyHost=127.0.0.1' '-Dhttps.proxyPort=10809'` (owner's VPN proxy; quote -D args in PowerShell). Signed when `MISHKA_KEYSTORE`/`MISHKA_KEYSTORE_PASSWORD` env set (key: C:\Users\0airo\android-tools\mishka-release.keystore, never commit) |
 | Phone test | own emulator `mishka_test` (headless, -no-audio); never touch the owner's AVDs (HSKLearn, 9T). Real phone: `adb devices` |
+| Release notes | `RELEASE_NOTES.md` = **only what this version adds** (owner's rule); move the old text to `docs/CHANGELOG.md` first |
 | Release | bump `<Version>` in csproj → commit → `git tag -a vX.Y.Z` → push tag → **`gh workflow run release.yml --ref vX.Y.Z`** (tag-push trigger fires 20–60 min late; cancel the late duplicate run if it appears) |
 
 The app is `requireAdministrator`; autostart = scheduled task `MishkaHelper` (HighestAvailable, no UAC at logon).
@@ -57,6 +58,7 @@ src/
     Hotkeys.cs         RegisterHotKey, Pretty(), scenario hotkeys
     Profiles.cs        apply profiles, auto by AC/app rules (+process priority)
     Alerts.cs          threshold toasts
+    Support.cs         support chat client (Supabase REST, anonymous sign-in per install, session encrypted with Core/Secrets.cs); Url/AnonKey constants empty = page offers GitHub
     Phone.cs           Android app link: UDP discovery 8771 ("MISHKA?"), WebSocket /api/ws (status, notif, clip ↔ ring, clip, file offers /api/phone/file/{id})
     Focus.cs           game mode: DND + mute every app except the foreground game and voice chats (Settings.FocusKeepSound), phone toasts held; auto on full-screen + GPU load, auto off when the game exits
     PowerTimer.cs      shutdown in N min / now / when downloads finish (3 min below 150 KB/s net + 5 MB/s disk); Windows' own shutdown timer
@@ -87,6 +89,11 @@ src/
     When.cs            Russian time phrases → DateTime + rest of sentence (через N минут / в воскресенье / завтра в 6 вечера / 1 ноября / 25.12); unit-tested
     Calendar.cs        ICS links → events per day (DAILY/WEEKLY RRULE, EXDATE, COUNT/UNTIL); intent + Brain tool
     Scenarios.cs       scenario engine: steps + triggers (voice/hotkey/time/events)
+  Secretary/           (Full + Secretary editions; shares When/Notes/Calendar/Models from Jarvis/ via csproj)
+    Secretary.cs       foreground tracking, per-app hints, morning/evening summaries, meetings, breaks, deadline offers, search; SecretarySettings = one switch per feature
+    SecCapture.cs      hotkey windows: app note, quick note, voice (SecVoice: Vosk + NAudio), "remember" (browser address via UI Automation)
+    SecWork.cs         SecWorkspace (save/restore open windows), SecDownloads (proposes, moves only on a button), SecMail (MailKit, read-only IMAP)
+    SecStore.cs        secretary.json next to the settings
   Pages/               one UserControl per section (XAML shell + code-built cards)
     Home, Jarvis, Scenarios, Controls, System, Devices, Phone, Nitro, Boost (+BoostPage.Full = cleanup wizard), Security, Tools, Profiles, Hotkeys, Radial (wheel editor), Widgets, Settings
   UI/
@@ -102,6 +109,8 @@ src/
     JarvisUi.cs        orb + chat window + JarvisInput (Ctrl+Alt+Enter typed request, silent answer)
     Shots.cs / SelfTest.cs  dev tooling
 mobile/                Android app «Mishka» (Kotlin + Compose, minSdk 26): Link (discovery, HTTP), LinkService (foreground WS, ring, files), NotifListener, ShareActivity, Cleaner (big/APK/dupes/old downloads), MainActivity tabs ПК/Пульт(WebView of the remote page)/Чистка. CI builds Mishka-Phone.apk only if repo secrets MISHKA_KEYSTORE_B64 + MISHKA_KEYSTORE_PASSWORD exist
+supabase/schema.sql    support chat tables and row-level security: the app holds only the public anon key, so these rules are the whole protection
+docs/admin/            support admin panel (static, GitHub Pages, signs in to Supabase; user text only via textContent)
 docs/remote/           phone remote page: served by Remote.cs (embedded) over Wi-Fi, and by GitHub Pages (HTTPS → Web Bluetooth)
 docs/features/         landing page (index.html + img/*.png) shipped as <app>\docs
 installer/MishkaHelper.iss   Inno Setup, FLAVOR env = ""/Lite, one AppId for both; uninstall asks to delete AppData/models

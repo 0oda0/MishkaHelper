@@ -26,13 +26,14 @@ public static class CommandPalette
         ["page:Tools"] = "Пульт с телефона (QR-код)",
         ["page:Boost"] = "Полная очистка компьютера",
         ["page:Radial"] = "Настроить колесо под себя",
+        ["setup"] = "Первоначальная настройка: разделы и горячие клавиши",
     };
 
     static readonly (string Page, string Name)[] Pages =
     {
         ("Home", "Главная"), ("Jarvis", "Джарвис"), ("Scenarios", "Сценарии"), ("Controls", "Управление"), ("System", "Система"), ("Devices", "Устройства"), ("Nitro", "Nitro"),
         ("Boost", "Ускорение"), ("Security", "Защита"), ("Tools", "Инструменты"), ("Profiles", "Профили"), ("Hotkeys", "Горячие клавиши"), ("Radial", "Колесо"), ("Phone", "Телефон"),
-        ("Widgets", "Виджеты"), ("Settings", "Настройки"),
+        ("Widgets", "Виджеты"), ("Settings", "Настройки"), ("Secretary", "Секретарша"), ("Support", "Поддержка"),
     };
 
     /// <summary>Every runnable command (for the wheel editor): icon, name, action key.</summary>
@@ -50,11 +51,11 @@ public static class CommandPalette
         var hk = Settings.Current.Hotkeys;
         var l = Defaults.HotkeyNames.Where(kv => Defaults.Available(kv.Key)).Select(kv => new Cmd("", kv.Value, kv.Key, Hotkeys.Pretty(hk.GetValueOrDefault(kv.Key, "")))).ToList();
         l.AddRange(Extra.Select(kv => new Cmd("", kv.Value, kv.Key, "")));
-        l.AddRange(Pages.Where(p => Edition.HasJarvis || p.Page is not ("Jarvis" or "Scenarios"))
+        l.AddRange(Pages.Where(p => (Edition.HasJarvis || p.Page is not ("Jarvis" or "Scenarios")) && (Edition.HasSecretary || p.Page != "Secretary"))
             .Select(p => new Cmd("", "Открыть: " + p.Name, "page:" + p.Page, "")));
         l.AddRange(Settings.Current.Profiles.Select(p => new Cmd(p.Icon, "Профиль: " + p.Name, "profile:" + p.Name, "")));
         l.AddRange(Settings.Current.Launchers.Select((x, i) => new Cmd("", "Запустить: " + x.Name, "launch:" + i, "")));
-#if !LITE
+#if JARVIS
         l.AddRange(Settings.Current.Scenarios.Select(s => new Cmd("\uE8B1", "Сценарий: " + s.Name, "scenario:" + s.Id, "")));
 #endif
         l.AddRange(Widgets.Names.Select(kv => new Cmd("", "Виджет: " + kv.Value, "widget:" + kv.Key, "")));

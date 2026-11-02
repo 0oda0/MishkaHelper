@@ -1,0 +1,265 @@
+using System.Diagnostics;
+using System.IO;
+using MailKit;
+using MailKit.Net.Imap;
+using MailKit.Search;
+
+namespace MishkaHelper.Core;
+
+/// <summary>"Где я остановился": the open programs, folders and browser pages, saved and brought back with one click.</summary>
+public static class SecWorkspace
+{
+    static readonly HashSet<string> Skip = new(StringComparer.OrdinalIgnoreCase)
+        { "MishkaHelper", "explorer", "ApplicationFrameHost", "SystemSettings", "TextInputHost", "ShellExperienceHost", "SearchHost", "StartMenuExperienceHost", "LockApp" };
+
+    public static Task<List<SavedWindow>> Snapshot() => Task.Run(() =>
+    {
+        var res = new List<SavedWindow>();
+        foreach (var p in Process.GetProcesses())
+        {
+            using (p)
+            {
+                try
+                {
+                    if (p.MainWindowHandle == IntPtr.Zero || p.MainWindowTitle.Length == 0 || Skip.Contains(p.ProcessName)) continue;
+                    var url = SecCapture.BrowserUrl(p.MainWindowHandle, p.ProcessName);
+                    if (url != null) { res.Add(new SavedWindow { Kind = "url", Target = url }); continue; }
+                    var path = p.MainModule?.FileName;
+                    if (path != null && res.All(x => x.Target != path)) res.Add(new SavedWindow { Kind = "app", Target = path });
+                }
+                catch { }   // protected system process
+            }
+        }
+        res.AddRange(ExplorerFolders().Select(f => new SavedWindow { Kind = "folder", Target = f }));
+        return res;
+    });
+
+    static List<string> ExplorerFolders()
+    {
+        var l = new List<string>();
+        var t = new Thread(() =>
+        {
+            try
+            {
+                dynamic shell = Activator.CreateInstance(Type.GetTypeFromProgID("Shell.Application")!)!;
+                foreach (var w in shell.Windows())
+                {
+                    string url = w.LocationURL;
+                    if (url.StartsWith("file:///")) l.Add(new Uri(url).LocalPath);
+                }
+            }
+            catch (Exception e) { Log.Error(e); }
+        });
+        t.SetApartmentState(ApartmentState.STA);
+        t.Start();
+        t.Join(5000);
+        return l;
+    }
+
+    public static async Task AutoSave()
+    {
+        var snap = await Snapshot();
+        if (snap.Count == 0) return;
+        SecStore.Cur.LastWorkspace = snap; SecStore.Cur.LastWorkspaceAt = DateTime.Now;
+        SecStore.Save();
+    }
+
+    public static async Task SaveNamed(string name)
+    {
+        SecStore.Cur.Workspaces[name] = await Snapshot();
+        SecStore.Save();
+        Secretary.Apply();
+    }
+
+    /// <summary>Everything opens unelevated through Explorer; programs already running are left alone.</summary>
+    public static void Restore(List<SavedWindow> items)
+    {
+        var running = Process.GetProcesses().Select(p => { using (p) { try { return p.MainModule?.FileName; } catch { return null; } } }).Where(x => x != null).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        int opened = 0;
+        foreach (var i in items)
+        {
+            try
+            {
+                if (i.Kind == "app" && (running.Contains(i.Target) || !File.Exists(i.Target))) continue;
+                if (i.Kind == "folder" && !Directory.Exists(i.Target)) continue;
+                if (i.Kind == "url" && !(Uri.TryCreate(i.Target, UriKind.Absolute, out var u) && u.Scheme is "http" or "https")) continue;
+                Shell.Open(i.Target);
+                opened++;
+            }
+            catch (Exception e) { Log.Error(e); }
+        }
+        Osd.Show("", $"Открыто: {opened}");
+    }
+}
+
+/// <summary>Sorting the Downloads folder: only proposes. A file moves only when the user presses the button.</summary>
+public static class SecDownloads
+{
+    public record Item(string Path, string Name, string Category, string Dest);
+
+    static readonly string Dir = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads");
+    static FileSystemWatcher? _fw;
+    static readonly System.Text.RegularExpressions.Regex Important = new(@"бил[её]т|ticket|boarding|посадочн|invoice|сч[её]т|квитанц|договор|contract|расписан|schedule", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+    internal static (string Category, string Folder)? Sort(string name)
+    {
+        switch (System.IO.Path.GetExtension(name).ToLowerInvariant())
+        {
+            case ".pdf" or ".doc" or ".docx" or ".xls" or ".xlsx" or ".ppt" or ".pptx" or ".txt" or ".rtf" or ".odt" or ".csv": return ("Документы", Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments));
+            case ".jpg" or ".jpeg" or ".png" or ".gif" or ".webp" or ".bmp" or ".heic" or ".svg": return ("Картинки", Environment.GetFolderPath(Environment.SpecialFolder.MyPictures));
+            case ".mp3" or ".flac" or ".wav" or ".m4a" or ".ogg": return ("Музыка", Environment.GetFolderPath(Environment.SpecialFolder.MyMusic));
+            case ".mp4" or ".mkv" or ".avi" or ".mov" or ".webm": return ("Видео", Environment.GetFolderPath(Environment.SpecialFolder.MyVideos));
+            case ".exe" or ".msi": return ("Установщики", System.IO.Path.Combine(Dir, "Установщики"));
+            case ".zip" or ".rar" or ".7z" or ".tar" or ".gz": return ("Архивы", System.IO.Path.Combine(Dir, "Архивы"));
+            default: return null;   // unfinished downloads and unknown types stay where they are
+        }
+    }
+
+    public static void Apply(bool on)
+    {
+        _fw?.Dispose(); _fw = null;
+        if (!on || !Directory.Exists(Dir)) return;
+        _fw = new FileSystemWatcher(Dir) { NotifyFilter = NotifyFilters.FileName, EnableRaisingEvents = true };
+        // Browsers create "x.pdf.crdownload" and rename it at the end, so Renamed is the moment a download finishes.
+        _fw.Renamed += (_, e) => Fresh(e.Name);
+        _fw.Created += (_, e) => Fresh(e.Name);
+    }
+
+    static void Fresh(string? name)
+    {
+        if (name == null || Sort(name) == null || !Important.IsMatch(name)) return;
+        System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
+            Secretary.Notify("", "Важный файл в «Загрузках»", name, () => Shell.Open(Shell.Sys("explorer"), $"/select,\"{System.IO.Path.Combine(Dir, name)}\"")));
+    }
+
+    public static List<Item> Pending()
+    {
+        if (!Directory.Exists(Dir)) return new();
+        var res = new List<Item>();
+        foreach (var f in new DirectoryInfo(Dir).EnumerateFiles().OrderByDescending(f => f.LastWriteTime).Take(300))
+        {
+            // Links are skipped: this process is elevated and must only ever move plain files of the user's.
+            if (f.Attributes.HasFlag(FileAttributes.ReparsePoint) || f.Attributes.HasFlag(FileAttributes.Hidden)) continue;
+            if (Sort(f.Name) is { } s) res.Add(new(f.FullName, f.Name, s.Category, s.Folder));
+        }
+        return res;
+    }
+
+    public static string Move(Item i)
+    {
+        var from = new FileInfo(i.Path);
+        if (!from.Exists || from.Attributes.HasFlag(FileAttributes.ReparsePoint)) throw new IOException("Файла уже нет");
+        Directory.CreateDirectory(i.Dest);
+        var to = System.IO.Path.Combine(i.Dest, i.Name);
+        for (int n = 2; File.Exists(to); n++) to = System.IO.Path.Combine(i.Dest, $"{System.IO.Path.GetFileNameWithoutExtension(i.Name)} ({n}){System.IO.Path.GetExtension(i.Name)}");
+        from.MoveTo(to);
+        return to;
+    }
+}
+
+/// <summary>Mail by IMAP, read only: the folder is opened read-only, so letters stay unread and nothing can be sent or deleted.</summary>
+public static class SecMail
+{
+    public record Letter(string From, string Subject, string Preview, DateTime When, string Web);
+
+    public static int Unread { get; private set; }
+    public static List<Letter> Recent { get; private set; } = new();
+    public static string LastError { get; private set; } = "";
+    public static event Action? Changed;
+    static readonly SemaphoreSlim Busy = new(1, 1);
+
+    /// <summary>IMAP server and web mail by address. Outlook.com is left out: Microsoft no longer accepts app passwords there.</summary>
+    internal static (string Host, string Web)? Provider(string email)
+    {
+        var d = email.Split('@').LastOrDefault()?.ToLowerInvariant() ?? "";
+        return d switch
+        {
+            "yandex.ru" or "ya.ru" or "yandex.com" or "narod.ru" => ("imap.yandex.ru", "https://mail.yandex.ru"),
+            "mail.ru" or "bk.ru" or "inbox.ru" or "list.ru" or "internet.ru" => ("imap.mail.ru", "https://e.mail.ru"),
+            "gmail.com" or "googlemail.com" => ("imap.gmail.com", "https://mail.google.com"),
+            "icloud.com" or "me.com" => ("imap.mail.me.com", "https://www.icloud.com/mail"),
+            "rambler.ru" => ("imap.rambler.ru", "https://mail.rambler.ru"),
+            _ => null,
+        };
+    }
+
+    public static void OpenWeb()
+    {
+        var web = SecStore.Cur.Mail.FirstOrDefault()?.Web;
+        if (!string.IsNullOrEmpty(web)) Shell.Open(web);
+    }
+
+    static async Task<ImapClient> Connect(MailAccount a, CancellationToken ct)
+    {
+        var c = new ImapClient { Timeout = 30_000 };
+        await c.ConnectAsync(a.Host, a.Port, MailKit.Security.SecureSocketOptions.SslOnConnect, ct);
+        await c.AuthenticateAsync(a.Email, Secrets.Unprotect(a.Secret), ct);
+        return c;
+    }
+
+    /// <summary>Checks the login and remembers where the inbox is now, so old letters don't arrive as a flood of "new" ones.</summary>
+    public static async Task Add(string email, string password, string? host = null)
+    {
+        var p = Provider(email);
+        var h = host ?? p?.Host ?? throw new InvalidOperationException("Не знаю сервер этой почты — укажи его (например imap.example.com)");
+        var a = new MailAccount { Email = email.Trim(), Host = h, Web = p?.Web ?? "", Secret = Secrets.Protect(password) };
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(40));
+        using var c = await Connect(a, cts.Token);
+        await c.Inbox.OpenAsync(FolderAccess.ReadOnly, cts.Token);
+        var all = await c.Inbox.SearchAsync(SearchQuery.All, cts.Token);
+        a.LastUid = all.Count > 0 ? all.Max(u => u.Id) : 0;
+        await c.DisconnectAsync(true, cts.Token);
+        SecStore.Cur.Mail.RemoveAll(x => x.Email.Equals(a.Email, StringComparison.OrdinalIgnoreCase));
+        SecStore.Cur.Mail.Add(a);
+        SecStore.Save();
+        _ = Check();
+    }
+
+    public static void Remove(MailAccount a) { SecStore.Cur.Mail.Remove(a); SecStore.Save(); Unread = 0; Recent = new(); Changed?.Invoke(); }
+
+    public static async Task Check()
+    {
+        if (!await Busy.WaitAsync(0)) return;
+        try
+        {
+            int unread = 0; var letters = new List<Letter>(); LastError = "";
+            bool changed = false;
+            foreach (var a in SecStore.Cur.Mail)
+            {
+                try
+                {
+                    using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+                    using var c = await Connect(a, cts.Token);
+                    await c.Inbox.OpenAsync(FolderAccess.ReadOnly, cts.Token);
+                    var ids = await c.Inbox.SearchAsync(SearchQuery.NotSeen, cts.Token);
+                    unread += ids.Count;
+                    var newest = ids.OrderByDescending(u => u.Id).Take(20).ToList();
+                    var infos = newest.Count == 0 ? new List<IMessageSummary>() : (await c.Inbox.FetchAsync(newest, MessageSummaryItems.Envelope | MessageSummaryItems.UniqueId | MessageSummaryItems.PreviewText, cts.Token)).ToList();
+                    foreach (var m in infos.OrderByDescending(m => m.UniqueId.Id))
+                    {
+                        var l = new Letter(m.Envelope.From.ToString(), m.Envelope.Subject ?? "(без темы)", m.PreviewText ?? "", m.Envelope.Date?.LocalDateTime ?? DateTime.Now, a.Web);
+                        letters.Add(l);
+                        if (m.UniqueId.Id > a.LastUid) Arrived(l);
+                    }
+                    if (newest.Count > 0 && newest[0].Id > a.LastUid) { a.LastUid = newest[0].Id; changed = true; }
+                    await c.DisconnectAsync(true, cts.Token);
+                }
+                catch (Exception e) { LastError = $"{a.Email}: {e.Message}"; Log.Info("mail: " + LastError); }   // never log the password; MailKit's message has none
+            }
+            Unread = unread; Recent = letters.OrderByDescending(l => l.When).ToList();
+            if (changed) SecStore.Save();
+            Changed?.Invoke();
+        }
+        finally { Busy.Release(); }
+    }
+
+    static void Arrived(Letter l)
+    {
+        var s = Settings.Current.Secretary;
+        var vip = s.MailImportant;
+        bool important = vip.Count == 0 || vip.Any(v => (l.From + " " + l.Subject).Contains(v, StringComparison.OrdinalIgnoreCase));
+        if (important)
+            Secretary.Notify("", l.From, l.Subject, () => { if (l.Web.Length > 0) Shell.Open(l.Web); });
+        if (s.Deadlines) Secretary.Offer((l.Subject + ". " + l.Preview).Trim(), "из письма");
+    }
+}

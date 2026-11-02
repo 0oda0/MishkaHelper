@@ -21,7 +21,10 @@ public static class Services
         Try(ScreenTime.Start);
         Try(Reminders.Start);
         Try(ClipHistory.Start);
-#if !LITE
+#if SECRETARY
+        Try(Secretary.Start);
+#endif
+#if JARVIS
         Try(Scenarios.Start);
         // "Не включать при запуске": off at launch whatever it was last time; the switch on the Jarvis page turns it on for this session.
         if (!Settings.Current.Jarvis.StartWithApp && Settings.Current.Jarvis.Enabled) { Settings.Current.Jarvis.Enabled = false; Settings.Save(); }
@@ -34,6 +37,7 @@ public static class Services
             _tick++;
             Try(Profiles.CheckApps);
             Try(Focus.Check);
+            if (_tick % 60 == 4) _ = Support.CheckReplies();             // every 5 min
             if (_tick % 12 == 3) Try(AutoTheme);                         // every minute
             if (_tick % 60 == 1) await Devices.CheckBatteries();          // every 5 min
             if (_tick % 360 == 2) await Scheduled();                     // every 30 min
@@ -71,7 +75,7 @@ public static class Services
     public static void Stop()
     {
         _jobs?.Stop();
-#if !LITE
+#if JARVIS
         Try(Jarvis.Stop);
         Try(Brain.Unload);
 #endif

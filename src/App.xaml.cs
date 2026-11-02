@@ -53,6 +53,7 @@ public partial class App : Application
         if (Settings.Current.StartWithWindows)
             Task.Run(() => { if (!Autostart.PointsHere) Autostart.Set(true); });
 
+        DevRun = e.Args.Contains("--shots") || e.Args.Contains("--selftest");
         if (Array.IndexOf(e.Args, "--shots") is int si and >= 0 && si + 1 < e.Args.Length)
         {
             ShowMain();
@@ -60,7 +61,7 @@ public partial class App : Application
             return;
         }
 
-#if !LITE
+#if JARVIS
         if (Array.IndexOf(e.Args, "--selftest") is int ti and >= 0 && ti + 1 < e.Args.Length)
         {
             ShowMain();
@@ -72,6 +73,9 @@ public partial class App : Application
         bool tray = e.Args.Contains("--tray") || (e.Args.Contains("--autostart") && Settings.Current.StartMinimized);
         if (!tray) ShowMain();
     }
+
+    /// <summary>Screenshots and self-tests: no first-run setup in the way.</summary>
+    public static bool DevRun { get; private set; }
 
     public void ShowMain()
     {

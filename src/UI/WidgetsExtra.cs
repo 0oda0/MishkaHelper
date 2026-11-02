@@ -525,7 +525,7 @@ public static partial class Widgets
         var root = Header("\uE787", "Ближайшие дела", list);
         var add = new Button { Content = "+ Добавить", Style = (Style)Application.Current.Resources["GhostButton"], HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 6, 0, 0),
             ToolTip = "Напиши как есть: «в пятницу сдать отчёт», «завтра в 18:00 тренировка»" };
-#if !LITE
+#if JARVIS
         add.Click += (_, _) => JarvisInput.Toggle();
 #else
         add.Visibility = Visibility.Collapsed;
@@ -535,7 +535,7 @@ public static partial class Widgets
         async void Load()
         {
             var items = Reminders.Upcoming(7).Select(r => (At: Reminders.RingAt(r), Time: r.HasTime, Text: r.Text, R: (Reminder?)r)).ToList();
-#if !LITE
+#if JARVIS
             if (Core.Calendar.Configured)
                 for (int d = 0; d < 7; d++)
                     try { foreach (var e in await Core.Calendar.On(DateTime.Today.AddDays(d))) if (e.AllDay || e.Start >= DateTime.Now) items.Add((e.Start, !e.AllDay, e.Title + (e.Place.Length > 0 ? $" · {e.Place}" : ""), null)); }

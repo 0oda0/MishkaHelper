@@ -28,6 +28,10 @@ public static class Defaults
         ["jarvisToggle"] = "Джарвис: включить / выключить",
         ["jarvisOrb"] = "Джарвис: показать / скрыть шар",
         ["jarvisVoice"] = "Джарвис: голос вкл / выкл",
+        ["secNote"] = "Секретарша: заметка к этой программе или сайту",
+        ["secQuick"] = "Секретарша: быстрая заметка текстом",
+        ["secVoice"] = "Секретарша: заметка голосом (без Джарвиса)",
+        ["secRemember"] = "Секретарша: запомнить эту страницу",
         ["palette"] = "Палитра команд (поиск по всем функциям)",
         ["clipboard"] = "История буфера обмена",
         ["topmost"] = "Активное окно поверх всех",
@@ -44,8 +48,9 @@ public static class Defaults
         ["explorer"] = "Перезапустить Проводник",
     };
 
-    /// <summary>Jarvis actions don't exist in the Lite edition.</summary>
-    public static bool Available(string action) => Edition.HasJarvis || !action.StartsWith("jarvis");
+    /// <summary>Jarvis and secretary actions exist only in the editions that have them.</summary>
+    public static bool Available(string action) =>
+        (Edition.HasJarvis || !action.StartsWith("jarvis")) && (Edition.HasSecretary || !action.StartsWith("sec"));
 
     public static void Fill(AppSettings s)
     {
@@ -71,6 +76,7 @@ public static class Defaults
             ["jarvis"] = "Ctrl+Alt+J",
             ["jarvisChat"] = "Ctrl+Alt+I",
             ["jarvisType"] = "Ctrl+Alt+Enter",
+            ["secNote"] = "Ctrl+Alt+E", ["secQuick"] = "Ctrl+Alt+L", ["secVoice"] = "Ctrl+Alt+U", ["secRemember"] = "Ctrl+Alt+S",
             ["clipboard"] = "Ctrl+Alt+V",
             ["topmost"] = "Ctrl+Alt+T",
             ["opacity"] = "Ctrl+Alt+Y",

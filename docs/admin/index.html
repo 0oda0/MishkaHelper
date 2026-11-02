@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src https://*.supabase.co">
+<title>Mishka Поддержка</title>
+<style>
+:root{--bg:#0a0a12;--card:#141422;--ctl:#1e1e31;--a:#a259ff;--t:#eeeef6;--m:#8c8ca6;--line:#24243a;--warn:#ffc53d}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--t);font:14px system-ui,sans-serif;height:100vh;display:flex;flex-direction:column}
+header{padding:10px 16px;border-bottom:1px solid var(--line);display:flex;gap:12px;align-items:center}
+h1{font-size:16px;margin:0;flex:1}
+input,textarea,button{font:inherit;color:var(--t);background:var(--ctl);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+button{cursor:pointer}button.p{background:var(--a);border-color:var(--a);color:#fff}
+#login{margin:12vh auto;width:min(340px,calc(100% - 32px));display:flex;flex-direction:column;gap:10px}
+#main{flex:1;display:flex;min-height:0}
+#list{width:320px;border-right:1px solid var(--line);overflow:auto;flex:none}
+#filter{padding:8px;display:flex;gap:6px}#filter input{flex:1;min-width:0}
+.t{padding:10px 12px;border-bottom:1px solid var(--line);cursor:pointer}.t:hover,.t.on{background:var(--card)}
+.t b{display:flex;justify-content:space-between;font-weight:600}.m{color:var(--m);font-size:12px}
+.badge{background:var(--a);border-radius:9px;padding:0 7px;color:#fff;font-size:12px}
+#chat{flex:1;display:flex;flex-direction:column;min-width:0}
+#head{padding:10px 14px;border-bottom:1px solid var(--line);display:flex;gap:8px;align-items:center;flex-wrap:wrap}#head .m{flex:1}
+#msgs{flex:1;overflow:auto;padding:14px;display:flex;flex-direction:column;gap:6px}
+.b{max-width:70%;padding:8px 11px;border-radius:12px;background:var(--ctl);white-space:pre-wrap;overflow-wrap:anywhere;align-self:flex-start}
+.b.me{background:#a259ff44;align-self:flex-end}
+#send{padding:10px;border-top:1px solid var(--line);display:flex;gap:8px}#send textarea{flex:1;min-height:44px;resize:vertical}
+[hidden]{display:none!important}
+#err{color:var(--warn);min-height:1em}
+@media(max-width:700px){#list{width:100%}#main.open #list{display:none}#main:not(.open) #chat{display:none}}
+</style>
+</head>
+<body>
+<header><h1>Mishka · поддержка</h1><span id="who" class="m"></span><button id="out" hidden>Выйти</button></header>
+
+<form id="login" hidden>
+  <input id="email" type="email" placeholder="Почта админа" autocomplete="username" required>
+  <input id="pass" type="password" placeholder="Пароль" autocomplete="current-password" required>
+  <button class="p">Войти</button>
+  <div id="err"></div>
+</form>
+
+<div id="main" hidden>
+  <div id="list">
+    <div id="filter"><input id="q" placeholder="Поиск по версии и заметке"><button id="closed">Закрытые</button></div>
+    <div id="tickets"></div>
+  </div>
+  <div id="chat">
+    <div id="head" hidden><button id="backBtn">←</button><span id="info" class="m"></span><input id="note" placeholder="Заметка для себя"><button id="close"></button></div>
+    <div id="msgs"></div>
+    <form id="send" hidden><textarea id="reply" placeholder="Ответ (Ctrl+Enter — отправить)" maxlength="8000"></textarea><button class="p">Отправить</button></form>
+  </div>
+</div>
+
+<script>
+// Everything from users is put on the page with textContent only: a message must never become markup in the admin's browser.
+const $ = id => document.getElementById(id);
+// Public anon key, the same one the app ships; admin rights come only from the signed-in account.
+const DEFAULTS = { url: 'https://xifkllxvzqaudmxuzcgb.supabase.co', key: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhpZmtsbHh2enFhdWRteHV6Y2diIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTM2MTU3NzMsImV4cCI6MjEwOTE5MTc3M30.pZVtbOeCoSDV0ZFp_nAEQ1WRuNDDpq0IKCaLeQtGFls' };
+let cfg = DEFAULTS, session = null, cur = null, showClosed = false, shown = 0;
+
+async function call(path, opt = {}) {
+  const r = await fetch(cfg.url + path, { ...opt, headers: { apikey: cfg.key, Authorization: 'Bearer ' + (session?.access_token || cfg.key), 'Content-Type': 'application/json', ...opt.headers } });
+  if (r.status === 401 && session) { if (await refresh()) return call(path, opt); signOut(); throw new Error('Сессия закончилась'); }
+  const text = await r.text();
+  if (!r.ok) throw new Error(text.slice(0, 200));
+  return text ? JSON.parse(text) : null;
+}
+
+// The session lives only until the tab closes.
+function keep(s) { session = s; sessionStorage.session = JSON.stringify(s); }
+async function refresh() {
+  try {
+    const r = await fetch(cfg.url + '/auth/v1/token?grant_type=refresh_token', { method: 'POST', headers: { apikey: cfg.key, 'Content-Type': 'application/json' }, body: JSON.stringify({ refresh_token: session.refresh_token }) });
+    if (!r.ok) return false;
+    keep(await r.json()); return true;
+  } catch { return false; }
+}
+function signOut() { session = null; delete sessionStorage.session; cur = null; start(); }
+
+$('login').onsubmit = async e => {
+  e.preventDefault(); $('err').textContent = '';
+  try {
+    const r = await fetch(cfg.url + '/auth/v1/token?grant_type=password', { method: 'POST', headers: { apikey: cfg.key, 'Content-Type': 'application/json' }, body: JSON.stringify({ email: $('email').value, password: $('pass').value }) });
+    if (!r.ok) throw new Error('Неверная почта или пароль');
+    keep(await r.json());
+    $('pass').value = '';
+    start();
+  } catch (x) { $('err').textContent = x.message; }
+};
+$('out').onclick = signOut;
+
+async function start() {
+  const on = !!session;
+  $('login').hidden = on; $('main').hidden = !on; $('out').hidden = !on;
+  $('who').textContent = on ? session.user?.email || '' : '';
+  if (!on) return;
+  loadTickets();
+}
+
+async function loadTickets() {
+  if (!session) return;
+  try {
+    const rows = await call(`/rest/v1/tickets?select=*&status=eq.${showClosed ? 'closed' : 'open'}&order=last_at.desc&limit=200`);
+    const q = $('q').value.trim().toLowerCase();
+    $('tickets').replaceChildren(...rows.filter(t => !q || (t.admin_note + ' ' + t.app_version + ' ' + t.edition + ' ' + t.id).toLowerCase().includes(q)).map(t => {
+      const d = document.createElement('div'); d.className = 't' + (cur?.id === t.id ? ' on' : '');
+      const b = document.createElement('b'); const n = document.createElement('span'); n.textContent = t.admin_note || 'Пользователь ' + t.id.slice(0, 6); b.append(n);
+      if (t.unread_admin) { const u = document.createElement('span'); u.className = 'badge'; u.textContent = t.unread_admin; b.append(u); }
+      const m = document.createElement('div'); m.className = 'm'; m.textContent = `${t.edition} ${t.app_version} · ${new Date(t.last_at).toLocaleString('ru')}`;
+      d.append(b, m); d.onclick = () => open(t); return d;
+    }));
+    if (cur) { const f = rows.find(t => t.id === cur.id); if (f) cur = f; }
+    document.title = (rows.reduce((a, t) => a + t.unread_admin, 0) || '') + ' Mishka Поддержка';
+  } catch (x) { $('who').textContent = 'Ошибка: ' + x.message; }
+}
+
+async function open(t) {
+  cur = t; shown = 0; $('msgs').replaceChildren(); $('main').classList.add('open');
+  $('head').hidden = false; $('send').hidden = false;
+  $('info').textContent = `${t.edition} ${t.app_version} · с ${new Date(t.created_at).toLocaleDateString('ru')}`;
+  $('note').value = t.admin_note; $('close').textContent = t.status === 'open' ? 'Закрыть' : 'Открыть снова';
+  await loadMsgs();
+  if (t.unread_admin) await call(`/rest/v1/tickets?id=eq.${t.id}`, { method: 'PATCH', body: JSON.stringify({ unread_admin: 0 }) });
+  loadTickets();
+}
+
+async function loadMsgs() {
+  if (!cur) return;
+  const rows = await call(`/rest/v1/messages?ticket_id=eq.${cur.id}&id=gt.${shown}&select=*&order=id.asc`);
+  for (const m of rows) {
+    const d = document.createElement('div'); d.className = 'b' + (m.from_admin ? ' me' : '');
+    d.textContent = m.body;
+    const when = document.createElement('div'); when.className = 'm'; when.textContent = new Date(m.created_at).toLocaleString('ru'); d.append(when);
+    $('msgs').append(d); shown = m.id;
+  }
+  if (rows.length) $('msgs').scrollTop = 1e9;
+}
+
+$('send').onsubmit = async e => {
+  e.preventDefault();
+  const body = $('reply').value.trim(); if (!body || !cur) return;
+  try { await call('/rest/v1/messages', { method: 'POST', body: JSON.stringify({ ticket_id: cur.id, body }) }); $('reply').value = ''; await loadMsgs(); loadTickets(); }
+  catch (x) { alert('Не отправилось: ' + x.message); }
+};
+$('reply').onkeydown = e => { if (e.ctrlKey && e.key === 'Enter') $('send').requestSubmit(); };
+$('note').onchange = () => cur && call(`/rest/v1/tickets?id=eq.${cur.id}`, { method: 'PATCH', body: JSON.stringify({ admin_note: $('note').value }) }).then(loadTickets);
+$('close').onclick = async () => {
+  if (!cur) return;
+  const status = cur.status === 'open' ? 'closed' : 'open';
+  await call(`/rest/v1/tickets?id=eq.${cur.id}`, { method: 'PATCH', body: JSON.stringify({ status }) });
+  cur = null; $('head').hidden = true; $('send').hidden = true; $('msgs').replaceChildren(); $('main').classList.remove('open'); loadTickets();
+};
+$('backBtn').onclick = () => $('main').classList.remove('open');
+$('closed').onclick = () => { showClosed = !showClosed; $('closed').textContent = showClosed ? 'Открытые' : 'Закрытые'; loadTickets(); };
+$('q').oninput = loadTickets;
+
+try { session = JSON.parse(sessionStorage.session || 'null'); } catch {}
+start();
+setInterval(() => { if (session && !document.hidden) { loadTickets(); loadMsgs().catch(() => {}); } }, 5000);
+</script>
+</body>
+</html>
