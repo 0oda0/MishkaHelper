@@ -349,6 +349,7 @@ public static class Remote
                     tasks = s.Tasks ? Secretary.OpenTasks().Take(30).Select(t => new { id = t.Id, text = t.Text, due = t.Due is { } d ? When.Say(d, t.HasTime, DateTime.Now) : "", late = t.Due < DateTime.Today }) : null,
                     pages = store.Remembered.Take(15).Select((r, i) => new { i, title = r.Title, daily = r.Daily }),
                     sets = store.Workspaces.Keys,
+                    inbox = store.Inbox.Take(20).Select(i => string.IsNullOrEmpty(i.Title) ? i.Text : $"{i.Title}: {i.Text}"),
                     log = s.DayLog ? Secretary.DayLog() : new(),
                 };
             }
@@ -361,6 +362,7 @@ public static class Remote
                 if (int.TryParse(arg, out var pi) && pi >= 0 && pi < SecStore.Cur.Remembered.Count) Secretary.Open(SecStore.Cur.Remembered[pi]);
                 return new { };
             case "secSet": SecWorkspace.OpenSet(arg); return new { };
+            case "secAsk": { var a = await SecAsk.Reply(arg); return new { said = a.Text }; }
 #endif
 #if JARVIS
             case "ytSubs": return await YouTubeSubs(arg == "refresh");

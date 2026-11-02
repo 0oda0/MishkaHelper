@@ -145,14 +145,13 @@ public static class SecCapture
     }
 
     // ---------- note from the selected text ----------
-    [System.Runtime.InteropServices.DllImport("user32.dll")] static extern short GetAsyncKeyState(int vk);
     [System.Runtime.InteropServices.DllImport("user32.dll")] static extern uint GetClipboardSequenceNumber();
 
     public static async void FromSelection()
     {
         if (!Secretary.Require(S.Selection, "Заметка из выделенного")) return;
         // The hotkey's own Ctrl+Alt must be up, or the copy arrives as Ctrl+Alt+C.
-        for (int i = 0; i < 40 && new[] { 0x11, 0x12, 0x10, 0x5B }.Any(k => GetAsyncKeyState(k) < 0); i++) await Task.Delay(25);
+        await LayoutFix.WaitKeysUp();
         var ctx = await Context();
         // ponytail: only text on the clipboard is put back; a copied picture is replaced by the selection.
         string? before = null;

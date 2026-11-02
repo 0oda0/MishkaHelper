@@ -39,8 +39,10 @@ public static class Actions
                     break;
                 case "widgets": Widgets.ToggleAll(); break;
                 case "focus": Focus.Toggle(); break;
+                case "layoutFix": LayoutFix.Run(); break;
                 case "setup": SetupWizard.Open(); break;
 #if SECRETARY
+                case "secDesk": SecDesk.Toggle(); break;
                 case "secNote": SecCapture.AppNote(); break;
                 case "secQuick": SecCapture.Quick(); break;
                 case "secVoice": SecCapture.Quick(voice: true); break;

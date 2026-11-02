@@ -64,6 +64,7 @@ src/
     Focus.cs           game mode: DND + mute every app except the foreground game and voice chats (Settings.FocusKeepSound), phone toasts held; auto on full-screen + GPU load, auto off when the game exits
     PowerTimer.cs      shutdown in N min / now / when downloads finish (3 min below 150 KB/s net + 5 MB/s disk); Windows' own shutdown timer
     Vpn.cs             "VPN first": Settings.VpnSites (YouTube) wait for the VPN, starting Happ/Hiddify/Amnezia/v2rayN from Program Files only
+    LayoutFix.cs       Ctrl+Alt+Z: wrong-layout text (selected or last word) converted and retyped; no keyboard hook, acts only when pressed
     Remote.cs          phone remote: HttpListener on LAN (port 8770), PIN header, private IPs only, netsh firewall rule (Private)
     BleRemote.cs       Bluetooth LE GATT server (no pairing) for docs/remote page via Web Bluetooth; PIN per device; turns BT radio on
     InputSim.cs        SendInput mouse/keys/unicode text + JPEG screenshot (remotes)
@@ -93,6 +94,7 @@ src/
   Secretary/           (Full + Secretary editions; shares When/Notes/Calendar/Models from Jarvis/ via csproj)
     Secretary.cs       foreground tracking, per-app hints, morning/evening summaries, meetings, breaks, deadline offers, search; SecretarySettings = one switch per feature
     SecPlan.cs         what a line means (task, repeat, birthday, "когда открою…"), trigger matching, schedule block of a day; pure and unit-tested
+    SecDesk.cs         SecInbox (waits for an answer), SecAsk (phrases → actions, pure Route), SecContext (which program deserves a hint), SecBubble (floating button), SecDesk (window), SecHabits
     SecCapture.cs      hotkey windows: app note, quick note, voice (SecVoice: Vosk + NAudio), "remember" (browser address via UI Automation)
     SecWork.cs         SecWorkspace (save/restore open windows), SecDownloads (proposes, moves only on a button), SecMail (MailKit, read-only IMAP)
     SecStore.cs        secretary.json next to the settings
@@ -136,6 +138,7 @@ STATUS.md              honest audit: not done / not verified live / known issues
 - Whisper hallucinates on silence ("Продолжение следует…") → filtered in Ears.IsJunk.
 - A second running copy (installed + dev) shares llama port 18765 → set `MISHKA_LLAMA_PORT` for dev runs.
 - **Security rule:** the app runs elevated — never read commands from or execute files in user-writable places (%AppData%, %LocalAppData%, %TEMP%, Downloads). Use AppPaths.Shared/Data, Shell.Sys for system tools.
+- `SHQueryUserNotificationState` returns "busy" for ordinary windows: use `Focus.FullScreenNow()`. Store apps sit under `ApplicationFrameHost`: `Secretary.Foreground()` resolves the real process.
 - Hotkeys pressed by the owner work; hotkeys injected while an elevated window is in front don't.
 
 ## Conventions

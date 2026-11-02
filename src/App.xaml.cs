@@ -29,6 +29,9 @@ public partial class App : Application
         if (e.Args.Contains("--quit")) { Shutdown(); return; }
         new Thread(() => { if (quitSignal.WaitOne()) Dispatcher.Invoke(Quit); }) { IsBackground = true }.Start();
 
+        // Background threads and forgotten tasks: without these a failure leaves no trace at all.
+        AppDomain.CurrentDomain.UnhandledException += (_, ex) => { if (ex.ExceptionObject is Exception x) Log.Error(x); };
+        TaskScheduler.UnobservedTaskException += (_, ex) => { Log.Error(ex.Exception); ex.SetObserved(); };
         DispatcherUnhandledException += (_, ex) =>
         {
             Log.Error(ex.Exception);

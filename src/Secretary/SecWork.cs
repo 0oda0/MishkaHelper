@@ -198,7 +198,7 @@ public static class SecDownloads
         }
         if (!Important.IsMatch(name)) return;
         System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
-            Secretary.Notify("", "Важный файл в «Загрузках»", name, () => Shell.Open(Shell.Sys("explorer"), $"/select,\"{System.IO.Path.Combine(Dir, name)}\"")));
+            SecInbox.Add(new InboxItem { Kind = "file", Title = "Важный файл в «Загрузках»", Text = name, Ref = System.IO.Path.Combine(Dir, name) }));
     }
 
     public static List<Item> Pending()
@@ -213,6 +213,9 @@ public static class SecDownloads
         }
         return res;
     }
+
+    /// <summary>New in the last week: years of old downloads shouldn't nag every morning. The page still lists everything.</summary>
+    public static int RecentCount(int days = 7) => Pending().Count(i => { try { return File.GetLastWriteTime(i.Path) >= DateTime.Now.AddDays(-days); } catch { return false; } });
 
     public static string Move(Item i)
     {
@@ -274,40 +277,99 @@ public static class SecDownloads
     });
 }
 
-/// <summary>The schedule itself in the summaries: reads the remembered page with Mishka's own browser, once a day per date.</summary>
+/// <summary>
+/// The schedule itself, read from the remembered page with Mishka's own browser: waits for the site to draw, presses the tab of the day
+/// or "next week" if the day isn't on screen. A failure is remembered as a reason, never as "no lessons", and tried again in an hour.
+/// </summary>
 public static class SecSchedule
 {
-    public static bool NeedsLogin { get; private set; }
-    public static string LoginUrl { get; private set; } = "";
+    static readonly Dictionary<string, List<string>> Days = new();
+    static readonly SemaphoreSlim Busy = new(1, 1);
 
-    public static async Task<List<string>> Lines(DateTime day)
+    public static RememberedItem? Page => SecStore.Cur.Remembered.FirstOrDefault(r => r.Daily && r.Target.StartsWith("http", StringComparison.OrdinalIgnoreCase));
+    public static bool NeedsLogin => SecStore.Cur.ScheduleProblem == "login";
+    public static string LoginUrl => Page?.Target ?? "";
+    public static string Problem(DateTime day) => SecStore.Cur.ScheduleProblem;
+
+    public static async Task<List<string>> Lines(DateTime day, bool fresh = false)
     {
         var s = Settings.Current.Secretary;
         var store = SecStore.Cur;
-        var page = store.Remembered.FirstOrDefault(r => r.Daily && r.Target.StartsWith("http", StringComparison.OrdinalIgnoreCase));
+        var page = Page;
         if (!s.ScheduleRead || page == null) return new();
-        var key = day.ToString("yyyy-MM-dd") + page.Target;
-        if (store.ScheduleCacheDay == key) return store.ScheduleCache;
+        var key = day.ToString("yyyy-MM-dd") + "|" + page.Target;
+        if (!fresh && store.ScheduleCacheDay == key && store.ScheduleCache.Count > 0) return store.ScheduleCache;
+        if (!fresh && Days.TryGetValue(key, out var known)) return known;
+        // Not hammering the site: a failed read waits an hour unless the user asks directly.
+        if (!fresh && (DateTime.Now - store.ScheduleTriedAt).TotalMinutes < (store.ScheduleProblem == "offline" ? 15 : 60)) return new();
+        if (!await Busy.WaitAsync(0)) return new();
         try
         {
+            store.ScheduleTriedAt = DateTime.Now;
             await Vpn.EnsureFor(page.Target);
-            var text = await WebReader.ReadText(page.Target, 30000);
-            NeedsLogin = text == "__LOGIN__";
-            LoginUrl = page.Target;
-            if (NeedsLogin) return new();
-            var lines = SecPlan.ScheduleFor(text, day) ?? new();
-            store.ScheduleCacheDay = key; store.ScheduleCache = lines;
+            var lines = await ReadDay(page.Target, day);
+            if (lines != null)
+            {
+                Days[key] = lines;
+                store.ScheduleProblem = lines.Count == 0 ? "empty" : "";
+                if (day == DateTime.Today && lines.Count > 0) { store.ScheduleCacheDay = key; store.ScheduleCache = lines; }
+            }
             SecStore.Save();
-            return lines;
+            return lines ?? new();
         }
-        catch (Exception e) { Log.Error(e); return new(); }
+        catch (Exception e) { Log.Error(e); store.ScheduleProblem = "error"; return new(); }
+        finally { Busy.Release(); }
+    }
+
+    /// <summary>The day's words a site might put on a tab or heading, most exact first.</summary>
+    internal static string[] ClickWords(DateTime day, DateTime now)
+    {
+        var ru = new System.Globalization.CultureInfo("ru-RU");
+        var l = new List<string> { day.ToString("dd.MM"), day.ToString("d MMMM", ru), day.ToString("dddd", ru), day.ToString("ddd", ru) };
+        if (day == now.Date) l.Add("сегодня");
+        if (day == now.Date.AddDays(1)) l.Add("завтра");
+        return l.ToArray();
+    }
+
+    static async Task<List<string>?> ReadDay(string url, DateTime day)
+    {
+        var store = SecStore.Cur;
+        var read = await WebReader.ReadWith(url, ClickWords(day, DateTime.Now), SameWeek(day, DateTime.Now));
+        if (read.Login) { store.ScheduleProblem = "login"; return null; }
+        if (read.Failed) { store.ScheduleProblem = "offline"; return null; }
+        foreach (var text in read.Texts)
+            if (SecPlan.ScheduleFor(text, day) is { } found) return found;
+        store.ScheduleProblem = "notfound";
+        // Kept for looking into a site the reader doesn't understand; it stays in the protected data folder.
+        try { File.WriteAllText(System.IO.Path.Combine(Settings.Dir, "schedule-last.txt"), string.Join("\n=====\n", read.Texts)); } catch { }
+        return null;
+    }
+
+    internal static bool SameWeek(DateTime day, DateTime now)
+    {
+        DateTime Monday(DateTime d) => d.Date.AddDays(-(((int)d.DayOfWeek + 6) % 7));
+        return Monday(day) == Monday(now);
     }
 }
 
 /// <summary>Mail by IMAP, read only: the folder is opened read-only, so letters stay unread and nothing can be sent or deleted.</summary>
 public static class SecMail
 {
-    public record Letter(string From, string Subject, string Preview, DateTime When, string Web, bool Bulk);
+    public record Letter(string From, string Subject, string Preview, DateTime When, string Web, bool Bulk, string Address = "");
+
+    public static string ShortFrom(string from) { var i = from.IndexOf('<'); return (i > 0 ? from[..i] : from).Trim(' ', '"'); }
+
+    /// <summary>A prepared reply in the user's own mail: it opens as a draft, and only they can press "send".</summary>
+    internal static string DraftUrl(string web, string to, string subject, string name)
+    {
+        var su = subject.StartsWith("Re:", StringComparison.OrdinalIgnoreCase) ? subject : "Re: " + subject;
+        var body = "Здравствуйте!\n\n\n\nС уважением,\n" + name;
+        string E(string x) => Uri.EscapeDataString(x);
+        if (web.Contains("mail.google")) return $"https://mail.google.com/mail/?view=cm&to={E(to)}&su={E(su)}&body={E(body)}";
+        if (web.Contains("mail.yandex")) return $"https://mail.yandex.ru/compose?to={E(to)}&subject={E(su)}&body={E(body)}";
+        if (web.Contains("e.mail.ru")) return $"https://e.mail.ru/compose/?to={E(to)}&subject={E(su)}&body={E(body)}";
+        return $"mailto:{E(to)}?subject={E(su)}&body={E(body)}";
+    }
 
     public static int Unread { get; private set; }
     public static List<Letter> Recent { get; private set; } = new();
@@ -389,7 +451,7 @@ public static class SecMail
                     var infos = newest.Count == 0 ? new List<IMessageSummary>() : (await c.Inbox.FetchAsync(newest, new FetchRequest(MessageSummaryItems.Envelope | MessageSummaryItems.UniqueId | MessageSummaryItems.PreviewText) { Headers = new HeaderSet(new[] { "List-Unsubscribe" }) }, cts.Token)).ToList();
                     foreach (var m in infos.OrderByDescending(m => m.UniqueId.Id))
                     {
-                        var l = new Letter(m.Envelope.From.ToString(), m.Envelope.Subject ?? "(без темы)", m.PreviewText ?? "", m.Envelope.Date?.LocalDateTime ?? DateTime.Now, a.Web, IsBulk(m.Envelope.From.ToString(), m.Headers?.Contains("List-Unsubscribe") == true));
+                        var l = new Letter(m.Envelope.From.ToString(), m.Envelope.Subject ?? "(без темы)", m.PreviewText ?? "", m.Envelope.Date?.LocalDateTime ?? DateTime.Now, a.Web, IsBulk(m.Envelope.From.ToString(), m.Headers?.Contains("List-Unsubscribe") == true), m.Envelope.From.Mailboxes.FirstOrDefault()?.Address ?? "");
                         letters.Add(l);
                         if (m.UniqueId.Id > a.LastUid) Arrived(l);
                     }
@@ -412,7 +474,11 @@ public static class SecMail
         var vip = s.MailImportant;
         bool important = vip.Count == 0 || vip.Any(v => (l.From + " " + l.Subject).Contains(v, StringComparison.OrdinalIgnoreCase));
         if (important)
-            Secretary.Notify("", l.From, l.Subject, () => { if (l.Web.Length > 0) Shell.Open(l.Web); });
+        {
+            Secretary.Notify("\uE715", ShortFrom(l.From), l.Subject, () => { if (l.Web.Length > 0) Shell.Open(l.Web); });
+            Secretary.ToPhoneIfAway($"Письмо от {ShortFrom(l.From)}: {l.Subject}");
+            if (l.Address.Length > 0) SecInbox.Add(new InboxItem { Kind = "mail", Title = "Письмо от " + ShortFrom(l.From), Text = l.Subject, Ref = DraftUrl(l.Web, l.Address, l.Subject, Environment.UserName) });
+        }
         if (s.Deadlines) Secretary.Offer((l.Subject + ". " + l.Preview).Trim(), "из письма");
     }
 }

@@ -67,10 +67,11 @@ nav button{border-radius:0;background:none;padding:14px 0;font-size:12px;min-wid
   </section>
 
   <section id="t-sec" hidden>
-    <div class="c"><div class="m">Записать на ПК</div><br>
-      <input id="secIn" type="text" placeholder="Завтра в 6 сдать отчёт" enterkeyhint="send" onkeydown="if(event.key==='Enter')secAdd()"><br><br>
-      <button onclick="secAdd()">Записать</button><p id="secSaid" class="m">Голосом — микрофон на клавиатуре телефона.</p></div>
+    <div class="c"><div class="m">Спроси или запиши</div><br>
+      <input id="secIn" type="text" placeholder="Что завтра? · Расписание · Завтра в 6 сдать отчёт" enterkeyhint="send" onkeydown="if(event.key==='Enter')secAdd()"><br><br>
+      <button onclick="secAdd()">Отправить</button><p id="secSaid" class="m">Голосом — микрофон на клавиатуре телефона.</p></div>
     <div class="c"><div class="m">Сегодня</div><div id="secToday"></div><div id="secLog" class="m"></div></div>
+    <div class="c" id="secInboxBox" hidden><div class="m">Ждёт ответа (решается на ПК)</div><div id="secInbox"></div></div>
     <div class="c" id="secTasksBox"><div class="m">Дела</div><div id="secTasks"></div></div>
     <div class="c" id="secPagesBox" hidden><div class="m">Запомнено (откроется на ПК)</div><div class="r" id="secPages"></div></div>
     <div class="c" id="secSetsBox" hidden><div class="m">Наборы (откроются на ПК)</div><div class="r" id="secSets"></div></div>
@@ -217,6 +218,7 @@ async function loadSec() {
   const j = await api('secToday'); if (!j) return;
   $('secToday').replaceChildren(...(j.today.length ? j.today.map(para) : [para('Дел на сегодня нет.')]));
   $('secLog').textContent = (j.log || []).join(' · ');
+  $('secInboxBox').hidden = !(j.inbox || []).length; $('secInbox').replaceChildren(...(j.inbox || []).map(para));
   $('secTasksBox').hidden = !j.tasks;
   $('secTasks').replaceChildren(...(j.tasks || []).map(t => {
     const row = document.createElement('div'); row.className = 'r'; row.style.marginTop = '8px';
@@ -229,8 +231,9 @@ async function loadSec() {
 }
 async function secAdd() {
   const t = $('secIn').value.trim(); if (!t) return;
-  const j = await api('secAdd', t);
-  if (j) { $('secSaid').textContent = j.said; $('secIn').value = ''; loadSec(); }
+  $('secSaid').textContent = '…';
+  const j = await api('secAsk', t);
+  if (j) { $('secSaid').textContent = j.said; $('secSaid').style.whiteSpace = 'pre-line'; $('secIn').value = ''; loadSec(); }
 }
 
 // ---- power ----

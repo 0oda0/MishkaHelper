@@ -40,6 +40,11 @@ public class SecStore
     public Dictionary<string, List<SavedWindow>> Workspaces { get; set; } = new();
     public List<MailAccount> Mail { get; set; } = new();
     public List<Suggestion> Suggestions { get; set; } = new();
+    public List<InboxItem> Inbox { get; set; } = new();
+    public Dictionary<string, List<string>> HabitLog { get; set; } = new();
+    public HashSet<string> HabitAsked { get; set; } = new();
+    public DateTime ScheduleTriedAt { get; set; }
+    public string ScheduleProblem { get; set; } = "";
     public List<SecTask> Tasks { get; set; } = new();
     public List<AppTrigger> Triggers { get; set; } = new();
     public Dictionary<string, WorkSetOptions> SetOptions { get; set; } = new();

@@ -145,6 +145,18 @@ public class SecretarySettings
     public bool Dates { get; set; } = true;
     public bool ShutdownCheck { get; set; } = true;
     public bool PhoneTab { get; set; } = true;
+    public bool Bubble { get; set; } = true;
+    public double BubbleX { get; set; } = -1;   // right edge of the button; -1 = default place
+    public double BubbleY { get; set; } = -1;
+    public bool ContextHints { get; set; } = true;
+    public bool Prep { get; set; } = true;
+    public int PrepMinutes { get; set; } = 15;
+    public bool Milestones { get; set; } = true;
+    public bool Habits { get; set; } = true;
+    public bool LongSession { get; set; } = true;
+    public string Name { get; set; } = "Секретарша";
+    public string Tone { get; set; } = "work";   // work, friend, short
+    public bool SpeakMorning { get; set; }       // the morning summary aloud (needs Jarvis' voice); off: no sound unless asked for
 }
 
 public class Launcher

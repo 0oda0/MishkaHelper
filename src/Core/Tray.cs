@@ -7,9 +7,14 @@ namespace MishkaHelper.Core;
 public sealed class Tray : IDisposable
 {
     readonly NotifyIcon _icon;
+    public static Tray? Current { get; private set; }
+
+    /// <summary>Tooltip with a short status, e.g. how much waits for the secretary's user. Windows allows 63 characters.</summary>
+    public void Status(string text) { var t = text.Length == 0 ? "Mishka Helper" : "Mishka Helper · " + text; _icon.Text = t.Length > 63 ? t[..63] : t; }
 
     public Tray()
     {
+        Current = this;
         var stream = System.Windows.Application.GetResourceStream(new Uri("pack://application:,,,/Assets/app.ico")).Stream;
         _icon = new NotifyIcon
         {
@@ -21,6 +26,7 @@ public sealed class Tray : IDisposable
         var menu = new ContextMenuStrip { Renderer = new DarkRenderer(), ShowImageMargin = false, Font = new Font("Segoe UI", 10f) };
         menu.Items.Add("Открыть", null, (_, _) => App.Current.ShowMain());
         menu.Items.Add("Быстрая панель", null, (_, _) => Actions.Run("quick"));
+        if (Edition.HasSecretary) menu.Items.Add("Секретарша", null, (_, _) => Actions.Run("secDesk"));
         menu.Items.Add("Ускорить всё", null, (_, _) => Actions.Run("boost"));
         menu.Items.Add("Виджеты", null, (_, _) => Actions.Run("widgets"));
         menu.Items.Add(new ToolStripSeparator());

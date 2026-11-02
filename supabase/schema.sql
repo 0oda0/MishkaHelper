@@ -61,6 +61,9 @@ begin
   if length(new.body) > 8000 then
     raise exception 'too_long';
   end if;
+  if new.attachment <> '' and new.attachment not like auth.uid()::text || '/%' then
+    raise exception 'not_your_file';
+  end if;
   select count(*) into recent from public.messages m join public.tickets t on t.id = m.ticket_id
     where t.user_id = auth.uid() and not m.from_admin and m.created_at > now() - interval '1 minute';
   if recent >= 5 then
@@ -116,6 +119,17 @@ revoke insert on public.tickets from authenticated;
 grant insert (app_version, edition) on public.tickets to authenticated;
 revoke insert on public.messages from authenticated;
 grant insert (ticket_id, body) on public.messages to authenticated;
+
+-- Screenshots: private bucket, each person writes only to a folder named after their id. See the migration support_screenshots; before_message above also checks
+--   new.attachment like auth.uid()::text || '/%' for non-admins.
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('support', 'support', false, 5242880, array['image/png', 'image/jpeg']) on conflict (id) do nothing;
+create policy "support upload own folder" on storage.objects for insert to authenticated
+  with check (bucket_id = 'support' and (storage.foldername(name))[1] = auth.uid()::text);
+create policy "support read own or admin" on storage.objects for select to authenticated
+  using (bucket_id = 'support' and ((storage.foldername(name))[1] = auth.uid()::text or public.is_admin()));
+alter table public.messages add column attachment text not null default '' check (length(attachment) <= 200);
+grant insert (attachment) on public.messages to authenticated;
 
 -- For .github/workflows/keepalive.yml: a real database call that reads nothing.
 create or replace function public.ping() returns boolean

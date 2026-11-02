@@ -312,6 +312,201 @@ public class BackupTests : IDisposable
     }
 }
 
+public class SecDeskTests
+{
+    static readonly DateTime Now = new(2026, 11, 2, 12, 0, 0);   // Monday
+
+    [Theory]
+    [InlineData("что завтра?", "agenda")]
+    [InlineData("что у меня в пятницу", "agenda")]
+    [InlineData("расписание на завтра", "schedule")]
+    [InlineData("где расписание", "schedule")]
+    [InlineData("какие пары завтра?", "schedule")]
+    [InlineData("что с почтой?", "mail")]
+    [InlineData("перенеси отчёт на пятницу", "move")]
+    [InlineData("сделал отчёт", "done")]
+    [InlineData("где договор", "find")]
+    [InlineData("куда я сохранил договор?", "find")]
+    [InlineData("что просрочено", "overdue")]
+    [InlineData("какой план", "plan")]
+    [InlineData("завтра в 6 тренировка", "note")]
+    [InlineData("надо купить молоко", "note")]
+    [InlineData("обновить расписание в журнале группы", "note")]
+    public void Routes(string text, string kind) => Assert.Equal(kind, SecAsk.Route(text).Kind);
+
+    class T { public string Text = ""; }
+
+    [Fact]
+    public void BestMatchByStems()
+    {
+        var items = new[] { new T { Text = "Сдать отчёт по физике" }, new T { Text = "Купить молоко" } };
+        Assert.Equal("Сдать отчёт по физике", SecAsk.Best("отчет", items, t => t.Text)?.Text);
+        Assert.Equal("Купить молоко", SecAsk.Best("молока", items, t => t.Text)?.Text);
+        Assert.Null(SecAsk.Best("концерт", items, t => t.Text));
+    }
+
+    static SecContext.Hint? H(string process, string title = "", string? url = null, bool full = false, string[]? tasks = null, Dictionary<string, string>? notes = null, RememberedItem[]? pages = null) =>
+        SecContext.For(process, title, url, full, notes ?? new(), pages ?? Array.Empty<RememberedItem>(), tasks ?? Array.Empty<string>());
+
+    [Theory]
+    [InlineData("explorer")]
+    [InlineData("Taskmgr")]
+    [InlineData("CalculatorApp")]
+    [InlineData("MishkaHelper")]
+    public void SystemWindowsStayQuiet(string p) => Assert.Null(H(p, "x", null, false, new[] { "explorer x taskmgr" }, new() { [p.ToLowerInvariant()] = "заметка" }));
+
+    [Fact]
+    public void GamesStayQuiet() => Assert.Null(H("game", "Игра", null, true, null, new() { ["game"] = "заметка" }));
+
+    [Fact]
+    public void NoteComesFirst() => Assert.StartsWith("Заметка", H("winword", "Док", null, false, new[] { "проверить word" }, new() { ["winword"] = "поля 2 см" })!.Text);
+
+    [Fact]
+    public void SiteIsRecognised()
+    {
+        var page = new RememberedItem { Title = "Расписание", Target = "https://lk.mtuci.ru/student/schedule" };
+        Assert.Contains("Расписание", H("msedge", "ЛК", "https://lk.mtuci.ru/student", false, null, null, new[] { page })!.Text);
+        Assert.Null(H("msedge", "Коты", "https://cats.ru/", false, null, null, new[] { page }));
+    }
+
+    [Fact]
+    public void TaskAboutThisProgram()
+    {
+        Assert.Contains("титульник", H("WINWORD", "Документ1 - Word", null, false, new[] { "Проверить титульник в ворд" })!.Text);
+        Assert.Null(H("notepad", "Безымянный", null, false, new[] { "Сдать отчёт по физике" }));
+    }
+
+    [Fact]
+    public void FarDeadlineGetsWarnings()
+    {
+        var m = SecPlan.MilestonesFor("Курсовая", new DateTime(2026, 11, 20), Now);
+        Assert.Equal(new[] { new DateTime(2026, 11, 13, 10, 0, 0), new DateTime(2026, 11, 17, 10, 0, 0), new DateTime(2026, 11, 19, 10, 0, 0) }, m.Select(x => x.At));
+        Assert.Contains("завтра", m[2].Text);
+        Assert.Empty(SecPlan.MilestonesFor("Скоро", new DateTime(2026, 11, 3), Now));
+    }
+
+    [Theory]
+    [InlineData("9:00 Матан", 9, 0)]
+    [InlineData("Пара 09.30–11.05 Физика", 9, 30)]
+    [InlineData("Ауд. 312", -1, 0)]
+    [InlineData("25.11.2026 экзамен", -1, 0)]
+    public void LineTimes(string line, int h, int m) => Assert.Equal(h < 0 ? null : new TimeSpan(h, m, 0), SecPlan.LineTime(line));
+
+    [Fact]
+    public void PlanFitsTasksAroundLessons()
+    {
+        var busy = new[] { (new TimeSpan(13, 0, 0), new TimeSpan(14, 30, 0), "13:00 Матан") };
+        var plan = SecPlan.PlanDay(Now, busy, new[] { "Отчёт", "Молоко", "Лаба" });
+        Assert.Equal(new[] { "12:00 Отчёт", "13:00 Матан", "14:30 Молоко", "15:15 Лаба" }, plan);
+    }
+
+    [Fact]
+    public void PlanSaysWhatDidNotFit()
+    {
+        var late = new DateTime(2026, 11, 2, 21, 30, 0);
+        Assert.Equal(new[] { "Не влезло в день: 1" }, SecPlan.PlanDay(late, Array.Empty<(TimeSpan, TimeSpan, string)>(), new[] { "Отчёт" }));
+    }
+
+    [Fact]
+    public void ScheduleWithShortDayNames()
+    {
+        Assert.Equal(new[] { "9:00 История" }, SecPlan.ScheduleFor("Пн\n9:00 Матан\nВт\n9:00 История\nСр\nНет", Now.AddDays(1)));
+        Assert.Equal(new[] { "Физика" }, SecPlan.ScheduleFor("Понедельник, 2 ноября\nФизика\nВторник, 3 ноября\nХимия", Now));
+    }
+
+    [Fact]
+    public void HabitNeedsThreeDays()
+    {
+        var log = new Dictionary<string, List<string>>();
+        var asked = new HashSet<string>();
+        var d = new DateTime(2026, 11, 3, 18, 10, 0);
+        SecHabits.Note("Discord", d, log); SecHabits.Note("Discord", d.AddMinutes(5), log);
+        Assert.Empty(SecHabits.Found(log, asked, d));
+        SecHabits.Note("Discord", d.AddDays(7), log); SecHabits.Note("Discord", d.AddDays(14), log);
+        var found = SecHabits.Found(log, asked, d.AddDays(14)).ToList();
+        Assert.Equal(new[] { "2|18|discord" }, found);
+        asked.Add(found[0]);
+        Assert.Empty(SecHabits.Found(log, asked, d.AddDays(14)));
+    }
+
+    [Fact]
+    public void ReplyDraftOpensInTheirOwnMail()
+    {
+        var y = SecMail.DraftUrl("https://mail.yandex.ru", "a@b.ru", "Отчёт", "Иван");
+        Assert.StartsWith("https://mail.yandex.ru/compose?to=a%40b.ru&subject=Re%3A", y);
+        Assert.StartsWith("mailto:", SecMail.DraftUrl("", "a@b.ru", "Re: x", "Иван"));
+        Assert.DoesNotContain("Re%3A%20Re", SecMail.DraftUrl("", "a@b.ru", "Re: x", "Иван"));
+    }
+
+    [Fact]
+    public void WeekCheckForNextWeekPress()
+    {
+        Assert.True(SecSchedule.SameWeek(new DateTime(2026, 11, 8), Now));
+        Assert.False(SecSchedule.SameWeek(new DateTime(2026, 11, 9), Now));
+    }
+}
+
+public class FullScreenTests
+{
+    static readonly (int, int, int, int) Screen = (0, 0, 1920, 1080);
+
+    [Fact] public void GameOrVideo() => Assert.True(Focus.Fills(false, (0, 0, 1920, 1080), Screen));
+    [Fact] public void NormalWindow() => Assert.False(Focus.Fills(false, (100, 100, 900, 700), Screen));
+    [Fact] public void MaximizedAboveTaskbar() => Assert.False(Focus.Fills(true, (-8, -8, 1928, 1048), Screen));
+    [Fact] public void MaximizedWithAutoHiddenTaskbarIsNotFullScreen() => Assert.False(Focus.Fills(true, (-8, -8, 1928, 1088), Screen));
+    [Fact] public void OtherMonitorIsCompared() => Assert.False(Focus.Fills(false, (0, 0, 1920, 1080), (1920, 0, 3840, 1080)));
+}
+
+public class ImprovementTests
+{
+    static readonly DateTime Now = new(2026, 11, 2, 12, 0, 0);
+
+    [Fact] public void TextKeepsCapitalsAndYo() => Assert.Equal("Сдать отчёт Ивану", SecPlan.Understand("завтра в 18:00 сдать отчёт Ивану", Now).Text);
+    [Fact] public void RepeatKeepsCapitals() => Assert.Equal("Звонок Ивану", SecPlan.Understand("каждый вторник в 18:00 Звонок Ивану", Now).Text);
+    [Fact] public void FillerWordsStayOut() => Assert.Equal("Сдать лабу", SecPlan.Understand("завтра позарез надо сдать лабу", Now).Text);
+    [Fact] public void OriginalFallsBack() => Assert.Equal("другой текст", SecPlan.Original("совсем не то", "другой текст"));
+
+    [Theory]
+    [InlineData("a.png", 1000, true)]
+    [InlineData("a.JPG", 1000, true)]
+    [InlineData("a.exe", 1000, false)]
+    [InlineData("a.svg", 1000, false)]
+    [InlineData("a.png", 6 * 1024 * 1024, false)]
+    public void SupportPictures(string name, long size, bool ok) => Assert.Equal(ok, Support.PictureProblem(name, size) == null);
+}
+
+public class LayoutFixTests
+{
+    [Theory]
+    [InlineData(0x25, 1u)]   // left
+    [InlineData(0x2E, 1u)]   // delete
+    [InlineData(0x43, 0u)]   // C
+    [InlineData(0x11, 0u)]   // ctrl
+    public void ArrowsAreExtendedKeys(int vk, uint flag) => Assert.Equal(flag, InputSim.ExtendedFlag((ushort)vk));
+
+    [Theory]
+    [InlineData("ghbdtn", "привет")]
+    [InlineData("Ghbdtn", "Привет")]
+    [InlineData("GHBDTN", "ПРИВЕТ")]
+    [InlineData("руддщ", "hello")]
+    [InlineData("Руддщ", "Hello")]
+    [InlineData("ghbdtn vbh", "привет мир")]
+    [InlineData("rfr ltkf?", "как дела,")]
+    [InlineData("cgfcb,j", "спасибо")]
+    [InlineData("\\\\", "\\\\")]
+    public void Converts(string from, string to) => Assert.Equal(to, LayoutFix.Convert(from) ?? from);
+
+    [Theory]
+    [InlineData("12345")]
+    [InlineData("  ")]
+    [InlineData("!!!")]
+    public void NoLettersNothingToDo(string s) => Assert.Null(LayoutFix.Convert(s));
+
+    [Fact] public void BothWaysComeBack() => Assert.Equal("ghbdtn", LayoutFix.Convert(LayoutFix.Convert("ghbdtn")!));
+    [Fact] public void KeyboardFollowsTheText() { Assert.True(LayoutFix.EndsRussian("привет")); Assert.False(LayoutFix.EndsRussian("hello")); }
+    [Fact] public void WholeLineCopyIsNotASelection() { Assert.True(LayoutFix.IsLineCopy("строка\r\n")); Assert.False(LayoutFix.IsLineCopy("слово")); }
+}
+
 public class EdgeGecTests
 {
     // Reference values from edge-tts drm.generate_sec_ms_gec_v2 (Python) for the same timestamps.

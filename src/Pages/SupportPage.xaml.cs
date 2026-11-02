@@ -29,11 +29,23 @@ public partial class SupportPage : UserControl
         Body.Children.Add(new ScrollViewer { Content = _chat, MaxHeight = 420, VerticalScrollBarVisibility = ScrollBarVisibility.Auto });
         var box = new TextBox { AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, MinHeight = 70, MaxLength = 4000, Padding = new Thickness(8), Margin = new Thickness(0, 10, 0, 6) };
         var attach = new CheckBox { Style = (Style)FindResource("Switch"), Content = "Приложить сведения о ПК (версия, Windows, железо)" };
+        string? picture = null;
+        var attachPic = new Button { Content = "Приложить скриншот", HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 4, 0, 6) };
+        attachPic.Click += (_, _) =>
+        {
+            var d = new Microsoft.Win32.OpenFileDialog { Filter = "Картинки|*.png;*.jpg;*.jpeg" };
+            if (d.ShowDialog() != true) return;
+            if (Support.PictureProblem(d.FileName, new System.IO.FileInfo(d.FileName).Length) is { } why) { _status.Text = why; return; }
+            picture = d.FileName;
+            attachPic.Content = "Приложено: " + System.IO.Path.GetFileName(d.FileName);
+            _status.Text = "";
+        };
         var send = new Button { Content = "Отправить", Style = (Style)FindResource("AccentButton"), HorizontalAlignment = HorizontalAlignment.Left };
         send.Click += async (_, _) =>
         {
             var text = box.Text.Trim();
-            if (text.Length == 0) return;
+            if (text.Length == 0 && picture == null) return;
+            if (text.Length == 0) text = "Скриншот";
             if (attach.IsChecked == true)
             {
                 var report = $"{Edition.Display} {Edition.Version}\n{Toolbox.SystemReport()}";
@@ -43,8 +55,8 @@ public partial class SupportPage : UserControl
             send.IsEnabled = false; _status.Text = "Отправляю…";
             try
             {
-                await Support.Send(text);
-                box.Clear(); attach.IsChecked = false; _status.Text = "";
+                await Support.Send(text, picture);
+                box.Clear(); attach.IsChecked = false; _status.Text = ""; picture = null; attachPic.Content = "Приложить скриншот";
                 await Refresh();
             }
             catch (Exception e) { _status.Text = "Не отправилось: " + e.Message; _github.Visibility = Visibility.Visible; }
@@ -52,6 +64,7 @@ public partial class SupportPage : UserControl
         };
         Body.Children.Add(UiKit.WithHint(box, "Твоё сообщение"));
         Body.Children.Add(attach);
+        Body.Children.Add(attachPic);
         Body.Children.Add(send);
         Body.Children.Add(_status);
         _github.Click += (_, _) => Shell.Open(Support.IssuesUrl);

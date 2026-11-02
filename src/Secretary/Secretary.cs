@@ -16,9 +16,6 @@ public static class Secretary
     static SecretarySettings S => Settings.Current.Secretary;
     static DispatcherTimer? _t;
     static int _tick;
-    static string _lastKey = "";
-    static readonly HashSet<string> HintShown = new();
-    static readonly HashSet<string> MeetingShown = new();
     static DateTime _activeSince = DateTime.Now, _lastSuggest;
 
     public static string CurrentApp { get; private set; } = "";
@@ -29,7 +26,8 @@ public static class Secretary
     [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
     [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetWindowText(IntPtr h, System.Text.StringBuilder s, int n);
-    [DllImport("shell32.dll")] static extern int SHQueryUserNotificationState(out int state);
+    delegate bool EnumProc(IntPtr h, IntPtr l);
+    [DllImport("user32.dll")] static extern bool EnumChildWindows(IntPtr parent, EnumProc f, IntPtr l);
     [StructLayout(LayoutKind.Sequential)] struct LASTINPUTINFO { public uint cbSize, dwTime; }
     [DllImport("user32.dll")] static extern bool GetLastInputInfo(ref LASTINPUTINFO i);
 
@@ -38,15 +36,21 @@ public static class Secretary
         _t = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
         _t.Tick += (_, _) => Tick();
         _t.Start();
-        Reminders.Due += text => { if (S.Enabled && S.ToPhone) _ = Phone.Say(text); };
+        Reminders.Due += ToPhoneIfAway;
+        SecInbox.Changed += () => { SecBubble.Apply(CurrentFullScreen); ShowCount(); };
+        ShowCount();
         ClipHistory.Copied += OnCopied;
         Apply();
     }
+
+    static void ShowCount() => Tray.Current?.Status(S.Enabled && SecInbox.Count > 0 ? $"ждёт ответа: {SecInbox.Count}" : "");
 
     /// <summary>After any switch changes: start or stop what runs in the background.</summary>
     public static void Apply()
     {
         SecDownloads.Apply(S.Enabled && S.Downloads);
+        SecBubble.Apply(CurrentFullScreen);
+        ShowCount();
         Changed?.Invoke();
     }
 
@@ -69,11 +73,15 @@ public static class Secretary
     {
         if (S.QuietInGame && (Focus.On || CurrentFullScreen))
         {
-            AddSuggestion($"{title}: {text}", "пока ты был в игре");
+            SecInbox.Add(new InboxItem { Kind = "note", Title = title, Text = text });
             return;
         }
         Toast.Show(glyph, title, text, click);
     }
+
+    /// <summary>Away from the PC for 10+ minutes: the phone gets it, the screen of an empty room doesn't help.</summary>
+    public static bool Away => IdleMs() > 10 * 60_000;
+    public static void ToPhoneIfAway(string text) { if (S.Enabled && S.ToPhone && Away) _ = Phone.Say(text); }
 
     public static IntPtr ForegroundWindow() => GetForegroundWindow();
 
@@ -83,7 +91,18 @@ public static class Secretary
         GetWindowThreadProcessId(h, out var pid);
         var sb = new System.Text.StringBuilder(512);
         GetWindowText(h, sb, sb.Capacity);
-        try { using var p = Process.GetProcessById((int)pid); return ((int)pid, p.ProcessName, sb.ToString()); } catch { return (0, "", ""); }
+        try
+        {
+            using var p = Process.GetProcessById((int)pid);
+            if (!p.ProcessName.Equals("ApplicationFrameHost", StringComparison.OrdinalIgnoreCase)) return ((int)pid, p.ProcessName, sb.ToString());
+            // Store apps live inside this host window: the real program is the child window of another process.
+            uint real = 0;
+            EnumChildWindows(h, (c, _) => { GetWindowThreadProcessId(c, out var cp); if (cp != pid) { real = cp; return false; } return true; }, IntPtr.Zero);
+            if (real == 0) return ((int)pid, p.ProcessName, sb.ToString());
+            using var rp = Process.GetProcessById((int)real);
+            return ((int)real, rp.ProcessName, sb.ToString());
+        }
+        catch { return (0, "", ""); }
     }
 
     static uint IdleMs()
@@ -94,17 +113,20 @@ public static class Secretary
 
     static void Tick()
     {
-        if (!S.Enabled) return;
+        if (!S.Enabled) { SecBubble.Apply(false); return; }
         _tick++;
         try
         {
             var (_, name, title) = Foreground();
-            CurrentFullScreen = SHQueryUserNotificationState(out var st) == 0 && st is 2 or 3;
+            CurrentFullScreen = Focus.FullScreenNow();
+            SecBubble.Apply(CurrentFullScreen);
             // Our own windows don't count: the note hotkey must still refer to the program underneath.
             if (name.Length > 0 && !name.Equals("MishkaHelper", StringComparison.OrdinalIgnoreCase))
             {
                 CurrentApp = name; CurrentTitle = title;
-                if (S.AppHints) ShowHint(name);
+                if (S.AppHints) ShowHint(name, title);
+                if (name != _appNow) { _appNow = name; _appSince = DateTime.Now; }
+                if (S.Habits && _tick % 30 == 0 && IdleMs() < 120_000 && !SecContext.ShouldStayQuiet(name, false)) SecHabits.Note(name, DateTime.Now, SecStore.Cur.HabitLog);
                 if (S.AppTriggers && SecStore.Cur.Triggers.Count > 0) CheckTriggers(name, title);
             }
             if (_tick % 15 == 0) Minute();
@@ -112,14 +134,35 @@ public static class Secretary
         catch (Exception e) { Log.Error(e); }
     }
 
-    // A note appears once per session, the first time its program comes to the front.
-    static void ShowHint(string name)
+    static string _appNow = "";
+    static DateTime _appSince = DateTime.Now;
+    static string _hintSeen = "";
+    static readonly Dictionary<string, DateTime> HintedAt = new();
+
+    /// <summary>What the secretary said about the program in front, for the page and the self-test.</summary>
+    public static event Action<string, string?>? Hinted;
+
+    // Each program or site is judged once per title change; a hint repeats no sooner than 4 hours later.
+    static async void ShowHint(string name, string title)
     {
-        var key = name.ToLowerInvariant();
-        if (key == _lastKey) return;
-        _lastKey = key;
-        if (!S.AppNotes || !HintShown.Add(key) || !SecStore.Cur.AppNotes.TryGetValue(key, out var note) || note.Trim().Length == 0) return;
-        Notify("", "Заметка: " + name, note.Length > 200 ? note[..200] + "…" : note, () => SecCapture.AppNote());
+        var seen = name + "|" + title;
+        if (seen == _hintSeen) return;
+        _hintSeen = seen;
+        if (!S.AppNotes && !S.ContextHints) return;
+        var window = GetForegroundWindow();
+        var url = await Task.Run(() => SecCapture.BrowserUrl(window, name));
+        if (seen != _hintSeen) return;   // moved on meanwhile
+        var hint = SecContext.For(name, title, url, CurrentFullScreen, S.AppNotes ? SecStore.Cur.AppNotes : new Dictionary<string, string>(), S.ContextHints ? SecStore.Cur.Remembered : new(), S.ContextHints && S.Tasks ? OpenTasks().Select(t => t.Text) : Array.Empty<string>());
+        Hinted?.Invoke(name, hint?.Text);
+        if (hint == null || (HintedAt.TryGetValue(hint.Key, out var at) && (DateTime.Now - at).TotalHours < 4)) return;
+        HintedAt[hint.Key] = DateTime.Now;
+        Action click = hint.Action switch
+        {
+            "note" => () => SecCapture.AppNote(),
+            _ => () => SecDesk.Open(activate: true),
+        };
+        if (SecBubble.Shown) SecBubble.Say(hint.Text, click);
+        else Notify("\uE70B", S.Name, hint.Text, click);
     }
 
     static string _trigSeen = "";
@@ -212,7 +255,9 @@ public static class Secretary
             _activeSince = now;
             Toast.Show("", "Перерыв", $"Ты за компьютером уже {Math.Max(15, S.BreakMinutes)} минут. Встань, разомнись.");
         }
-        if (S.Meetings) _ = Meetings(now);
+        if (S.Meetings || S.Prep) _ = Prepare(now);
+        if (S.Habits && _tick % 1800 == 0) CheckHabits(now);
+        if (S.LongSession && S.Tasks) CheckLongSession(now);
         if (S.Workspace && _tick % 450 == 0 && idle < 5 * 60_000) _ = SecWorkspace.AutoSave();
         if (S.Mail && _tick % (Math.Max(5, S.MailMinutes) * 30) == 15) _ = SecMail.Check();
     }
@@ -237,14 +282,27 @@ public static class Secretary
         foreach (var d in SecStore.Cur.Remembered.Where(x => x.Daily)) l.Add(new("", d.Title, () => Open(d)));
         if (S.Workspace && SecStore.Cur.LastWorkspace.Count > 0 && SecStore.Cur.LastWorkspaceAt.Date < DateTime.Today)
             l.Add(new("", $"Вернуть рабочее место ({SecStore.Cur.LastWorkspaceAt:dd.MM HH:mm})", () => SecWorkspace.Restore(SecStore.Cur.LastWorkspace)));
-        if (S.Downloads && SecDownloads.Pending().Count is > 0 and var n) l.Add(new("", $"Файлов разобрать в «Загрузках»: {n}", () => App.Current.Navigate("Secretary")));
+        if (S.Downloads && SecDownloads.RecentCount() is > 0 and var n) l.Add(new("\uE896", $"Новых файлов в «Загрузках» за неделю: {n}", () => App.Current.Navigate("Secretary")));
         return l;
     }
 
-    static async Task Morning()
+    // The morning summary stays until closed: a 6-second toast was easy to miss.
+    static Task Morning()
     {
+        SecInbox.ReviewOverdue(DateTime.Now);
+        SecDesk.Open(activate: false);
+        if (S.SpeakMorning) Speak();
+        return Task.CompletedTask;
+    }
+
+    static async void Speak()
+    {
+#if JARVIS
         var l = await Today();
-        Toast.Show("", "Доброе утро", l.Count == 0 ? "На сегодня дел нет." : string.Join("\n", l.Take(5).Select(x => "• " + x.Text)), () => App.Current.Navigate("Secretary"));
+        if (Settings.Current.Jarvis.Speak) _ = Voice.Say(SecVoiceTone.Greeting(DateTime.Now, S) + ". " + (l.Count == 0 ? "На сегодня дел нет." : string.Join(". ", l.Take(4).Select(x => x.Text))));
+#else
+        await Task.CompletedTask;
+#endif
     }
 
     static async void Evening()
@@ -270,20 +328,65 @@ public static class Secretary
 
     static readonly Regex AnyUrl = new(@"https?://\S+", RegexOptions.Compiled);
 
-    // A meeting link in the event's place opens with one click, 10 minutes ahead.
-    static async Task Meetings(DateTime now)
+    static readonly HashSet<string> PrepShown = new();
+
+    // Ahead of a lesson or meeting: what, where, and one press to open the prepared set or the meeting link.
+    static async Task Prepare(DateTime now)
     {
-        if (!Calendar.Configured) return;
         try
         {
-            foreach (var e in await Calendar.On(now.Date))
+            var ahead = now.AddMinutes(Math.Max(5, S.PrepMinutes));
+            var soon = new List<(DateTime At, string Text, string Place)>();
+            if (S.Meetings && Calendar.Configured)
+                foreach (var e in await Calendar.On(now.Date)) if (!e.AllDay) soon.Add((e.Start, e.Title, e.Place));
+            if (S.Prep)
+                foreach (var line in await SecSchedule.Lines(now.Date))
+                    if (SecPlan.LineTime(line) is { } t) soon.Add((now.Date + t, line, ""));
+            foreach (var (at, text, place) in soon)
             {
-                if (e.AllDay || e.Start <= now || e.Start > now.AddMinutes(10) || !MeetingShown.Add(e.Start.ToString("o") + e.Title)) continue;
-                var link = AnyUrl.Match(e.Place).Value;
-                Notify("", $"Через {(int)Math.Ceiling((e.Start - now).TotalMinutes)} мин: {e.Title}", e.Place, link.Length > 0 ? () => Shell.Open(link) : null);
+                if (at <= now || at > ahead || !PrepShown.Add(at.ToString("o") + text)) continue;
+                var buttons = new List<(string, Action)>();
+                var link = AnyUrl.Match(place).Value;
+                if (link.Length > 0) buttons.Add(("Подключиться", () => Shell.Open(link)));
+                var set = SecStore.Cur.Workspaces.Keys.FirstOrDefault();
+                if (set != null) buttons.Add(($"Набор «{set}»", () => SecWorkspace.OpenSet(set)));
+                var title = $"Через {(int)Math.Ceiling((at - now).TotalMinutes)} мин";
+                var body = place.Length > 0 && link.Length == 0 ? $"{text}, {place}" : text;
+                if (S.QuietInGame && (Focus.On || CurrentFullScreen)) continue;
+                Toast.Show("\uE787", title, body, null, buttons.Count > 0 ? buttons.ToArray() : null);
+                ToPhoneIfAway($"{title}: {body}");
             }
         }
         catch (Exception e) { Log.Error(e); }
+    }
+
+    static void CheckHabits(DateTime now)
+    {
+        var store = SecStore.Cur;
+        foreach (var key in SecHabits.Found(store.HabitLog, store.HabitAsked, now).Take(1).ToList())
+        {
+            var p = key.Split('|', 3);
+            int dow = int.Parse(p[0]), hour = int.Parse(p[1]);
+            var ru = new System.Globalization.CultureInfo("ru-RU");
+            var next = now.Date.AddDays(((dow - (int)now.DayOfWeek) + 7) % 7).AddHours(hour);
+            if (next <= now) next = next.AddDays(7);
+            store.HabitAsked.Add(key);
+            SecInbox.Add(new InboxItem { Kind = "habit", Title = $"Ты часто открываешь {p[2]}: {next.ToString("dddd", ru)}, около {hour}:00. Напоминать?", Text = $"Обычно в это время: {p[2]}", At = next, HasTime = true });
+        }
+    }
+
+    static bool _longToldToday;
+    static DateTime _longDay;
+
+    static void CheckLongSession(DateTime now)
+    {
+        if (_longDay != now.Date) { _longDay = now.Date; _longToldToday = false; }
+        if (_longToldToday || (now - _appSince).TotalHours < 3 || SecContext.ShouldStayQuiet(_appNow, CurrentFullScreen)) return;
+        var due = OpenTasks().FirstOrDefault(t => t.Due?.Date <= now.Date);
+        if (due == null) return;
+        _longToldToday = true;
+        var text = $"Уже 3 часа в {_appNow}, а на сегодня ещё открыто: {due.Text}";
+        if (SecBubble.Shown) SecBubble.Say(text, () => SecDesk.Open(activate: true)); else Notify("\uE823", S.Name, text);
     }
 
     // ---------- dates in text ----------
@@ -302,11 +405,10 @@ public static class Secretary
         var d = FindDeadline(text, DateTime.Now);
         if (d == null) return;
         var label = text.Length > 120 ? text[..120] + "…" : text;
-        Notify("", "Напомнить?", $"{When.Say(d.At, d.HasTime, DateTime.Now)}: {label}\nНажми, чтобы добавить ({source}).", () =>
-        {
-            Reminders.Add(label, d.At, d.HasTime);
-            Osd.Show("", "Напоминание добавлено");
-        });
+        var item = new InboxItem { Kind = "offer", Title = $"Напомнить {When.Say(d.At, d.HasTime, DateTime.Now)}? ({source})", Text = label, At = d.At, HasTime = d.HasTime };
+        SecInbox.Add(item);   // stays in the inbox if the toast is missed
+        if (S.QuietInGame && (Focus.On || CurrentFullScreen)) return;
+        Toast.Show("\uE787", item.Title, label, () => SecDesk.Open(activate: true), SecInbox.Buttons(item));
     }
 
     static void OnCopied(string text)
@@ -315,16 +417,6 @@ public static class Secretary
         if (FindDeadline(text, DateTime.Now) == null) return;
         _lastSuggest = DateTime.Now;
         Offer(text, "из буфера");
-    }
-
-    public static void AddSuggestion(string text, string source)
-    {
-        var list = SecStore.Cur.Suggestions;
-        if (list.Any(s => s.Text == text)) return;
-        list.Insert(0, new Suggestion { Text = text, Source = source });
-        if (list.Count > 50) list.RemoveAt(50);
-        SecStore.Save();
-        Changed?.Invoke();
     }
 
     /// <summary>Search over notes, app notes and remembered pages.</summary>

@@ -56,6 +56,10 @@ public static class InputSim
         ["volup"] = 0xAF, ["voldown"] = 0xAE, ["mute"] = 0xAD,
     };
 
+    // Arrows and the block above them are "extended" keys. Without the flag Windows takes them for the numeric keypad,
+    // where Shift doesn't select: Ctrl+Shift+Left only moved the caret.
+    internal static uint ExtendedFlag(ushort vk) => vk is 0x21 or 0x22 or 0x23 or 0x24 or 0x25 or 0x26 or 0x27 or 0x28 or 0x2D or 0x2E or 0x5B or 0x5C ? 1u : 0u;
+
     /// <summary>"enter", "alt+tab", "ctrl+c", "win+d"…</summary>
     public static bool Key(string combo)
     {
@@ -67,8 +71,8 @@ public static class InputSim
             else if (p.Length == 1 && char.IsLetterOrDigit(p[0]) && p[0] < 128) vks.Add(char.ToUpperInvariant(p[0]));
             else return false;
         }
-        foreach (var v in vks) Send(K(v, 0, 0));
-        for (int i = vks.Count - 1; i >= 0; i--) Send(K(vks[i], 0, 0x0002));
+        foreach (var v in vks) Send(K(v, 0, ExtendedFlag(v)));
+        for (int i = vks.Count - 1; i >= 0; i--) Send(K(vks[i], 0, 0x0002u | ExtendedFlag(vks[i])));
         return true;
     }
 

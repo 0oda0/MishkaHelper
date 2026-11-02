@@ -99,14 +99,29 @@ public static class Support
         finally { Gate.Release(); }
     }
 
-    public static async Task Send(string body)
+    /// <summary>What may be attached: a picture up to 5 MB. Null if fine, otherwise what to tell the user. The server enforces the same.</summary>
+    internal static string? PictureProblem(string name, long size) =>
+        !new[] { ".png", ".jpg", ".jpeg" }.Contains(System.IO.Path.GetExtension(name).ToLowerInvariant()) ? "Подойдёт картинка PNG или JPG"
+        : size > 5 << 20 ? "Картинка больше 5 МБ" : null;
+
+    public static async Task Send(string body, string? picture = null)
     {
         await Gate.WaitAsync();
         try
         {
             await Login();
             var t = await Ticket(true);
-            await Send(Req(HttpMethod.Post, "/rest/v1/messages", new JsonObject { ["ticket_id"] = t, ["body"] = body }.ToJsonString()));
+            var attachment = "";
+            if (picture != null)
+            {
+                var png = picture.EndsWith(".png", StringComparison.OrdinalIgnoreCase);
+                attachment = $"{_userId}/{Guid.NewGuid():N}{(png ? ".png" : ".jpg")}";
+                var up = Req(HttpMethod.Post, "/storage/v1/object/support/" + attachment);
+                up.Content = new ByteArrayContent(await System.IO.File.ReadAllBytesAsync(picture));
+                up.Content.Headers.ContentType = new MediaTypeHeaderValue(png ? "image/png" : "image/jpeg");
+                await Send(up);
+            }
+            await Send(Req(HttpMethod.Post, "/rest/v1/messages", new JsonObject { ["ticket_id"] = t, ["body"] = body, ["attachment"] = attachment }.ToJsonString()));
         }
         finally { Gate.Release(); }
     }

@@ -27,6 +27,35 @@ public static class Focus
     static readonly HashSet<string> NotGames = new(StringComparer.OrdinalIgnoreCase)
         { "chrome", "msedge", "firefox", "browser", "opera", "yandex", "vlc", "mpc-hc64", "potplayermini64", "kmplayer", "explorer", "powerpnt", "MishkaHelper" };
 
+    [StructLayout(LayoutKind.Sequential)] struct RECT { public int Left, Top, Right, Bottom; }
+    [StructLayout(LayoutKind.Sequential)] struct MONITORINFO { public int cbSize; public RECT Monitor, Work; public int Flags; }
+    [DllImport("user32.dll")] static extern bool GetWindowRect(IntPtr h, out RECT r);
+    [DllImport("user32.dll")] static extern IntPtr MonitorFromWindow(IntPtr h, int flags);
+    [DllImport("user32.dll")] static extern bool GetMonitorInfo(IntPtr m, ref MONITORINFO i);
+    [DllImport("user32.dll")] static extern bool IsZoomed(IntPtr h);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetClassName(IntPtr h, System.Text.StringBuilder s, int n);
+
+    /// <summary>The window fills its whole monitor and isn't just maximized (a maximized window can overhang the screen when the taskbar auto-hides).</summary>
+    internal static bool Fills(bool maximized, (int L, int T, int R, int B) w, (int L, int T, int R, int B) m) =>
+        !maximized && w.L <= m.L && w.T <= m.T && w.R >= m.R && w.B >= m.B;
+
+    /// <summary>
+    /// A game, video or slide show on the whole screen. SHQueryUserNotificationState can't answer this alone:
+    /// it says "busy" (2) for ordinary windows too, which silenced everything. Only its exclusive Direct3D state (3) is trusted.
+    /// </summary>
+    public static bool FullScreenNow()
+    {
+        if (SHQueryUserNotificationState(out var st) == 0 && st == 3) return true;
+        var h = GetForegroundWindow();
+        if (h == IntPtr.Zero) return false;
+        var c = new System.Text.StringBuilder(64);
+        GetClassName(h, c, c.Capacity);
+        if (c.ToString() is "Progman" or "WorkerW" or "Shell_TrayWnd") return false;   // the desktop itself covers the screen
+        var i = new MONITORINFO { cbSize = Marshal.SizeOf<MONITORINFO>() };
+        if (!GetWindowRect(h, out var r) || !GetMonitorInfo(MonitorFromWindow(h, 2), ref i)) return false;
+        return Fills(IsZoomed(h), (r.Left, r.Top, r.Right, r.Bottom), (i.Monitor.Left, i.Monitor.Top, i.Monitor.Right, i.Monitor.Bottom));
+    }
+
     static (int Pid, string Name) Foreground()
     {
         GetWindowThreadProcessId(GetForegroundWindow(), out var pid);
@@ -76,12 +105,12 @@ public static class Focus
             return;
         }
         if (!Settings.Current.FocusAuto) return;
-        // 2 = busy (borderless full screen), 3 = exclusive Direct3D full screen.
-        if (SHQueryUserNotificationState(out var st) != 0 || st is not (2 or 3)) return;
+        if (!FullScreenNow()) return;
         var (pid, name) = Foreground();
         if (pid == 0 || NotGames.Contains(name)) return;
         // ponytail: "full screen + busy GPU" = game; a full-screen app that doesn't load the GPU stays untouched.
-        if (st == 2 && SysMon.Last.Gpu < 40) return;
+        SHQueryUserNotificationState(out var st);
+        if (st != 3 && SysMon.Last.Gpu < 40) return;
         Set(true, auto: true);
     }
 

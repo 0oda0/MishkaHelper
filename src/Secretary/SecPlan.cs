@@ -53,8 +53,22 @@ public static class SecPlan
             return new Plan("repeat", Reminders.Cap(text), new DateTime(when.At.Year, when.At.Month, when.At.Day), false, "yearly", 3);
         bool task = TaskWord.IsMatch(text) || (when != null && TaskWord.IsMatch(when.Rest));
         if (when != null && when.At > now)
-            return new Plan("remind", Reminders.Cap(when.Rest.Length > 0 ? when.Rest : text), when.At, when.HasTime) { IsTask = task };
+            return new Plan("remind", Reminders.Cap(when.Rest.Length > 0 ? Original(text, when.Rest) : text), when.At, when.HasTime) { IsTask = task };
         return task ? new Plan("task", Reminders.Cap(Regex.Replace(text, @"^\s*(надо|нужно|не\s+забыть)\s+", "", Ru))) { IsTask = true } : new Plan("note", text);
+    }
+
+    /// <summary>The date parser returns lower case without ё. Words it kept are taken back from what the person actually wrote: "Иван", "отчёт".</summary>
+    internal static string Original(string written, string rest)
+    {
+        var want = rest.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var res = new List<string>();
+        int i = 0;
+        foreach (var w in written.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (i >= want.Length) break;
+            if (RuText.Clean(w) == RuText.Clean(want[i])) { res.Add(w); i++; }
+        }
+        return i == want.Length ? string.Join(' ', res).Trim(',', '.', ';', ':', ' ') : rest;
     }
 
     static Plan? ParseRepeat(string text, DateTime now)
@@ -71,7 +85,7 @@ public static class SecPlan
 
         var rest = (text[..m.Index] + " " + text[(m.Index + m.Length)..]).Trim();
         var when = When.Parse(rest, now);
-        var label = when != null && when.Rest.Length > 0 ? when.Rest : Regex.Replace(rest, @"\s+", " ").Trim(' ', ',', '.');
+        var label = when != null && when.Rest.Length > 0 ? Original(rest, when.Rest) : Regex.Replace(rest, @"\s+", " ").Trim(' ', ',', '.');
         bool hasTime = when?.HasTime == true;
         var time = hasTime ? when!.At.TimeOfDay : TimeSpan.FromHours(10);
         DateTime at;
@@ -98,6 +112,54 @@ public static class SecPlan
     }
 
     static DateTime Clamp(int y, int m, int d) => new(y, m, Math.Min(d, DateTime.DaysInMonth(y, m)));
+
+    /// <summary>A far deadline gets early warnings: a week, three days and a day before.</summary>
+    public static List<(DateTime At, string Text)> MilestonesFor(string text, DateTime due, DateTime now)
+    {
+        var res = new List<(DateTime, string)>();
+        foreach (var d in new[] { 7, 3, 1 })
+        {
+            var at = due.Date.AddDays(-d).AddHours(10);
+            if (at > now.AddHours(1)) res.Add((at, $"{text}: {(d == 1 ? "завтра срок" : $"до срока {d} дн.")}"));
+        }
+        return res;
+    }
+
+    /// <summary>The clock time a schedule line starts with or contains: "9:00 Матан", "Пара 09.30–11.05".</summary>
+    public static TimeSpan? LineTime(string line)
+    {
+        var m = Regex.Match(line, @"(?<![\d.:])([01]?\d|2[0-3])[:.]([0-5]\d)(?![\d.])");
+        return m.Success ? new TimeSpan(int.Parse(m.Groups[1].Value), int.Parse(m.Groups[2].Value), 0) : null;
+    }
+
+    /// <summary>Busy blocks stay where they are; tasks go into free gaps of 45+ minutes, in the given order, until 22:00.</summary>
+    public static List<string> PlanDay(DateTime now, IEnumerable<(TimeSpan From, TimeSpan To, string Text)> busy, IEnumerable<string> tasks)
+    {
+        var end = TimeSpan.FromHours(22);
+        var slot = TimeSpan.FromMinutes(45);
+        var start = TimeSpan.FromMinutes(Math.Ceiling(Math.Max(now.TimeOfDay.TotalMinutes, 9 * 60) / 15) * 15);
+        var blocks = busy.OrderBy(b => b.From).ToList();
+        var todo = new Queue<string>(tasks);
+        var res = new List<(TimeSpan At, string Text)>();
+        var t = start;
+        foreach (var b in blocks.Append((end, end, "")))
+        {
+            while (todo.Count > 0 && t + slot <= b.Item1) { res.Add((t, todo.Dequeue())); t += slot; }
+            if (b.Item3.Length > 0) res.Add((b.Item1, b.Item3));
+            if (b.Item2 > t) t = b.Item2;
+        }
+        var lines = res.OrderBy(x => x.At).Select(x => x.Text != "" && Regex.IsMatch(x.Text, @"^\d{1,2}[:.]\d{2}") ? x.Text : $"{x.At:hh\\:mm} {x.Text}").ToList();
+        if (todo.Count > 0) lines.Add($"Не влезло в день: {todo.Count}");
+        return lines;
+    }
+
+    /// <summary>Does a task talk about this program or site? Only by clear names: a Latin word or a known alias, not every word of the sentence.</summary>
+    internal static bool TaskMentions(string task, string process, string title, string? url)
+    {
+        foreach (var w in Regex.Split(task.ToLowerInvariant(), @"[^\p{L}\p{N}.]+").Where(w => w.Length >= 2))
+            if ((Aliases.ContainsKey(w) || (Regex.IsMatch(w, "^[a-z0-9.]{3,}$") && !w.All(char.IsDigit))) && Matches(w, process, title, url)) return true;
+        return false;
+    }
 
     /// <summary>Does it. The line always stays as a note too, with the program it was written in. Returns what to say back.</summary>
     public static string Apply(string text, string app)
@@ -128,6 +190,8 @@ public static class SecPlan
         if (p.IsTask && s.Tasks)
         {
             store.Tasks.Add(new SecTask { Text = p.Text, Due = p.At, HasTime = p.HasTime });
+            if (s.Milestones && p.At is { } due)
+                foreach (var (at, label) in MilestonesFor(p.Text, due, now)) Reminders.Add(label, at, true);
             if (p.Kind == "task") said = "Добавила в дела";
         }
         SecStore.Save();
@@ -159,16 +223,18 @@ public static class SecPlan
     static readonly string[] Months = { "январ", "феврал", "март", "апрел", "ма", "июн", "июл", "август", "сентябр", "октябр", "ноябр", "декабр" };
 
     static bool IsDayHeading(string line) =>
-        line.Length < 40 && (WeekWords.Any(w => Regex.IsMatch(line, @"\b" + w, Ru)) || Regex.IsMatch(line, @"^\s*\d{1,2}\.\d{1,2}(\.\d{2,4})?\s*$") || Regex.IsMatch(line, @"^\s*\d{1,2}\s+(" + string.Join("|", Months) + @")\w*", Ru));
+        line.Length < 40 && (WeekWords.Any(w => Regex.IsMatch(line, @"\b" + w, Ru)) || Regex.IsMatch(line, @"^(пн|вт|ср|чт|пт|сб|вс)\b", Ru) || Regex.IsMatch(line, @"^\s*\d{1,2}\.\d{1,2}(\.\d{2,4})?\s*$") || Regex.IsMatch(line, @"^\s*\d{1,2}\s+(" + string.Join("|", Months) + @")\w*", Ru));
 
     /// <summary>The block under the heading of that day, or null: pages differ too much to guess beyond a clear heading.</summary>
     public static List<string>? ScheduleFor(string pageText, DateTime day)
     {
         var lines = pageText.Split('\n').Select(l => l.Trim()).Where(l => l.Length > 0).ToArray();
         var word = WeekWords[(int)day.DayOfWeek];
-        var dated = new[] { day.ToString("dd.MM"), day.ToString("d.MM"), $"{day.Day} {Months[day.Month - 1]}" };
+        var dated = new[] { day.ToString("dd.MM"), day.ToString("d.MM"), $"{day.Day} {Months[day.Month - 1]}", $"{day:dd} {Months[day.Month - 1]}" };
+        var shortDay = new[] { "вс", "пн", "вт", "ср", "чт", "пт", "сб" }[(int)day.DayOfWeek];
         int start = Array.FindIndex(lines, l => l.Length < 40 && dated.Any(d => l.Contains(d, StringComparison.OrdinalIgnoreCase)));
         if (start < 0) start = Array.FindIndex(lines, l => l.Length < 40 && Regex.IsMatch(l, @"\b" + word, Ru));
+        if (start < 0) start = Array.FindIndex(lines, l => l.Length < 40 && Regex.IsMatch(l, @"^" + shortDay + @"\b", Ru));
         if (start < 0) return null;
         var res = new List<string>();
         for (int i = start + 1; i < lines.Length && res.Count < 12; i++)

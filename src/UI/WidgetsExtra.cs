@@ -543,8 +543,18 @@ public static partial class Widgets
                     try { foreach (var e in await Core.Calendar.On(DateTime.Today.AddDays(d))) if (e.AllDay || e.Start >= DateTime.Now) items.Add((e.Start, !e.AllDay, e.Title + (e.Place.Length > 0 ? $" · {e.Place}" : ""), null)); }
                     catch { }
 #endif
+            #if SECRETARY
+            if (Settings.Current.Secretary.Enabled)
+                foreach (var line in await SecSchedule.Lines(DateTime.Today))
+                    if (SecPlan.LineTime(line) is { } lt && DateTime.Today + lt >= DateTime.Now) items.Add((DateTime.Today + lt, true, line, null));
+#endif
             list.Children.Clear();
-            if (items.Count == 0) { list.Children.Add(UiKit.Text((Edition.HasJarvis ? "На неделю ничего. Скажи или напиши Джарвису: " : Edition.HasSecretary ? "На неделю ничего. Нажми «Добавить» и напиши: " : "На неделю ничего. ") + "«в пятницу сдать отчёт».", 12, true)); return; }
+            var tasks = new List<(string Text, Action Done)>();
+#if SECRETARY
+            if (Settings.Current.Secretary.Enabled && Settings.Current.Secretary.Tasks)
+                foreach (var t in Secretary.OpenTasks().Take(6)) tasks.Add((t.Due is { } due ? $"{t.Text} · {due:dd.MM}" : t.Text, () => Secretary.Finish(t)));
+#endif
+            if (items.Count == 0 && tasks.Count == 0) { list.Children.Add(UiKit.Text((Edition.HasJarvis ? "На неделю ничего. Скажи или напиши Джарвису: " : Edition.HasSecretary ? "На неделю ничего. Нажми «Добавить» и напиши: " : "На неделю ничего. ") + "«в пятницу сдать отчёт».", 12, true)); return; }
             string? lastDay = null;
             foreach (var it in items.OrderBy(i => i.At).Take(10))
             {
@@ -568,6 +578,20 @@ public static partial class Widgets
                     Foreground = it.R != null ? B("TextBrush") : B("AccentBrush") };   // accent = from your calendar
                 row.Children.Add(txt);
                 list.Children.Add(row);
+            }
+            if (tasks.Count > 0)
+            {
+                var head = UiKit.Text("Дела", 11, true); head.Margin = new Thickness(0, lastDay == null ? 0 : 8, 0, 2); head.FontWeight = FontWeights.SemiBold;
+                list.Children.Add(head);
+                foreach (var (text, finish) in tasks)
+                {
+                    var row = new DockPanel { Margin = new Thickness(0, 1, 0, 1) };
+                    var done = new Button { Content = "\uE73E", FontFamily = Icon, Style = (Style)Application.Current.Resources["GhostButton"], ToolTip = "Сделано" };
+                    done.Click += (_, _) => { finish(); Load(); };
+                    DockPanel.SetDock(done, Dock.Right); row.Children.Add(done);
+                    row.Children.Add(new TextBlock { Text = text, FontSize = 13, TextTrimming = TextTrimming.CharacterEllipsis, ToolTip = text, VerticalAlignment = VerticalAlignment.Center });
+                    list.Children.Add(row);
+                }
             }
         }
         return (root, null, Load);

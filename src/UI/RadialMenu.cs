@@ -56,6 +56,17 @@ public static class RadialMenu
                 new("\uE765", "Написать", () => Actions.Run("jarvisType")),
             })),
 #endif
+#if SECRETARY
+            ("secretary", new("\uE70B", "Секретарша", Sub: () => new List<Item>
+            {
+                new("\uE8BD", SecInbox.Count > 0 ? $"Окно ({SecInbox.Count})" : "Окно", () => Actions.Run("secDesk")),
+                new("\uE70B", "Заметка", () => Actions.Run("secNote")),
+                new("\uE765", "Записать", () => Actions.Run("secQuick")),
+                new("\uE720", "Голосом", () => Actions.Run("secVoice")),
+                new("\uE8A1", "Запомнить", () => Actions.Run("secRemember")),
+                new("\uE8C8", "Из выделенного", () => Actions.Run("secClip")),
+            })),
+#endif
             ("sound", new("\uE7F5", "Звук", Sub: () => Audio.Devices(DataFlow.Render).Select(d => new Item(d.IsDefault ? "\uE73E" : "\uE7F5", Short(d.Name), () => Actions.Run("audio:" + d.Id))).ToList())),
             ("music", new("\uE8D6", "Музыка", Sub: () => new List<Item>
             {

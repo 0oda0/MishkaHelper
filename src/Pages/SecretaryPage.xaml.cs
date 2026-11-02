@@ -13,6 +13,12 @@ public partial class SecretaryPage : UserControl
     /// <summary>Feature switches. Also shown by the first-run setup.</summary>
     public static readonly (string Name, string Hint, Func<bool> Get, Action<bool> Set)[] Features =
     {
+        ("Летающая кнопка", "Открывает окно секретарши, показывает, сколько ждёт ответа, и говорит короткие подсказки рядом с собой. В игре и на весь экран прячется.", () => S.Bubble, v => S.Bubble = v),
+        ("Подсказки по программам", "Что-то по делу о том, что сейчас открыто: заметка, запомненный сайт, дело про эту программу. В системных окнах и играх молчит.", () => S.ContextHints, v => S.ContextHints = v),
+        ("Подготовка к парам и встречам", "За 15 минут: что, где, и кнопка набора или ссылки на встречу.", () => S.Prep, v => S.Prep = v),
+        ("Предупреждать о дальних сроках", "Дело с далёким сроком: за неделю, за 3 дня и за день.", () => S.Milestones, v => S.Milestones = v),
+        ("Замечать привычки", "Одна и та же программа в одно время три недели: предложит напоминание. Спрашивает один раз.", () => S.Habits, v => S.Habits = v),
+        ("Подсказка при долгой работе", "3 часа в одной программе, а дело на сегодня не закрыто.", () => S.LongSession, v => S.LongSession = v),
         ("Заметки к программам и сайтам", "Свой текст для каждой программы и каждого сайта, по горячей клавише.", () => S.AppNotes, v => S.AppNotes = v),
         ("Показывать заметку при открытии", "Один раз за сеанс, когда программа выходит на передний план.", () => S.AppHints, v => S.AppHints = v),
         ("Быстрая заметка", "Текст с датой сам становится напоминанием.", () => S.Capture, v => S.Capture = v),
@@ -26,7 +32,7 @@ public partial class SecretaryPage : UserControl
         ("Разбор «Загрузок»", "Подсказывает, куда разложить файлы. Без твоей кнопки ничего не двигает.", () => S.Downloads, v => S.Downloads = v),
         ("Встречи из календаря", "За 10 минут до начала; ссылка на встречу открывается по нажатию.", () => S.Meetings, v => S.Meetings = v),
         ("Напоминать о перерыве", "После долгой работы без пауз.", () => S.Breaks, v => S.Breaks = v),
-        ("Дублировать напоминания на телефон", "Через приложение Mishka.", () => S.ToPhone, v => S.ToPhone = v),
+        ("Важное на телефон, когда меня нет", "Если за ПК никого 10 минут: напоминания, пары и важные письма идут в приложение Mishka.", () => S.ToPhone, v => S.ToPhone = v),
         ("Дела с галочками", "«Надо сдать отчёт» попадает в список. Просроченное остаётся в утренней сводке.", () => S.Tasks, v => S.Tasks = v),
         ("Повторы", "«Каждый вторник в 18 тренировка», «каждое 5-е оплатить интернет».", () => S.Repeats, v => S.Repeats = v),
         ("Дни рождения и даты", "«День рождения мамы 12 мая» — каждый год и за 3 дня до него; такие же события из календаря.", () => S.Dates, v => S.Dates = v),
@@ -47,7 +53,8 @@ public partial class SecretaryPage : UserControl
         Render();
         Secretary.Changed += OnChanged;
         SecMail.Changed += OnChanged;
-        Unloaded += (_, _) => { Secretary.Changed -= OnChanged; SecMail.Changed -= OnChanged; };
+        SecInbox.Changed += OnChanged;
+        Unloaded += (_, _) => { Secretary.Changed -= OnChanged; SecMail.Changed -= OnChanged; SecInbox.Changed -= OnChanged; };
     }
 
     void OnChanged() => Dispatcher.BeginInvoke(Render);
@@ -92,12 +99,12 @@ public partial class SecretaryPage : UserControl
         Cards.Children.Add(TodayCard());
         if (S.Tasks) Cards.Children.Add(TasksCard());
         Cards.Children.Add(SearchCard());
-        if (SecStore.Cur.Suggestions.Count > 0) Cards.Children.Add(WaitingCard());
+        if (SecInbox.Count > 0) Cards.Children.Add(WaitingCard());
         Cards.Children.Add(RememberedCard());
         if (S.AppNotes) Cards.Children.Add(NotesCard());
         if (S.Mail) Cards.Children.Add(MailCard());
         if (S.DayLog && Secretary.DayLog() is { Count: > 0 } log) Cards.Children.Add(DayLogCard(log));
-        if (S.Repeats || S.AppTriggers) Cards.Children.Add(RepeatsCard());
+        Cards.Children.Add(RepeatsCard());
         if (S.Meetings || S.Dates) Cards.Children.Add(CalendarCard());
         if (S.Workspace) Cards.Children.Add(WorkspaceCard());
         if (S.Downloads) Cards.Children.Add(DownloadsCard());
@@ -111,7 +118,21 @@ public partial class SecretaryPage : UserControl
         sw.Click += (_, _) => { S.Enabled = sw.IsChecked == true; Settings.Save(); Secretary.Apply(); Render(); };
         b.Children.Add(sw);
         var hk = Settings.Current.Hotkeys;
-        var keys = UiKit.Text($"Заметка к программе — {Hotkeys.Pretty(hk.GetValueOrDefault("secNote", ""))}\nБыстрая заметка — {Hotkeys.Pretty(hk.GetValueOrDefault("secQuick", ""))}\nГолосом — {Hotkeys.Pretty(hk.GetValueOrDefault("secVoice", ""))}\nЗапомнить страницу — {Hotkeys.Pretty(hk.GetValueOrDefault("secRemember", ""))}", 12, true);
+        Btn(b, "Открыть окно секретарши", () => SecDesk.Open(activate: true), true);
+        var name = new TextBox { Text = S.Name, Padding = new Thickness(8), Margin = new Thickness(0, 6, 0, 4), MaxLength = 24 };
+        name.LostFocus += (_, _) => { S.Name = name.Text.Trim().Length > 0 ? name.Text.Trim() : "Секретарша"; Settings.Save(); };
+        b.Children.Add(UiKit.Text("Имя и манера речи", 11, true));
+        b.Children.Add(name);
+        var tone = new ComboBox { ItemsSource = new[] { "Деловая", "Дружелюбная", "Коротко" }, SelectedIndex = S.Tone == "friend" ? 1 : S.Tone == "short" ? 2 : 0, Margin = new Thickness(0, 0, 0, 4) };
+        tone.SelectionChanged += (_, _) => { S.Tone = tone.SelectedIndex == 1 ? "friend" : tone.SelectedIndex == 2 ? "short" : "work"; Settings.Save(); };
+        b.Children.Add(tone);
+        if (Edition.HasJarvis)
+        {
+            var speak = new CheckBox { Style = St("Switch"), Content = "Читать утреннюю сводку вслух", IsChecked = S.SpeakMorning };
+            speak.Click += (_, _) => { S.SpeakMorning = speak.IsChecked == true; Settings.Save(); };
+            b.Children.Add(speak);
+        }
+        var keys = UiKit.Text($"Окно секретарши — {Hotkeys.Pretty(hk.GetValueOrDefault("secDesk", ""))}\nЗаметка к программе — {Hotkeys.Pretty(hk.GetValueOrDefault("secNote", ""))}\nБыстрая заметка — {Hotkeys.Pretty(hk.GetValueOrDefault("secQuick", ""))}\nГолосом — {Hotkeys.Pretty(hk.GetValueOrDefault("secVoice", ""))}\nЗапомнить страницу — {Hotkeys.Pretty(hk.GetValueOrDefault("secRemember", ""))}", 12, true);
         keys.Margin = new Thickness(0, 8, 0, 4);
         b.Children.Add(keys);
         Btn(b, "Поменять клавиши", () => App.Current.Navigate("Hotkeys"));
@@ -195,9 +216,17 @@ public partial class SecretaryPage : UserControl
 
     UIElement RepeatsCard()
     {
-        var (c, b) = Card("Повторы и условия", "Добавляются быстрой заметкой: «каждый вторник в 18 тренировка», «день рождения мамы 12 мая», «когда открою Word, проверить титульник».");
-        foreach (var r in Settings.Current.Reminders.Where(r => r.Repeat.Length > 0).ToList())
-            b.Children.Add(Row($"{r.Text} · {SecPlan.RepeatName(r.Repeat)} · дальше {When.Say(r.At, r.HasTime, DateTime.Now)}", ("✕", () => { Reminders.Remove(r); Render(); })));
+        var (c, b) = Card("Напоминания", "Добавляются быстрой заметкой: «каждый вторник в 18 тренировка», «день рождения мамы 12 мая», «когда открою Word, проверить титульник».");
+        foreach (var r in Settings.Current.Reminders.Where(r => !r.Done).OrderBy(Reminders.RingAt).Take(25).ToList())
+            b.Children.Add(Row($"{r.Text} · {When.Say(r.At, r.HasTime, DateTime.Now)}" + (r.Repeat.Length > 0 ? $" · {SecPlan.RepeatName(r.Repeat)}" : ""),
+                ("✕", () => { Reminders.Remove(r); Render(); }),
+                ("Когда", () =>
+                {
+                    var answer = UiKit.Ask("Перенести", "Когда? Например: завтра в 18:00, в пятницу, через час", "");
+                    if (string.IsNullOrWhiteSpace(answer)) return;
+                    if (When.Parse(answer, DateTime.Now) is not { } w) { Osd.Show("", "Не поняла дату"); return; }
+                    r.At = w.At; r.HasTime = w.HasTime; r.EveWarned = false; Settings.Save(); Render();
+                })));
         foreach (var t in SecStore.Cur.Triggers.ToList())
             b.Children.Add(Row($"Когда откроешь {t.Key}: {t.Text}", ("✕", () => { SecStore.Cur.Triggers.Remove(t); SecStore.Save(); Render(); })));
         return c;
@@ -236,16 +265,35 @@ public partial class SecretaryPage : UserControl
 
     UIElement WaitingCard()
     {
-        var (c, b) = Card("Пока ты был занят");
-        foreach (var s in SecStore.Cur.Suggestions.Take(10).ToList())
-            b.Children.Add(Row(s.Text, ("Убрать", () => { SecStore.Cur.Suggestions.Remove(s); SecStore.Save(); Render(); })));
-        Btn(b, "Убрать всё", () => { SecStore.Cur.Suggestions.Clear(); SecStore.Save(); Render(); });
+        var (c, b) = Card($"Входящие: {SecInbox.Count}", "То, что ждёт твоего решения. Пока не ответишь, никуда не денется.");
+        foreach (var i in SecStore.Cur.Inbox.Take(12).ToList())
+        {
+            var t = UiKit.Text(string.IsNullOrEmpty(i.Title) ? i.Text : $"{i.Title}: {i.Text}", 13); t.TextWrapping = TextWrapping.Wrap; t.Margin = new Thickness(0, 6, 0, 0);
+            b.Children.Add(t);
+            var bar = new WrapPanel();
+            foreach (var (label, click) in SecInbox.Buttons(i)) Btn(bar, label, () => { click(); Render(); });
+            b.Children.Add(bar);
+        }
         return c;
     }
 
     UIElement RememberedCard()
     {
         var (c, b) = Card("Запомнено", $"Открой страницу с расписанием и нажми {Hotkeys.Pretty(Settings.Current.Hotkeys.GetValueOrDefault("secRemember", ""))}.");
+        if (SecSchedule.Page is { } sched)
+        {
+            var result = UiKit.Text("", 12, true); result.TextWrapping = TextWrapping.Wrap;
+            var bar = new WrapPanel();
+            foreach (var (label, day) in new[] { ("Пары сегодня", DateTime.Today), ("Пары завтра", DateTime.Today.AddDays(1)) })
+                Btn(bar, label, async () =>
+                {
+                    result.Text = "Читаю сайт…";
+                    var a = await SecAsk.Reply(label == "Пары сегодня" ? "расписание сегодня" : "расписание завтра");
+                    result.Text = a.Text;
+                });
+            b.Children.Add(bar); b.Children.Add(result);
+            if (SecSchedule.NeedsLogin) Btn(b, "Войти на сайт расписания", () => WebReader.OpenWindow(sched.Target, "Вход на сайт расписания"), true);
+        }
         foreach (var r in SecStore.Cur.Remembered.Take(15).ToList())
             b.Children.Add(Row((r.Daily ? "★ " : "") + r.Title,
                 ("✕", () => { SecStore.Cur.Remembered.Remove(r); SecStore.Save(); Render(); }),

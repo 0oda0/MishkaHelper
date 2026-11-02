@@ -116,6 +116,67 @@ public static class SelfTest
         });
 #endif
 
+#if SECRETARY
+        await Step("sectrack", async () =>   // by name only: logs what the secretary says about each program in front; sample data is taken back at the end; no sound
+        {
+            if (!filter.Contains("sectrack")) return;
+            var sec = Settings.Current.Secretary; var was = sec.Enabled; var store = SecStore.Cur;
+            var tasks = store.Tasks.ToList(); var notes = new Dictionary<string, string>(store.AppNotes); var pages = store.Remembered.ToList(); var inbox = store.Inbox.ToList();
+            sec.Enabled = true; sec.Bubble = true; sec.ContextHints = true; sec.AppHints = true;
+            var speakWas = Settings.Current.Jarvis.Speak; Settings.Current.Jarvis.Speak = false;   // the owner's rule: no sound in tests
+            store.AppNotes["notepad"] = "Пример заметки: черновики храню в папке Учёба";
+            store.Tasks.Add(new SecTask { Text = "Проверить таблицу в excel", Due = DateTime.Today });
+            store.Tasks.Add(new SecTask { Text = "Просроченное для проверки", Due = DateTime.Today.AddDays(-2) });
+            store.Remembered.Add(new RememberedItem { Title = "Пример сайта", Target = "https://example.com/page", App = "msedge" });
+            SecInbox.ReviewOverdue(DateTime.Now);
+            SecInbox.Add(new InboxItem { Kind = "offer", Title = "Напомнить завтра? (из письма)", Text = "Встреча с куратором", At = DateTime.Now.AddDays(1), HasTime = false });
+            Secretary.Hinted += (app, hint) => L($"sectrack: {app} → {hint ?? "молчит"}");
+            Secretary.Apply();
+            L("sectrack: ready");
+            foreach (var q in new[] { "что сегодня?", "какой план", "что просрочено", "где заметка", "что с почтой?", "расписание завтра" })
+                L($"sectrack: «{q}» → {(await SecAsk.Reply(q)).Text.Replace('\n', ' ')}");
+            var until = DateTime.Now.AddMinutes(20);
+            while (DateTime.Now < until && !File.Exists(file + ".stop")) await Task.Delay(500);
+            store.Tasks = tasks; store.AppNotes = notes; store.Remembered = pages; store.Inbox = inbox; sec.Enabled = was; Settings.Current.Jarvis.Speak = speakWas;
+            SecStore.Save(); Settings.Save();
+            L("sectrack: cleaned up");
+        });
+#endif
+
+#if SECRETARY
+        await Step("secsched", async () =>   // by name only, URL in MISHKA_SCHED_URL: the owner signs in once in the window, then the real page is read until the day is found
+        {
+            if (!filter.Contains("secsched")) return;
+            var url = Environment.GetEnvironmentVariable("MISHKA_SCHED_URL") ?? "";
+            var sec = Settings.Current.Secretary; var was = sec.Enabled; var store = SecStore.Cur; var pages = store.Remembered.ToList();
+            sec.Enabled = true; sec.ScheduleRead = true;
+            store.Remembered.Insert(0, new RememberedItem { Title = "Расписание", Target = url, Daily = true });
+            WebReader.OpenWindow(url, "Вход на сайт расписания");
+            var until = DateTime.Now.AddMinutes(15);
+            while (DateTime.Now < until && !File.Exists(file + ".stop"))
+            {
+                await Task.Delay(20000);
+                var today = await SecSchedule.Lines(DateTime.Today, fresh: true);
+                var tomorrow = await SecSchedule.Lines(DateTime.Today.AddDays(1), fresh: true);
+                L($"secsched: today {today.Count}, tomorrow {tomorrow.Count}, problem={store.ScheduleProblem}");
+                foreach (var x in today) L("  сегодня: " + x);
+                foreach (var x in tomorrow) L("  завтра: " + x);
+                if (today.Count + tomorrow.Count > 0) break;
+            }
+            store.Remembered = pages; sec.Enabled = was; store.ScheduleProblem = ""; SecStore.Save(); Settings.Save();
+            L("secsched: done");
+        });
+#endif
+
+        await Step("supportpic", async () =>   // by name only: one real message with a tiny picture to the live server
+        {
+            if (!filter.Contains("supportpic")) return;
+            var png = Path.Combine(Path.GetTempPath(), "mishka-test.png");
+            File.WriteAllBytes(png, Convert.FromHexString("89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d49444154789c6360000002000001e221bc330000000049454e44ae426082"));
+            await Support.Send("Проверка скриншота из самотеста", png);
+            L("supportpic: sent, messages " + (await Support.Messages()).Count);
+        });
+
         await Step("support", async () =>   // real server: sends one test message, then waits up to 15 min for an answer in the page
         {
             if (!filter.Contains("support")) return;   // writes to the live server: only when asked by name

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src https://*.supabase.co">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src https://*.supabase.co; img-src https://*.supabase.co">
 <title>Mishka Поддержка</title>
 <style>
 :root{--bg:#0a0a12;--card:#141422;--ctl:#1e1e31;--a:#a259ff;--t:#eeeef6;--m:#8c8ca6;--line:#24243a;--warn:#ffc53d}
@@ -26,6 +26,7 @@ button{cursor:pointer}button.p{background:var(--a);border-color:var(--a);color:#
 #msgs{flex:1;overflow:auto;padding:14px;display:flex;flex-direction:column;gap:6px}
 .b{max-width:70%;padding:8px 11px;border-radius:12px;background:var(--ctl);white-space:pre-wrap;overflow-wrap:anywhere;align-self:flex-start}
 .b.me{background:#a259ff44;align-self:flex-end}
+.b img{display:block;max-width:100%;max-height:360px;border-radius:8px;margin-top:6px;cursor:zoom-in}
 #send{padding:10px;border-top:1px solid var(--line);display:flex;gap:8px}#send textarea{flex:1;min-height:44px;resize:vertical}
 [hidden]{display:none!important}
 #err{color:var(--warn);min-height:1em}
@@ -33,7 +34,7 @@ button{cursor:pointer}button.p{background:var(--a);border-color:var(--a);color:#
 </style>
 </head>
 <body>
-<header><h1>Mishka · поддержка</h1><span id="who" class="m"></span><button id="out" hidden>Выйти</button></header>
+<header><h1>Mishka · поддержка</h1><span id="who" class="m"></span><button id="bell" hidden>Уведомления</button><button id="out" hidden>Выйти</button></header>
 
 <form id="login" hidden>
   <input id="email" type="email" placeholder="Почта админа" autocomplete="username" required>
@@ -59,7 +60,7 @@ button{cursor:pointer}button.p{background:var(--a);border-color:var(--a);color:#
 const $ = id => document.getElementById(id);
 // Public anon key, the same one the app ships; admin rights come only from the signed-in account.
 const DEFAULTS = { url: 'https://xifkllxvzqaudmxuzcgb.supabase.co', key: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhpZmtsbHh2enFhdWRteHV6Y2diIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTM2MTU3NzMsImV4cCI6MjEwOTE5MTc3M30.pZVtbOeCoSDV0ZFp_nAEQ1WRuNDDpq0IKCaLeQtGFls' };
-let cfg = DEFAULTS, session = null, cur = null, showClosed = false, shown = 0;
+let lastUnread = -1, cfg = DEFAULTS, session = null, cur = null, showClosed = false, shown = 0;
 
 async function call(path, opt = {}) {
   const r = await fetch(cfg.url + path, { ...opt, headers: { apikey: cfg.key, Authorization: 'Bearer ' + (session?.access_token || cfg.key), 'Content-Type': 'application/json', ...opt.headers } });
@@ -91,10 +92,13 @@ $('login').onsubmit = async e => {
   } catch (x) { $('err').textContent = x.message; }
 };
 $('out').onclick = signOut;
+// Needs a click: browsers refuse the permission prompt without one. Works while this tab is open.
+$('bell').onclick = async () => { const r = await Notification.requestPermission(); $('bell').hidden = r === 'granted'; };
 
 async function start() {
   const on = !!session;
   $('login').hidden = on; $('main').hidden = !on; $('out').hidden = !on;
+  $('bell').hidden = !on || !window.Notification || Notification.permission === 'granted';
   $('who').textContent = on ? session.user?.email || '' : '';
   if (!on) return;
   loadTickets();
@@ -113,7 +117,10 @@ async function loadTickets() {
       d.append(b, m); d.onclick = () => open(t); return d;
     }));
     if (cur) { const f = rows.find(t => t.id === cur.id); if (f) cur = f; }
-    document.title = (rows.reduce((a, t) => a + t.unread_admin, 0) || '') + ' Mishka Поддержка';
+    const unread = rows.reduce((a, t) => a + t.unread_admin, 0);
+    document.title = (unread || '') + ' Mishka Поддержка';
+    if (unread > lastUnread && lastUnread >= 0 && window.Notification && Notification.permission === 'granted') new Notification('Mishka: новое сообщение', { body: 'Непрочитанных: ' + unread });
+    lastUnread = unread;
   } catch (x) { $('who').textContent = 'Ошибка: ' + x.message; }
 }
 
@@ -127,12 +134,25 @@ async function open(t) {
   loadTickets();
 }
 
+// Private files: a link that works for ten minutes, asked for with the admin's own login.
+async function showPicture(box, path) {
+  try {
+    const j = await call('/storage/v1/object/sign/support/' + path.split('/').map(encodeURIComponent).join('/'), { method: 'POST', body: JSON.stringify({ expiresIn: 600 }) });
+    const url = new URL(cfg.url + '/storage/v1' + j.signedURL);
+    if (url.origin !== cfg.url) return;
+    const img = document.createElement('img'); img.src = url.href; img.alt = 'Скриншот';
+    img.onclick = () => window.open(url.href, '_blank', 'noopener');
+    box.append(img);
+  } catch (x) { const e = document.createElement('div'); e.className = 'm'; e.textContent = 'Скриншот не открылся'; box.append(e); }
+}
+
 async function loadMsgs() {
   if (!cur) return;
   const rows = await call(`/rest/v1/messages?ticket_id=eq.${cur.id}&id=gt.${shown}&select=*&order=id.asc`);
   for (const m of rows) {
     const d = document.createElement('div'); d.className = 'b' + (m.from_admin ? ' me' : '');
     d.textContent = m.body;
+    if (m.attachment) showPicture(d, m.attachment);
     const when = document.createElement('div'); when.className = 'm'; when.textContent = new Date(m.created_at).toLocaleString('ru'); d.append(when);
     $('msgs').append(d); shown = m.id;
   }
