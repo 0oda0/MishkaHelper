@@ -61,13 +61,57 @@ public static class Voice
     static SpeechSynthesizer? _synth;
     static readonly bool NoSpeechTest = Environment.GetEnvironmentVariable("MISHKA_NO_SPEECH") == "1";
 
+    static IReadOnlyList<VoiceInformation>? _system;
+
     static IReadOnlyList<VoiceInformation> SystemVoices()
     {
-        try { if (NoSpeechTest) throw new FileNotFoundException(); return SpeechSynthesizer.AllVoices; }
-        catch (Exception e) { Log.Info("windows speech unavailable: " + e.Message); return Array.Empty<VoiceInformation>(); }
+        if (_system != null) return _system;
+        try { if (NoSpeechTest) throw new FileNotFoundException("simulated"); _system = SpeechSynthesizer.AllVoices; }
+        catch (Exception e) { Log.Info("windows speech unavailable: " + e.Message); _system = Array.Empty<VoiceInformation>(); }
+        return _system;
     }
 
     public static bool HasWindowsVoices => SystemVoices().Count > 0;
+
+    /// <summary>
+    /// Windows without its speech component still gets a voice that needs nothing from the system: the offline Piper one, fetched once on its own.
+    /// True if a voice is ready. Asked again on later starts if there was no internet.
+    /// </summary>
+    public static bool NeedsOwnVoice => !HasWindowsVoices && !PiperReady(Settings.Current.Jarvis.PiperVoice);
+    public static string OwnVoiceStatus { get; private set; } = "";
+    public static event Action? OwnVoiceChanged;
+    static Task<bool>? _ownVoice;
+
+    public static Task<bool> EnsureOwnVoice()
+    {
+        if (!NeedsOwnVoice) return Task.FromResult(true);
+        if (_ownVoice is { IsCompleted: false }) return _ownVoice;
+        return _ownVoice = FetchOwnVoice();
+    }
+
+    static async Task<bool> FetchOwnVoice()
+    {
+        void Say(string t) { OwnVoiceStatus = t; System.Windows.Application.Current?.Dispatcher.BeginInvoke(() => OwnVoiceChanged?.Invoke()); }
+        int shown = -1;
+        try
+        {
+            Say("Скачиваю свой голос Джарвиса…");
+            await DownloadPiper(Settings.Current.Jarvis.PiperVoice, f =>
+            {
+                int pct = (int)(f * 100);
+                if (pct / 5 != shown) { shown = pct / 5; Say($"Скачиваю свой голос Джарвиса: {pct}%"); }
+            });
+            Say("Свой голос готов, работает без интернета.");
+            Log.Info("own voice ready");
+            return true;
+        }
+        catch (Exception e)
+        {
+            Log.Error(e);
+            Say("Голос скачать не удалось: нет связи с сервером. Попробую при следующем запуске, пока Джарвис отвечает текстом.");
+            return false;
+        }
+    }
     static WaveOutEvent? _out;
 
     // Speech queue: each phrase starts synthesizing as soon as it's queued and plays in order (no gaps between sentences).
@@ -133,7 +177,7 @@ public static class Voice
             try { audio = Mp3(await EdgeTts.Synthesize(text, voice, (int)Math.Round((s.Rate - 1) * 100), s.EdgePitch)); }
             catch (Exception e) { Log.Info("edge tts: " + e.Message); }   // offline → fall through
         }
-        if (audio == null && (s.Tts is "piper" or "edge") && PiperReady(s.PiperVoice)) audio = await PiperAudio(text, s.PiperVoice, s.Rate);
+        if (audio == null && (s.Tts is "piper" or "edge" || !HasWindowsVoices) && PiperReady(s.PiperVoice)) audio = await PiperAudio(text, s.PiperVoice, s.Rate);
         audio ??= await WindowsAudio(text, s);
         return s.VoiceFx ? new ButlerFx(audio) : audio;
     }
@@ -237,7 +281,8 @@ public static class Voice
     {
         var all = SystemVoices();
         var voice = all.FirstOrDefault(v => v.DisplayName == s.Voice) ?? all.FirstOrDefault(v => v.Language.StartsWith("ru", StringComparison.OrdinalIgnoreCase)) ?? all.FirstOrDefault();
-        // No engine left at all: Jarvis still answers in text, just without sound.
+        // No engine left at all: Jarvis still answers in text, just without sound; the own voice comes for next time.
+        if (voice == null) _ = EnsureOwnVoice();
         if (voice == null) return new SilenceProvider(new WaveFormat(16000, 16, 1)).ToSampleProvider().Take(TimeSpan.FromMilliseconds(50));
         var synth = _synth ??= new SpeechSynthesizer();
         synth.Voice = voice;

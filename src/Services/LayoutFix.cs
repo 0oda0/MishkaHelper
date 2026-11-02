@@ -43,6 +43,14 @@ public static class LayoutFix
         for (int i = 0; i < 60 && new[] { 0x11, 0x12, 0x10, 0x5B, 0x5C }.Any(k => GetAsyncKeyState(k) < 0); i++) await Task.Delay(25);
     }
 
+    [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
+
+    static bool OwnWindowInFront()
+    {
+        GetWindowThreadProcessId(GetForegroundWindow(), out var pid);
+        return pid == Environment.ProcessId;
+    }
+
     static async Task<string?> Copy()
     {
         var seq = GetClipboardSequenceNumber();
@@ -72,6 +80,9 @@ public static class LayoutFix
         try
         {
             await WaitKeysUp();
+            // Pressed from the palette, wheel or tray: focus goes back to the program a moment later, and our own window has no text to fix.
+            for (int i = 0; i < 20 && OwnWindowInFront(); i++) await Task.Delay(25);
+            if (OwnWindowInFront()) { Osd.Show("", "Перейди в окно с текстом и нажми ещё раз"); return; }
             // ponytail: only text on the clipboard is put back; a copied picture is lost. Reading all formats fails on delayed clipboard data.
             string? before = null;
             try { if (Clipboard.ContainsText()) before = Clipboard.GetText(); } catch { }

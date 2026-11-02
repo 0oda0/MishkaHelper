@@ -691,6 +691,22 @@ public class OptionalWindowsPartsTests
     public void DefenderStatusSaysWhenItCantTell() => Assert.False(new DefenderStatus(false, false, false, "?", default, default, default, "", false).Available);
 }
 
+public class PaletteSearchTests
+{
+    [Theory]
+    [InlineData("замена текста")]
+    [InlineData("заменить")]
+    [InlineData("раскладка")]
+    [InlineData("карамба")]
+    [InlineData("ghbdtn")]
+    [InlineData("текст ошибка")]
+    public void LayoutFixIsFoundByOrdinaryWords(string q) => Assert.True(CommandPalette.Matches(Defaults.HotkeyNames["layoutFix"], "layoutFix", q));
+
+    [Fact] public void OtherCommandsAreNotDragged() => Assert.False(CommandPalette.Matches("Громкость +5", "volUp", "раскладка"));
+    [Fact] public void ReplacementIsNotANote() => Assert.False(CommandPalette.Matches(Defaults.HotkeyNames["secQuick"], "secQuick", "замена текста"));
+    [Fact] public void FullWordsAsTyped() => Assert.True(CommandPalette.Matches(Defaults.HotkeyNames["layoutFix"], "layoutFix", "замена текста"));
+}
+
 public class EdgeGecTests
 {
     // Reference values from edge-tts drm.generate_sec_ms_gec_v2 (Python) for the same timestamps.

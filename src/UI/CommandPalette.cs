@@ -12,6 +12,19 @@ public static class CommandPalette
 
     static Window? _w;
 
+    /// <summary>Words people actually search with, beyond the command's name.</summary>
+    internal static readonly Dictionary<string, string> Synonyms = new()
+    {
+        ["layoutFix"] = "замена заменить текст слово раскладка язык клавиатура исправить перевести перевод неправильная ошибка транслит caramba карамба punto пунто switcher свитчер",
+    };
+
+    internal static bool Matches(string name, string action, string query)
+    {
+        var hay = (name + " " + Synonyms.GetValueOrDefault(action, "")).ToLowerInvariant().Replace('ё', 'е');
+        return query.ToLowerInvariant().Replace('ё', 'е').Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            .All(w => hay.Contains(w) || (w.Length > 4 && hay.Contains(w[..^1])) || (w.Length > 6 && hay.Contains(w[..^2])));   // Russian endings: "текста", "раскладку"
+    }
+
     public static readonly Dictionary<string, string> Extra = new()
     {
         ["desktopIcons"] = "Скрыть/показать значки рабочего стола",
@@ -82,7 +95,7 @@ public static class CommandPalette
         {
             var words = box.Text.ToLowerInvariant().Split(' ', StringSplitOptions.RemoveEmptyEntries);
             list.Items.Clear();
-            foreach (var c in all.Where(c => words.All(wd => c.Name.ToLowerInvariant().Contains(wd))).Take(40))
+            foreach (var c in all.Where(c => Matches(c.Name, c.Action, box.Text)).Take(40))
             {
                 var row = new DockPanel { Tag = c };
                 var hint = UiKit.Text(c.Hint, 11, true); DockPanel.SetDock(hint, Dock.Right); hint.VerticalAlignment = VerticalAlignment.Center;

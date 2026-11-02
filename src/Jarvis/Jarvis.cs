@@ -28,6 +28,7 @@ public static class Jarvis
                 if (s == EarState.Listening && Settings.Current.Jarvis.WakeSound && !Voice.IsSpeaking) Voice.Chime(); });
         }
         if (j.ShowOrb) JarvisOrb.Show();
+        _ = Voice.EnsureOwnVoice();
         Brain.Warmup();
         try { await Ears.Start(); }
         catch (Exception e) { Status?.Invoke(e.Message); Toast.Show("", "Джарвис", e.Message, () => App.Current.Navigate("Jarvis")); }

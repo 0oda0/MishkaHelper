@@ -27,6 +27,7 @@ public sealed class Tray : IDisposable
         menu.Items.Add("Открыть", null, (_, _) => App.Current.ShowMain());
         menu.Items.Add("Быстрая панель", null, (_, _) => Actions.Run("quick"));
         if (Edition.HasSecretary) menu.Items.Add("Секретарша", null, (_, _) => Actions.Run("secDesk"));
+        menu.Items.Add("Заменить текст (раскладка)", null, (_, _) => Actions.Run("layoutFix"));
         menu.Items.Add("Ускорить всё", null, (_, _) => Actions.Run("boost"));
         menu.Items.Add("Виджеты", null, (_, _) => Actions.Run("widgets"));
         menu.Items.Add(new ToolStripSeparator());

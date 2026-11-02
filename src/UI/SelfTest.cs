@@ -177,6 +177,27 @@ public static class SelfTest
             L("supportpic: sent, messages " + (await Support.Messages()).Count);
         });
 
+        await Step("ownvoice", async () =>   // by name only, with MISHKA_NO_SPEECH=1 and a test data folder: fetches the voice, renders to a file, never plays anything
+        {
+            if (!filter.Contains("ownvoice")) return;
+            var j = Settings.Current.Jarvis;
+            j.Tts = "windows"; j.Speak = false;
+            L($"ownvoice: windows voices {Voice.HasWindowsVoices}, needs own {Voice.NeedsOwnVoice}");
+            L($"ownvoice: fetched {await Voice.EnsureOwnVoice()} ({Voice.OwnVoiceStatus})");
+            var wav = Path.Combine(Path.GetTempPath(), "mishka-ownvoice.wav");
+            L($"ownvoice: rendered {await Voice.RenderToFile("Добрый вечер. Это проверка собственного голоса.", wav):0.0} s, {new FileInfo(wav).Length} bytes");
+            File.Delete(wav);
+        });
+
+        await Step("palette", async () =>   // by name only: opens the command palette a little later, for a hand check over another program
+        {
+            if (!filter.Contains("palette")) return;
+            await Task.Delay(15000);
+            CommandPalette.Toggle();
+            L("palette: open");
+            await Task.Delay(25000);
+        });
+
         await Step("support", async () =>   // real server: sends one test message, then waits up to 15 min for an answer in the page
         {
             if (!filter.Contains("support")) return;   // writes to the live server: only when asked by name

@@ -81,6 +81,7 @@ public partial class HomePage : UserControl
             ("Ctrl+Alt+K", "Поиск любой функции: набери слово и нажми Enter.", "Попробовать", CommandPalette.Toggle),
             ("", "Полная очистка — мусор, автозагрузка, фоновые программы одной кнопкой.", "Открыть", () => App.Current.Navigate("Boost")),
         };
+        steps.Add((Hotkeys.Pretty(Settings.Current.Hotkeys.GetValueOrDefault("layoutFix", "")), "Набрал не в той раскладке? ghbdtn → привет: заменит выделенное или последнее слово.", "Подробнее", () => App.Current.Navigate("Tools")));
         if (Edition.HasJarvis) steps.Add(("Ctrl+Alt+J", "Джарвис — голосовой помощник. Один раз скачать модели — и «Джарвис, открой браузер».", "Настроить", () => App.Current.Navigate("Jarvis")));
         foreach (var (key, text, button, go) in steps)
         {

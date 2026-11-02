@@ -67,6 +67,7 @@ public static class RadialMenu
                 new("\uE8C8", "Из выделенного", () => Actions.Run("secClip")),
             })),
 #endif
+            ("layout", new("\uE8D3", "Раскладка", () => Actions.Run("layoutFix"))),
             ("sound", new("\uE7F5", "Звук", Sub: () => Audio.Devices(DataFlow.Render).Select(d => new Item(d.IsDefault ? "\uE73E" : "\uE7F5", Short(d.Name), () => Actions.Run("audio:" + d.Id))).ToList())),
             ("music", new("\uE8D6", "Музыка", Sub: () => new List<Item>
             {

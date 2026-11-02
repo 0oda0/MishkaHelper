@@ -94,7 +94,15 @@ public partial class JarvisPage : UserControl
         Status();
         b.Children.Add(status);
         if (Voice.HasWindowsVoices) Combo(b, "Голос Windows (запасной)", Voice.WindowsVoices().Select(v => (v, v)), J.Voice, v => J.Voice = v);
-        else b.Children.Add(UiKit.Text("Голосов Windows на этом ПК нет: используются нейроголоса и Piper. Без интернета и без Piper Джарвис отвечает только текстом.", 11, true));
+        else {
+            var ownVoice = UiKit.Text("", 11, true); ownVoice.TextWrapping = TextWrapping.Wrap;
+            void ShowOwn() => ownVoice.Text = "В этой Windows нет своих голосов, поэтому у Джарвиса свой: работает без интернета и без компонентов системы. " + (Voice.NeedsOwnVoice ? Voice.OwnVoiceStatus : "Голос готов.");
+            Voice.OwnVoiceChanged += ShowOwn;
+            Unloaded += (_, _) => Voice.OwnVoiceChanged -= ShowOwn;
+            _ = Voice.EnsureOwnVoice();
+            ShowOwn();
+            b.Children.Add(ownVoice);
+        }
         Switch(b, "Эффект «ИИ-дворецкий» (ниже тон, цифровой оттенок)", J.VoiceFx, v => J.VoiceFx = v);
         var rateText = UiKit.Text($"Скорость речи: {J.Rate:0.0}×", 12, true);
         var rate = new Slider { Minimum = 0.7, Maximum = 1.5, Value = J.Rate, TickFrequency = 0.05, IsSnapToTickEnabled = true };
