@@ -507,6 +507,175 @@ public class LayoutFixTests
     [Fact] public void WholeLineCopyIsNotASelection() { Assert.True(LayoutFix.IsLineCopy("строка\r\n")); Assert.False(LayoutFix.IsLineCopy("слово")); }
 }
 
+public class AutoLayoutTests
+{
+    [Theory]
+    [InlineData("ghbdtn", "привет")]
+    [InlineData("Ghbdtn", "Привет")]
+    [InlineData("cgfcb,j", "спасибо")]
+    [InlineData("hfcgbcfybt", "расписание")]
+    [InlineData("pfdnhf", "завтра")]
+    [InlineData("hf,jnf", "работа")]
+    [InlineData("rjvgm.nth", "компьютер")]
+    [InlineData("ctujlyz", "сегодня")]
+    [InlineData("руддщ", "hello")]
+    [InlineData("цштвщцы", "windows")]
+    [InlineData("пщщвнуфк", "goodyear")]
+    public void WrongLayoutIsFixed(string typed, string want) => Assert.Equal(want, AutoLayout.Decide(typed));
+
+    [Theory]
+    // real words stay, in either language
+    [InlineData("привет")] [InlineData("расписание")] [InlineData("компьютер")] [InlineData("объект")] [InlineData("Иван")] [InlineData("щётка")] [InlineData("вообще")] [InlineData("здравствуйте")]
+    [InlineData("hello")] [InlineData("windows")] [InlineData("github")] [InlineData("Telegram")] [InlineData("docker")] [InlineData("python")] [InlineData("mishka")] [InlineData("privet")] [InlineData("https")] [InlineData("json")]
+    // short, acronyms, digits, mixed: not worth guessing
+    [InlineData("git")] [InlineData("вк")] [InlineData("HTML")] [InlineData("МТУСИ")] [InlineData("win11")] [InlineData("abc1")] [InlineData("kotlin")] [InlineData("qwerty")]
+    public void RightWordsStay(string typed) => Assert.Null(AutoLayout.Decide(typed));
+
+    [Theory]
+    [InlineData("йогурт")]
+    [InlineData("ёлка")]
+    [InlineData("хрущёв")]
+    [InlineData("гжель")]
+    [InlineData("мгла")]
+    [InlineData("ткань")]
+    [InlineData("взгляд")]
+    [InlineData("вздрогнуть")]
+    [InlineData("счастье")]
+    [InlineData("пчела")]
+    [InlineData("льдина")]
+    [InlineData("шхуна")]
+    [InlineData("чтобы")]
+    [InlineData("подъезжать")]
+    [InlineData("съешь")]
+    [InlineData("фейерверк")]
+    [InlineData("аэропорт")]
+    [InlineData("дуэт")]
+    [InlineData("пьеса")]
+    [InlineData("вьюга")]
+    [InlineData("тьма")]
+    [InlineData("обьём")]
+    [InlineData("вьетнам")]
+    [InlineData("мгновение")]
+    [InlineData("ящерица")]
+    [InlineData("жюри")]
+    [InlineData("брошюра")]
+    [InlineData("парашют")]
+    [InlineData("экзамен")]
+    [InlineData("щавель")]
+    [InlineData("эксперимент")]
+    [InlineData("кофе")]
+    [InlineData("метро")]
+    [InlineData("такси")]
+    [InlineData("шоссе")]
+    [InlineData("кенгуру")]
+    [InlineData("интервью")]
+    [InlineData("ютуб")]
+    [InlineData("гугл")]
+    [InlineData("дискорд")]
+    [InlineData("телеграм")]
+    [InlineData("виндовс")]
+    [InlineData("кринж")]
+    [InlineData("yandex")]
+    [InlineData("kubernetes")]
+    [InlineData("nginx")]
+    [InlineData("postgres")]
+    [InlineData("linux")]
+    [InlineData("ubuntu")]
+    [InlineData("xbox")]
+    [InlineData("steam")]
+    [InlineData("wifi")]
+    [InlineData("ozon")]
+    [InlineData("avito")]
+    [InlineData("webp")]
+    [InlineData("photoshop")]
+    [InlineData("excel")]
+    [InlineData("word")]
+    [InlineData("outlook")]
+    [InlineData("chrome")]
+    [InlineData("firefox")]
+    [InlineData("rhythm")]
+    [InlineData("strength")]
+    [InlineData("twelfth")]
+    [InlineData("sphinx")]
+    [InlineData("lynx")]
+    [InlineData("crypt")]
+    [InlineData("psychology")]
+    [InlineData("schnitzel")]
+    [InlineData("nvidia")]
+    [InlineData("intel")]
+    [InlineData("acer")]
+    [InlineData("lenovo")]
+    [InlineData("samsung")]
+    [InlineData("xiaomi")]
+    [InlineData("huawei")]
+    [InlineData("android")]
+    [InlineData("iphone")]
+    [InlineData("gmail")]
+    [InlineData("facebook")]
+    [InlineData("instagram")]
+    [InlineData("tiktok")]
+    [InlineData("spotify")]
+    [InlineData("netflix")]
+    public void UncommonWordsStay(string typed) => Assert.Null(AutoLayout.Decide(typed));
+
+    [Theory]
+    [InlineData(0x47u, false, 'g')] [InlineData(0x47u, true, 'G')] [InlineData(0xBCu, false, ',')] [InlineData(0xBEu, false, '.')] [InlineData(0xDBu, false, '[')] [InlineData(0x31u, false, '\0')]
+    public void PhysicalKeys(uint vk, bool shift, char c) => Assert.Equal(c, AutoLayout.KeyChar(vk, shift));
+
+    [Fact]
+    public void NotesWithoutMarkup()
+    {
+        var p = Updater.PlainNotes("## Что нового в 1.4\n\n**Секретарша**\n- **Кнопка:** всегда `рядом`\n* ещё");
+        Assert.Equal("Секретарша\n• Кнопка: всегда рядом\n• ещё", p);
+        Assert.EndsWith("…", Updater.PlainNotes("1\n2\n3", 2));
+    }
+
+    [Fact]
+    public void WeekSummaryCountsHonestly()
+    {
+        var now = new DateTime(2026, 11, 8, 20, 0, 0);
+        var l = Secretary.WeekLog(now, new[]
+        {
+            new SecTask { DoneAt = now.AddDays(-1) }, new SecTask { DoneAt = now.AddDays(-9) },
+            new SecTask { Due = now.AddDays(-2) }, new SecTask { Due = now.AddDays(3) }, new SecTask { Due = now.AddDays(30) },
+        });
+        Assert.Equal("За неделю сделано: 1, просрочено: 1", l[0]);
+        Assert.Equal("На следующей неделе дел со сроком: 1", l[1]);
+    }
+
+    [Fact]
+    public void BackupFromToolsPageAlsoRefusesStrangeFiles() => Assert.Contains("settings.json", Backup.Files);
+}
+
+public class AutoLayoutRecallTests
+{
+    readonly Xunit.Abstractions.ITestOutputHelper _o;
+    public AutoLayoutRecallTests(Xunit.Abstractions.ITestOutputHelper o) => _o = o;
+
+    const string Ru = "как что это кто где так там нет все для мне уже вот при про над под без или дела есть будет была было который когда только может очень после нужно надо потом здесь больше почему потому этого если чтобы тоже всегда никогда сейчас теперь думаю знаю хочу могу буду делать работа сегодня завтра вчера человек время жизнь день рука глаз голова дверь стол город страна мир вопрос ответ слово место лицо друг дом сторона часть деньги машина вода ночь утро вечер неделя месяц привет спасибо пожалуйста хорошо плохо нормально понятно конечно наверное можно нельзя давай пойдем пошли ладно окей короче вообще кстати просто реально очень сильно быстро медленно большой маленький новый старый первый последний другой каждый любой один два три четыре пять шесть семь восемь девять десять программа компьютер телефон сообщение письмо документ файл папка отчет задание экзамен лекция университет преподаватель расписание занятие группа студент проект задача ошибка проблема решение настройка обновление секретарша заметка напоминание скачать установить запустить открыть закрыть написать отправить посмотреть проверить сделать исправить";
+    const string En = "the and for you are not with this that have from was but all can what your about which their would there could other these some time people because hello world thanks please today tomorrow yesterday work home house great good right wrong maybe really think know want need make take give find tell help where when while why how program computer phone message letter document file folder report project problem error update settings download install open close write send check meeting schedule teacher student university morning evening weekend money family friend";
+
+    [Fact]
+    public void WordsTheModelNeverSaw()
+    {
+        const string ru = "кошка собака молоко погода история математика физика химия литература вокзал больница аптека библиотека гитара карандаш тетрадь рюкзак наушники зарядка кровать холодильник сковорода бабушка дедушка ребята девушка парень мужчина женщина красный зелёный синий тёплый холодный весёлый грустный уставший голодный";
+        const string en = "kitchen garden summer winter history science doctor market guitar pencil backpack headphones charger bottle coffee sugar butter cheese chicken yellow purple orange simple strong weak happy tired hungry";
+        const string real = "vasya petya sasha moscow ivanov smirnov kolya dima roma anton maxim nikita lena katya olya sveta privet poka spasibo kak dela норм кек лол пон чел хз бро кринж рофл имба нуб лаба препод общага стипуха зачётка пятёрка чётко мтуси вуз яндекс сбер озон авито wb ozon yandex sber vk tg dota csgo valorant minecraft roblox fortnite genshin nvidia amd ryzen geforce rtx gtx ssd hdd usb hdmi wifi bluetooth todo readme config localhost admin root sudo bash grep curl wget mkdir chmod async await const void null true false string";
+        int found(string list) { var w = list.Split(' '); var miss = w.Where(x => AutoLayout.Decide(LayoutFix.Convert(x)!) != x).ToList(); _o.WriteLine($"unseen {w.Length - miss.Count}/{w.Length}, missed: {string.Join(' ', miss)}"); return 100 * (w.Length - miss.Count) / w.Length; }
+        var wrong = real.Split(' ').Where(x => AutoLayout.Decide(x) != null).ToList();
+        _o.WriteLine($"false fixes {wrong.Count}/{real.Split(' ').Length}: {string.Join(' ', wrong.Select(x => x + "→" + AutoLayout.Decide(x)))}");
+        found(ru); found(en);
+    }
+
+    [Fact]
+    public void MostWrongLayoutWordsAreFound()
+    {
+        int Rate(string list) { var w = list.Split(' '); var missed = w.Where(x => AutoLayout.Decide(LayoutFix.Convert(x)!) != x).ToList(); _o.WriteLine($"{w.Length - missed.Count}/{w.Length} missed: {string.Join(' ', missed)}"); return 100 * (w.Length - missed.Count) / w.Length; }
+        Assert.True(Rate(Ru) >= 85);
+        Assert.True(Rate(En) >= 85);
+    }
+}
+
 public class EdgeGecTests
 {
     // Reference values from edge-tts drm.generate_sec_ms_gec_v2 (Python) for the same timestamps.

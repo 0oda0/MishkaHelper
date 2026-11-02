@@ -42,6 +42,15 @@ public static class Updater
     internal static bool AssetMatches(string n, string kind, string ext, string prefix) =>
         n.StartsWith(prefix + kind, StringComparison.OrdinalIgnoreCase) && n.EndsWith(ext, StringComparison.OrdinalIgnoreCase);
 
+    /// <summary>Release text is Markdown; the app shows plain text. The first heading only repeats the version.</summary>
+    internal static string PlainNotes(string md, int maxLines = 8)
+    {
+        var lines = md.Replace("\r\n", "\n").Split('\n').Select(l => l.Trim()).Where(l => l.Length > 0 && !l.StartsWith("## Что нового"))
+            .Select(l => System.Text.RegularExpressions.Regex.Replace(l, @"\*\*|`|^#+\s*", ""))
+            .Select(l => System.Text.RegularExpressions.Regex.Replace(l, @"^[-*]\s+", "• ")).Take(maxLines + 1).ToList();
+        return string.Join("\n", lines.Take(maxLines)) + (lines.Count > maxLines ? "\n…" : "");
+    }
+
     public static async Task<UpdateInfo?> Check()
     {
         var json = await Http.GetStringAsync($"https://api.github.com/repos/{Repo}/releases/latest");

@@ -215,6 +215,16 @@ public static class Secretary
         return l;
     }
 
+    /// <summary>Sunday evening: the week in two lines. Finished tasks are kept for a week, so the count is honest.</summary>
+    internal static List<string> WeekLog(DateTime now, IEnumerable<SecTask> tasks)
+    {
+        var all = tasks.ToList();
+        int done = all.Count(t => t.DoneAt > now.AddDays(-7));
+        int late = all.Count(t => t.DoneAt == null && t.Due?.Date < now.Date);
+        int next = all.Count(t => t.DoneAt == null && t.Due?.Date > now.Date && t.Due <= now.AddDays(7));
+        return new() { $"За неделю сделано: {done}" + (late > 0 ? $", просрочено: {late}" : ""), $"На следующей неделе дел со сроком: {next}" };
+    }
+
     // Birthdays and anniversaries from the calendar, 3 days ahead.
     static readonly Regex DateEvent = new(@"день\s+рождени|\bдр\b|годовщин|birthday|anniversary", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
@@ -312,6 +322,7 @@ public static class Secretary
         items.AddRange(await SecSchedule.Lines(day));
         var daily = SecStore.Cur.Remembered.FirstOrDefault(x => x.Daily);
         var log = S.DayLog ? DayLog() : new();
+        if (S.DayLog && DateTime.Today.DayOfWeek == DayOfWeek.Sunday) log.AddRange(WeekLog(DateTime.Now, SecStore.Cur.Tasks));
         if (items.Count == 0 && daily == null && log.Count == 0) return;
         var parts = new List<string>();
         if (log.Count > 0) parts.Add(string.Join("\n", log));

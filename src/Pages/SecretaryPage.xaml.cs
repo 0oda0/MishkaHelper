@@ -324,7 +324,9 @@ public partial class SecretaryPage : UserControl
             b.Children.Add(Row(a.Email, ("Убрать", () => { if (UiKit.Confirm($"Убрать почту {a.Email} и её пароль с этого ПК?")) { SecMail.Remove(a); Render(); } })));
         if (SecMail.LastError.Length > 0) { var e = UiKit.Text("Ошибка: " + SecMail.LastError, 12); e.Foreground = (System.Windows.Media.Brush)FindResource("WarnBrush"); e.TextWrapping = TextWrapping.Wrap; b.Children.Add(e); }
         foreach (var l in SecMail.Recent.Where(x => !x.Bulk).Take(5))
-            b.Children.Add(Row($"{l.From}: {l.Subject}", ("Открыть", () => { if (l.Web.Length > 0) Shell.Open(l.Web); })));
+            b.Children.Add(l.Address.Length > 0
+                ? Row($"{SecMail.ShortFrom(l.From)}: {l.Subject}", ("Открыть", () => { if (l.Web.Length > 0) Shell.Open(l.Web); }), ("Ответить", () => Shell.Open(SecMail.DraftUrl(l.Web, l.Address, l.Subject, Environment.UserName))))
+                : Row($"{SecMail.ShortFrom(l.From)}: {l.Subject}", ("Открыть", () => { if (l.Web.Length > 0) Shell.Open(l.Web); })));
         if (SecMail.Recent.Count(x => x.Bulk) is > 0 and var bulk) b.Children.Add(UiKit.Text($"И ещё рассылок: {bulk}", 12, true));
 
         var email = new TextBox { Padding = new Thickness(8), Margin = new Thickness(0, 8, 0, 4) };

@@ -21,6 +21,7 @@ public static class Services
         Try(ScreenTime.Start);
         Try(Reminders.Start);
         Try(ClipHistory.Start);
+        Try(AutoLayout.Apply);
 #if SECRETARY
         Try(Secretary.Start);
 #endif
@@ -37,6 +38,7 @@ public static class Services
             _tick++;
             Try(Profiles.CheckApps);
             Try(Focus.Check);
+            if (_tick % 12 == 5) Try(AutoLayout.Apply);                  // every minute: Caramba may have started or quit
             if (_tick % 60 == 4) _ = Support.CheckReplies();             // every 5 min
             if (_tick % 12 == 3) Try(AutoTheme);                         // every minute
             if (_tick % 60 == 1) await Devices.CheckBatteries();          // every 5 min

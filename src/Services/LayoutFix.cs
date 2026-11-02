@@ -54,7 +54,7 @@ public static class LayoutFix
         return !ClipHistory.IsPrivateCopy() && Clipboard.ContainsText() ? Clipboard.GetText() : null;
     }
 
-    static void Switch(bool russian)
+    internal static void Switch(bool russian)
     {
         var want = (ushort)(russian ? 0x0419 : 0x0409);
         int n = GetKeyboardLayoutList(0, null);

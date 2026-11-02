@@ -16,7 +16,9 @@ public static class InputSim
 
     static void Send(params INPUT[] i) => SendInput((uint)i.Length, i, Marshal.SizeOf<INPUT>());
     static INPUT M(uint flags, int dx = 0, int dy = 0, int data = 0) => new() { type = 0, mi = new MOUSEINPUT { dx = dx, dy = dy, dwFlags = flags, mouseData = data } };
-    static INPUT K(ushort vk, ushort scan, uint flags) => new() { type = 1, ki = new KEYBDINPUT { wVk = vk, wScan = scan, dwFlags = flags } };
+    /// <summary>Marks keys we send ourselves, so a keyboard hook can tell them from anyone else's.</summary>
+    public static readonly IntPtr Mark = new(0x4D534B41);
+    static INPUT K(ushort vk, ushort scan, uint flags) => new() { type = 1, ki = new KEYBDINPUT { wVk = vk, wScan = scan, dwFlags = flags, extra = Mark } };
 
     public static void Move(int dx, int dy) => Send(M(0x0001, dx, dy));
 
@@ -38,6 +40,15 @@ public static class InputSim
     }
 
     /// <summary>Any Unicode text (Cyrillic included), regardless of the keyboard layout.</summary>
+    /// <summary>Erases and types in one call: nothing typed by the user or another program can land in the middle.</summary>
+    public static void Replace(int erase, string text)
+    {
+        var e = new List<INPUT>();
+        for (int i = 0; i < erase; i++) { e.Add(K(0x08, 0, 0)); e.Add(K(0x08, 0, 0x0002)); }
+        foreach (var ch in text) { e.Add(K(0, ch, 0x0004)); e.Add(K(0, ch, 0x0004 | 0x0002)); }
+        Send(e.ToArray());
+    }
+
     public static void Type(string text)
     {
         foreach (var ch in text.Replace("\r\n", "\n"))

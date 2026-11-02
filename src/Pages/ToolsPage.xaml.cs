@@ -17,6 +17,7 @@ public partial class ToolsPage : UserControl
         Cards.Children.Add(WindowsCard());
         Cards.Children.Add(RemoteCard());
         Cards.Children.Add(ClipboardCard());
+        Cards.Children.Add(LayoutCard());
         Cards.Children.Add(ScreenTimeCard());
         Cards.Children.Add(BackupCard());
         Cards.Children.Add(PowerCard());
@@ -223,23 +224,47 @@ public partial class ToolsPage : UserControl
             var dlg = new Microsoft.Win32.SaveFileDialog { FileName = $"MishkaHelper-{DateTime.Now:yyyy-MM-dd}.zip", Filter = "Zip|*.zip" };
             if (dlg.ShowDialog() != true) return;
             Settings.Save();
-            if (File.Exists(dlg.FileName)) File.Delete(dlg.FileName);
-            System.IO.Compression.ZipFile.CreateFromDirectory(Settings.Dir, dlg.FileName);
-            Osd.Show("", "Копия сохранена");
+#if SECRETARY
+            SecStore.Save();
+#endif
+            Backup.Make(Settings.Dir, dlg.FileName);
+            Osd.Show("\uE73E", "Копия сохранена");
         }, accent: true);
         Btn(wp, "Восстановить…", () =>
         {
             var dlg = new Microsoft.Win32.OpenFileDialog { Filter = "Zip|*.zip" };
             if (dlg.ShowDialog() != true || !UiKit.Confirm("Заменить текущие настройки и заметки данными из копии?")) return;
-            using (var z = System.IO.Compression.ZipFile.OpenRead(dlg.FileName))
-            {
-                if (z.GetEntry("settings.json") == null) { Osd.Show("", "Это не копия Mishka Helper"); return; }
-                System.IO.Compression.ZipFileExtensions.ExtractToDirectory(z, Settings.Dir, true);
-            }
+            // Only known names, checked first: this folder is what an elevated app trusts, a backup must not be able to put anything else in it.
+            try { Backup.Restore(dlg.FileName, Settings.Dir); }
+            catch (Exception ex) { Osd.Show("", "Файл не подошёл: " + ex.Message); return; }
             Settings.Load();
-            Osd.Show("", "Восстановлено. Перезапусти программу, чтобы всё применилось");
+#if SECRETARY
+            SecStore.Reload();
+#endif
+#if JARVIS || SECRETARY
+            Notes.Reload();
+#endif
+            Osd.Show("\uE73E", "Копия загружена");
         });
         b.Children.Add(wp);
+        return c;
+    }
+
+    UIElement LayoutCard()
+    {
+        var (c, b) = Card("\uE765", "Раскладка клавиатуры", $"{Hotkeys.Pretty(Settings.Current.Hotkeys.GetValueOrDefault("layoutFix", ""))} исправляет выделенное или последнее слово: ghbdtn → привет.");
+        var state = UiKit.Text("", 12, true); state.TextWrapping = TextWrapping.Wrap;
+        void Show() => state.Text = !Settings.Current.AutoLayout ? "Клавиатура не отслеживается."
+            : AutoLayout.CarambaRunning() ? "Запущена Caramba Switcher: чтобы не мешать ей, автоисправление ждёт, пока она не закроется."
+            : "Экспериментально: распознаёт не все слова, надёжнее клавиша выше. Помнит только текущее слово и только в памяти. Пароли, консоль и редакторы кода не трогает.";
+        Switch(b, "Исправлять сразу при наборе (экспериментально)", Settings.Current.AutoLayout, v =>
+        {
+            Settings.Current.AutoLayout = v; Settings.Save();
+            AutoLayout.Apply();
+            Show();
+        });
+        Show();
+        b.Children.Add(state);
         return c;
     }
 

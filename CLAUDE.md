@@ -64,6 +64,7 @@ src/
     Focus.cs           game mode: DND + mute every app except the foreground game and voice chats (Settings.FocusKeepSound), phone toasts held; auto on full-screen + GPU load, auto off when the game exits
     PowerTimer.cs      shutdown in N min / now / when downloads finish (3 min below 150 KB/s net + 5 MB/s disk); Windows' own shutdown timer
     Vpn.cs             "VPN first": Settings.VpnSites (YouTube) wait for the VPN, starting Happ/Hiddify/Amnezia/v2rayN from Program Files only
+    AutoLayout.cs      experimental, off by default: at space-down decides by letter patterns + pair scores + short-word list; further keys are held and replayed in order (1.5 s fuse); LL hooks on their own thread; own keys carry InputSim.Mark; stands aside for Caramba. MISHKA_AUTOLAYOUT_TEST=1 counts injected keys
     LayoutFix.cs       Ctrl+Alt+Z: wrong-layout text (selected or last word) converted and retyped; no keyboard hook, acts only when pressed
     Remote.cs          phone remote: HttpListener on LAN (port 8770), PIN header, private IPs only, netsh firewall rule (Private)
     BleRemote.cs       Bluetooth LE GATT server (no pairing) for docs/remote page via Web Bluetooth; PIN per device; turns BT radio on

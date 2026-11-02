@@ -58,7 +58,7 @@ public partial class SettingsPage : UserControl
 
     void ShowUpdate(UpdateInfo u)
     {
-        UpdateStatus.Text = $"Доступна версия {u.Version}." + (u.Notes.Length > 0 ? "\n" + string.Join("\n", u.Notes.Split('\n').Take(6)) : "");
+        UpdateStatus.Text = $"Доступна версия {u.Version}." + (u.Notes.Length > 0 ? "\n" + Updater.PlainNotes(u.Notes) : "");
         UpdateBtn.Content = $"Обновить до {u.Version}";
         UpdateBtn.Visibility = Visibility.Visible;
     }

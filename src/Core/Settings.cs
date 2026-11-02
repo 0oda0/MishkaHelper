@@ -295,6 +295,7 @@ public class AppSettings
     public List<string> VpnSites { get; set; } = new() { "youtube.com", "youtu.be" };
     /// <summary>VPN program; empty = find Happ / v2rayN / Hiddify / AmneziaVPN in Program Files.</summary>
     public string VpnApp { get; set; } = "";
+    public bool AutoLayout { get; set; }   // fix wrong-layout words while typing; a keyboard hook, so off unless asked for
     public int RemotePort { get; set; } = 8770;
     public string RemotePin { get; set; } = "";
     public bool ScreenTime { get; set; } = true;
