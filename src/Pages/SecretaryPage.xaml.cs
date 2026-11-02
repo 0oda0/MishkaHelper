@@ -98,6 +98,7 @@ public partial class SecretaryPage : UserControl
         if (S.Mail) Cards.Children.Add(MailCard());
         if (S.DayLog && Secretary.DayLog() is { Count: > 0 } log) Cards.Children.Add(DayLogCard(log));
         if (S.Repeats || S.AppTriggers) Cards.Children.Add(RepeatsCard());
+        if (S.Meetings || S.Dates) Cards.Children.Add(CalendarCard());
         if (S.Workspace) Cards.Children.Add(WorkspaceCard());
         if (S.Downloads) Cards.Children.Add(DownloadsCard());
         Cards.Children.Add(FeaturesCard());
@@ -165,6 +166,30 @@ public partial class SecretaryPage : UserControl
     {
         var (c, b) = Card("Итог дня");
         foreach (var l in log) b.Children.Add(Row(l));
+        return c;
+    }
+
+    UIElement CalendarCard()
+    {
+        var (c, b) = Card("Календарь", "Секретная ссылка iCal: Google Календарь → Настройки календаря → «Секретный адрес в формате iCal». Или ссылка на расписание вуза в формате .ics.");
+        var cals = Settings.Current.Jarvis.Calendars;
+        foreach (var u in cals.ToList())
+            b.Children.Add(Row(u.Length > 50 ? u[..50] + "…" : u, ("Убрать", () => { cals.Remove(u); Settings.Save(); Render(); })));
+        var url = new TextBox { Padding = new Thickness(8), Margin = new Thickness(0, 6, 0, 4) };
+        b.Children.Add(UiKit.WithHint(url, "https://… или webcal://…"));
+        var status = UiKit.Text("", 12, true); status.TextWrapping = TextWrapping.Wrap;
+        Btn(b, "Добавить", async () =>
+        {
+            var u = url.Text.Trim();
+            if (!Uri.TryCreate(u, UriKind.Absolute, out var parsed) || parsed.Scheme is not ("https" or "http" or "webcal")) { status.Text = "Нужна ссылка вида https://…"; return; }
+            cals.Add(u);
+            Settings.Save();
+            url.Clear();
+            status.Text = "Проверяю…";
+            await Core.Calendar.Load();
+            status.Text = await Core.Calendar.Say(DateTime.Today);
+        }, true);
+        b.Children.Add(status);
         return c;
     }
 

@@ -49,6 +49,33 @@ object Link {
 
     fun forget(c: Context) = prefs(c).edit().clear().apply()
 
+    const val APK_URL = "https://github.com/0oda0/MishkaHelper/releases/latest/download/Mishka-Phone.apk"
+
+    fun appVersion(c: Context): String = runCatching { c.packageManager.getPackageInfo(c.packageName, 0).versionName }.getOrNull() ?: "0"
+
+    /** "1.10.0" is newer than "1.9.2": compared number by number, not as text. */
+    fun isNewer(latest: String, current: String): Boolean {
+        val a = latest.trimStart('v').split(".").map { it.toIntOrNull() ?: 0 }
+        val b = current.trimStart('v').split(".").map { it.toIntOrNull() ?: 0 }
+        for (i in 0 until maxOf(a.size, b.size)) {
+            val d = a.getOrElse(i) { 0 } - b.getOrElse(i) { 0 }
+            if (d != 0) return d > 0
+        }
+        return false
+    }
+
+    /** The latest release's version, only if it carries the phone app (null if not, or offline). Call off the main thread. */
+    fun latestApkVersion(): String? = runCatching {
+        val req = Request.Builder().url("https://api.github.com/repos/0oda0/MishkaHelper/releases/latest").header("Accept", "application/vnd.github+json").build()
+        http.newCall(req).execute().use { r ->
+            if (!r.isSuccessful) return null
+            val j = JSONObject(r.body?.string() ?: "{}")
+            val assets = j.optJSONArray("assets") ?: return null
+            if ((0 until assets.length()).none { assets.getJSONObject(it).optString("name") == "Mishka-Phone.apk" }) return null
+            j.optString("tag_name").trimStart('v').ifEmpty { null }
+        }
+    }.getOrNull()
+
     /** Broadcasts on every Wi-Fi/Ethernet interface and collects answers for ~1.5 s. Call off the main thread. */
     fun discover(): List<Pc> {
         val found = linkedMapOf<String, Pc>()

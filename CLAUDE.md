@@ -58,6 +58,7 @@ src/
     Hotkeys.cs         RegisterHotKey, Pretty(), scenario hotkeys
     Profiles.cs        apply profiles, auto by AC/app rules (+process priority)
     Alerts.cs          threshold toasts
+    (Core/Backup.cs)   backup zip: known file names only, validated before anything is replaced
     Support.cs         support chat client (Supabase REST, anonymous sign-in per install, session encrypted with Core/Secrets.cs); Url/AnonKey constants empty = page offers GitHub
     Phone.cs           Android app link: UDP discovery 8771 ("MISHKA?"), WebSocket /api/ws (status, notif, clip ↔ ring, clip, file offers /api/phone/file/{id})
     Focus.cs           game mode: DND + mute every app except the foreground game and voice chats (Settings.FocusKeepSound), phone toasts held; auto on full-screen + GPU load, auto off when the game exits
@@ -117,6 +118,7 @@ docs/features/         landing page (index.html + img/*.png) shipped as <app>\do
 installer/MishkaHelper.iss   Inno Setup, FLAVOR env = ""/Lite, one AppId for both; uninstall asks to delete AppData/models
 tests/                 xunit project (InternalsVisibleTo MishkaHelper.Tests)
 tools/                 install-local.ps1, app.dev.manifest, make-icon.ps1
+.github/workflows/keepalive.yml  pings the support server every 2 days: free Supabase projects pause when idle
 .github/workflows/release.yml  builds both editions, setup + portable zip, GitHub release
 ROADMAP.md             feature list: done / later / rejected (with reasons)
 docs/JARVIS_TESTS.md   owner's manual Jarvis checklist — update with every Jarvis change, send with releases

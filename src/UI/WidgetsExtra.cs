@@ -527,6 +527,8 @@ public static partial class Widgets
             ToolTip = "Напиши как есть: «в пятницу сдать отчёт», «завтра в 18:00 тренировка»" };
 #if JARVIS
         add.Click += (_, _) => JarvisInput.Toggle();
+#elif SECRETARY
+        add.Click += (_, _) => SecCapture.Quick();
 #else
         add.Visibility = Visibility.Collapsed;
 #endif
@@ -535,14 +537,14 @@ public static partial class Widgets
         async void Load()
         {
             var items = Reminders.Upcoming(7).Select(r => (At: Reminders.RingAt(r), Time: r.HasTime, Text: r.Text, R: (Reminder?)r)).ToList();
-#if JARVIS
+#if JARVIS || SECRETARY
             if (Core.Calendar.Configured)
                 for (int d = 0; d < 7; d++)
                     try { foreach (var e in await Core.Calendar.On(DateTime.Today.AddDays(d))) if (e.AllDay || e.Start >= DateTime.Now) items.Add((e.Start, !e.AllDay, e.Title + (e.Place.Length > 0 ? $" · {e.Place}" : ""), null)); }
                     catch { }
 #endif
             list.Children.Clear();
-            if (items.Count == 0) { list.Children.Add(UiKit.Text("На неделю ничего. Скажи или напиши Джарвису: «в пятницу сдать отчёт».", 12, true)); return; }
+            if (items.Count == 0) { list.Children.Add(UiKit.Text((Edition.HasJarvis ? "На неделю ничего. Скажи или напиши Джарвису: " : Edition.HasSecretary ? "На неделю ничего. Нажми «Добавить» и напиши: " : "На неделю ничего. ") + "«в пятницу сдать отчёт».", 12, true)); return; }
             string? lastDay = null;
             foreach (var it in items.OrderBy(i => i.At).Take(10))
             {

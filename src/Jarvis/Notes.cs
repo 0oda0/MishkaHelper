@@ -23,6 +23,8 @@ public static class Notes
         }
     }
 
+    public static void Reload() => _all = null;
+
     public static void Add(string text)
     {
         All.Add(new Note(DateTime.Now, text.Trim()));

@@ -1,3 +1,4 @@
+using System.IO;
 using System.Net;
 using MishkaHelper.Core;
 using Xunit;
@@ -239,6 +240,75 @@ public class SecPlanTests
         Assert.False(SecDownloads.FolderAllowed(@"C:\Users\me2\Documents", @"C:\Users\me"));
         Assert.Equal("лаба", SecDownloads.RuleFor("Лаба3.pdf", new[] { new DownloadRule { Word = "лаба", Folder = "x" } })?.Word);
         Assert.Null(SecDownloads.RuleFor("кот.jpg", new[] { new DownloadRule { Word = "лаба", Folder = "x" } }));
+    }
+}
+
+public class BackupTests : IDisposable
+{
+    readonly string _dir = Path.Combine(Path.GetTempPath(), "mishka-backup-" + Guid.NewGuid().ToString("N"));
+    string Src => Path.Combine(_dir, "src");
+    string Dst => Path.Combine(_dir, "dst");
+    string Zip => Path.Combine(_dir, "b.zip");
+
+    public BackupTests()
+    {
+        Directory.CreateDirectory(Src);
+        File.WriteAllText(Path.Combine(Src, "settings.json"), "{\"Osd\":false}");
+        File.WriteAllText(Path.Combine(Src, "secretary.json"), "{\"Tasks\":[]}");
+        File.WriteAllText(Path.Combine(Src, "jarvis-notes.json"), "[]");
+        File.WriteAllText(Path.Combine(Src, "log.txt"), "not for the backup");
+    }
+
+    public void Dispose() { try { Directory.Delete(_dir, true); } catch { } }
+
+    [Fact]
+    public void RoundTripKeepsNotesAndSecretary()
+    {
+        Backup.Make(Src, Zip);
+        Assert.Equal(3, Backup.Restore(Zip, Dst));
+        Assert.Equal("{\"Tasks\":[]}", File.ReadAllText(Path.Combine(Dst, "secretary.json")));
+        Assert.True(File.Exists(Path.Combine(Dst, "jarvis-notes.json")));
+        Assert.False(File.Exists(Path.Combine(Dst, "log.txt")));
+    }
+
+    [Fact]
+    public void OldBareSettingsFileStillWorks()
+    {
+        Assert.Equal(1, Backup.Restore(Path.Combine(Src, "settings.json"), Dst));
+        Assert.True(File.Exists(Path.Combine(Dst, "settings.json")));
+    }
+
+    [Fact]
+    public void CraftedArchiveWritesNothingOutside()
+    {
+        using (var z = System.IO.Compression.ZipFile.Open(Zip, System.IO.Compression.ZipArchiveMode.Create))
+        {
+            foreach (var name in new[] { "settings.json", "..\\evil.json", "../evil.json", "evil.exe" })
+                using (var w = new StreamWriter(z.CreateEntry(name).Open())) w.Write("{}");
+        }
+        Assert.Equal(1, Backup.Restore(Zip, Dst));
+        Assert.False(File.Exists(Path.Combine(_dir, "evil.json")));
+        Assert.False(File.Exists(Path.Combine(Dst, "evil.exe")));
+    }
+
+    [Fact]
+    public void BadBackupChangesNothing()
+    {
+        using (var z = System.IO.Compression.ZipFile.Open(Zip, System.IO.Compression.ZipArchiveMode.Create))
+        {
+            using (var w = new StreamWriter(z.CreateEntry("settings.json").Open())) w.Write("{}");
+            using (var w = new StreamWriter(z.CreateEntry("secretary.json").Open())) w.Write("broken{");
+        }
+        Assert.ThrowsAny<Exception>(() => Backup.Restore(Zip, Dst));
+        Assert.False(File.Exists(Path.Combine(Dst, "settings.json")));
+    }
+
+    [Fact]
+    public void ForeignZipIsRefused()
+    {
+        using (var z = System.IO.Compression.ZipFile.Open(Zip, System.IO.Compression.ZipArchiveMode.Create))
+            using (var w = new StreamWriter(z.CreateEntry("photo.txt").Open())) w.Write("x");
+        Assert.ThrowsAny<Exception>(() => Backup.Restore(Zip, Dst));
     }
 }
 

@@ -61,6 +61,9 @@ public class SecStore
         return new();
     }
 
+    /// <summary>After a backup was restored: the cached copy must not overwrite it later.</summary>
+    public static void Reload() => _cur = Load();
+
     public static void Save()
     {
         try

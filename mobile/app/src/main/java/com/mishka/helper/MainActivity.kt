@@ -110,6 +110,7 @@ private fun PcTab() {
     var pin by remember { mutableStateOf("") }
     var manual by remember { mutableStateOf("") }
     var msg by remember { mutableStateOf("") }
+    var newVersion by remember { mutableStateOf<String?>(null) }
     val notifPerm = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
     val pickFiles = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
         if (uris.isEmpty()) return@rememberLauncherForActivityResult
@@ -127,10 +128,18 @@ private fun PcTab() {
     LaunchedEffect(Unit) {
         if (!paired) search()
         if (Build.VERSION.SDK_INT >= 33) notifPerm.launch(Manifest.permission.POST_NOTIFICATIONS)
+        newVersion = withContext(Dispatchers.IO) { Link.latestApkVersion() }?.takeIf { Link.isNewer(it, Link.appVersion(c)) }
     }
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
         Title("Mishka")
+        newVersion?.let { v ->
+            NeonCard {
+                Text("Есть новая версия: $v", fontWeight = FontWeight.SemiBold)
+                Hint("Сейчас стоит ${Link.appVersion(c)}. Настройки сохранятся.")
+                TextButton(onClick = { c.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(Link.APK_URL))) }) { Text("Скачать") }
+            }
+        }
         if (!paired) {
             NeonCard {
                 Text("Подключи компьютер", fontWeight = FontWeight.SemiBold, fontSize = 17.sp)
@@ -207,6 +216,17 @@ private fun PcTab() {
             val free = pm.isIgnoringBatteryOptimizations(c.packageName)
             Hint(if (free) "Экономия батареи не мешает связи." else "Android может усыплять связь с ПК. Разреши Mishka работать в фоне.")
             if (!free) TextButton(onClick = { c.startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:${c.packageName}"))) }) { Text("Разрешить") }
+            if (Build.MANUFACTURER.lowercase() in setOf("xiaomi", "redmi", "poco")) {
+                Spacer(Modifier.height(6.dp))
+                Hint("На Xiaomi ещё нужен «Автозапуск», иначе система закрывает связь в фоне: включи его для Mishka.")
+                TextButton(onClick = {
+                    // MIUI's own screen; it can move between versions, then the app's settings page is the way there.
+                    val auto = Intent().setClassName("com.miui.securitycenter", "com.miui.permcenter.autostart.AutoStartManagementActivity")
+                    runCatching { c.startActivity(auto) }.onFailure {
+                        c.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${c.packageName}")))
+                    }
+                }) { Text("Открыть автозапуск") }
+            }
         }
 
         TextButton(onClick = { LinkService.stop(c); Link.forget(c); paired = false; search() }) { Text("Отключить этот ПК", color = Dim) }

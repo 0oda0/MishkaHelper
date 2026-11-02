@@ -42,10 +42,17 @@
 
 ## Установка
 
-Из [Releases](../../releases) — две редакции:
+Из [Releases](../../releases) — четыре редакции:
 
-- **`MishkaHelper-Setup-x.y.z.exe`** — полная, с голосовым помощником Джарвисом;
-- **`MishkaHelper-Lite-Setup-x.y.z.exe`** — Lite, всё кроме Джарвиса (меньше и легче).
+| Файл | Что внутри |
+|---|---|
+| **`MishkaHelper-Setup-x.y.z.exe`** | Всё: инструменты, Джарвис и секретарша |
+| **`MishkaHelper-Jarvis-Setup-x.y.z.exe`** | Инструменты и голосовой помощник Джарвис |
+| **`MishkaHelper-Secretary-Setup-x.y.z.exe`** | Инструменты и секретарша: заметки, дела, сводки, почта |
+| **`MishkaHelper-Lite-Setup-x.y.z.exe`** | Только инструменты, самая лёгкая |
+| **`Mishka-Phone.apk`** | Приложение для Android 8+: уведомления, файлы, пульт, чистка, дела |
+
+Другую редакцию можно поставить поверх: настройки сохранятся.
 
 Есть и портативные `…-Portable-x.y.z.zip`. Обновляется прямо из приложения: «Настройки → О программе → Обновить». Все функции со скриншотами — кнопка «Что можно сделать» в приложении ([docs/features](docs/features/index.html)).
 Приложению нужны права администратора (Defender, вентиляторы, системная очистка). Автозапуск идёт через планировщик задач, поэтому UAC при входе в Windows не появляется.
@@ -64,10 +71,10 @@ dotnet build src/MishkaHelper.csproj
 dotnet publish src/MishkaHelper.csproj -c Release -r win-x64 --self-contained -o publish
 ```
 
-Редакция Lite (без Джарвиса):
+Другие редакции: `-p:Flavor=Jarvis`, `-p:Flavor=Secretary` или `-p:Flavor=Lite` (только инструменты):
 
 ```bash
-dotnet publish src/MishkaHelper.csproj -c Release -r win-x64 --self-contained -p:Flavor=Lite -o publish-lite
+dotnet publish src/MishkaHelper.csproj -c Release -r win-x64 --self-contained -p:Flavor=Secretary -o publish-secretary
 ```
 
 Релиз (установщик + портативная версия) собирается в GitHub Actions по тегу `v*`.

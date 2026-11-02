@@ -136,26 +136,40 @@ public partial class SettingsPage : UserControl
 
     void Export_Click(object s, RoutedEventArgs e)
     {
-        var d = new Microsoft.Win32.SaveFileDialog { FileName = "mishka-settings.json", Filter = "JSON|*.json" };
+        var d = new Microsoft.Win32.SaveFileDialog { FileName = $"mishka-backup-{DateTime.Now:yyyy-MM-dd}.zip", Filter = "Резервная копия|*.zip" };
         if (d.ShowDialog() != true) return;
-        Settings.Save();
-        File.Copy(Path.Combine(Settings.Dir, "settings.json"), d.FileName, true);
+        try
+        {
+            Settings.Save();
+#if SECRETARY
+            SecStore.Save();
+#endif
+            Backup.Make(Settings.Dir, d.FileName);
+            Osd.Show("", "Копия сохранена: настройки, заметки, дела");
+        }
+        catch (Exception ex) { Osd.Show("", "Не получилось: " + ex.Message); }
     }
 
     void Import_Click(object s, RoutedEventArgs e)
     {
-        var d = new Microsoft.Win32.OpenFileDialog { Filter = "JSON|*.json" };
+        var d = new Microsoft.Win32.OpenFileDialog { Filter = "Резервная копия|*.zip;*.json" };
         if (d.ShowDialog() != true) return;
+        if (!UiKit.Confirm("Заменить текущие настройки и заметки данными из копии?")) return;
         try
         {
-            System.Text.Json.JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(d.FileName));   // validate before replacing
-            File.Copy(d.FileName, Path.Combine(Settings.Dir, "settings.json"), true);
+            Backup.Restore(d.FileName, Settings.Dir);
             Settings.Load();
+#if SECRETARY
+            SecStore.Reload();
+#endif
+#if JARVIS || SECRETARY
+            Notes.Reload();
+#endif
             ThemeManager.Apply();
             Hotkeys.Reload();
-            Osd.Show("", "Настройки загружены");
+            Osd.Show("", "Копия загружена");
             App.Current.Navigate("Settings");
         }
-        catch (Exception ex) { Osd.Show("", "Файл не подошёл: " + ex.Message); }
+        catch (Exception ex) { Osd.Show("", "Файл не подошёл: " + ex.Message); }
     }
 }

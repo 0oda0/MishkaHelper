@@ -17,6 +17,7 @@ import android.media.AudioAttributes
 import android.media.AudioManager
 import android.media.MediaPlayer
 import android.media.RingtoneManager
+import android.net.Uri
 import android.os.BatteryManager
 import android.os.Build
 import android.os.Environment
@@ -79,6 +80,19 @@ class LinkService : Service() {
         registerReceiver(battery, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
         connect()
         main.postDelayed(tick, 60_000)
+        Thread { checkUpdate() }.start()
+    }
+
+    /** Once a day at most: the app isn't from a store, nothing else would tell the user about a new version. */
+    private fun checkUpdate() {
+        val prefs = getSharedPreferences("update", MODE_PRIVATE)
+        val now = System.currentTimeMillis()
+        if (now - prefs.getLong("checked", 0) < 24 * 3600_000L) return
+        val latest = Link.latestApkVersion() ?: return
+        prefs.edit().putLong("checked", now).apply()
+        if (!Link.isNewer(latest, Link.appVersion(this)) || prefs.getString("told", "") == latest) return
+        prefs.edit().putString("told", latest).apply()
+        main.post { event("Обновление Mishka $latest", "Нажми, чтобы скачать. Настройки сохранятся.", Intent(Intent.ACTION_VIEW, Uri.parse(Link.APK_URL))) }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {

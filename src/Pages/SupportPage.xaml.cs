@@ -11,6 +11,7 @@ public partial class SupportPage : UserControl
 {
     readonly StackPanel _chat = new();
     readonly TextBlock _status = UiKit.Text("", 12, true);
+    readonly Button _github = new() { Content = "Написать на GitHub", HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 6, 0, 0), Visibility = Visibility.Collapsed };
     readonly DispatcherTimer _poll = new() { Interval = TimeSpan.FromSeconds(5) };
     long _shown;
 
@@ -46,13 +47,15 @@ public partial class SupportPage : UserControl
                 box.Clear(); attach.IsChecked = false; _status.Text = "";
                 await Refresh();
             }
-            catch (Exception e) { _status.Text = "Не отправилось: " + e.Message; }
+            catch (Exception e) { _status.Text = "Не отправилось: " + e.Message; _github.Visibility = Visibility.Visible; }
             send.IsEnabled = true;
         };
         Body.Children.Add(UiKit.WithHint(box, "Твоё сообщение"));
         Body.Children.Add(attach);
         Body.Children.Add(send);
         Body.Children.Add(_status);
+        _github.Click += (_, _) => Shell.Open(Support.IssuesUrl);
+        Body.Children.Add(_github);
 
         _poll.Tick += async (_, _) => await Refresh();
         Loaded += async (_, _) => { await Refresh(); _poll.Start(); };
@@ -67,8 +70,9 @@ public partial class SupportPage : UserControl
             foreach (var m in list.Where(m => m.Id > _shown)) { _chat.Children.Add(Bubble(m)); _shown = m.Id; }
             if (list.Count > 0 && _chat.Parent is ScrollViewer sv) sv.ScrollToEnd();
             if (_status.Text.StartsWith("Нет связи")) _status.Text = "";
+            _github.Visibility = Visibility.Collapsed;
         }
-        catch (Exception e) { _status.Text = "Нет связи с поддержкой: " + e.Message; }
+        catch (Exception e) { _status.Text = "Нет связи с поддержкой: " + e.Message; _github.Visibility = Visibility.Visible; }
     }
 
     UIElement Bubble(Support.Message m)
