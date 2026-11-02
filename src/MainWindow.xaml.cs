@@ -45,7 +45,10 @@ public partial class MainWindow : Window
     void Nav_Checked(object sender, RoutedEventArgs e)
     {
         var name = ((FrameworkElement)sender).Name[3..];
-        FrameworkElement content = name switch
+        FrameworkElement content;
+        try
+        {
+        content = name switch
         {
             "Home" => new HomePage(),
             "Controls" => new ControlsPage(),
@@ -71,6 +74,13 @@ public partial class MainWindow : Window
             "Settings" => new SettingsPage(),
             _ => new TextBlock { Text = "?" },
         };
+        }
+        catch (Exception ex)
+        {
+            // A missing Windows component must not look like a dead button.
+            Log.Error(ex);
+            content = new TextBlock { Text = "Этот раздел не открылся на этом компьютере.\nПодробности в журнале: Настройки → «Лог ошибок». Его можно прислать на странице «Поддержка».", TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 20, 0, 0), Foreground = (System.Windows.Media.Brush)FindResource("TextBrush") };
+        }
         Page.Content = new ScrollViewer
         {
             Content = content,

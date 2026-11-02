@@ -28,7 +28,7 @@ public partial class HomePage : UserControl
             var model = await Task.Run(SystemInfo.Model);
             Sub.Text = model;
             var st = await Task.Run(Security.Status);
-            Sec.Text = (st.RealTime ? "✅ Защита в реальном времени включена" : "⚠ Защита в реальном времени выключена") +
+            Sec.Text = !st.Available ? "ℹ Защитник Windows недоступен" + (st.OtherAv.Length > 0 ? $"\nАнтивирус: {st.OtherAv}" : "") : (st.RealTime ? "✅ Защита в реальном времени включена" : "⚠ Защита в реальном времени выключена") +
                        $"\nБазы: {st.SigVersion} от {st.SigUpdated:dd.MM.yyyy}" +
                        (st.LastQuick != default ? $"\nПоследняя проверка: {st.LastQuick:dd.MM HH:mm}" : "") +
                        (st.OtherAv.Length > 0 ? $"\nДругой антивирус: {st.OtherAv}" : "");

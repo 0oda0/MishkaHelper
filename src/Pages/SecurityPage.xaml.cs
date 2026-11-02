@@ -36,6 +36,11 @@ public partial class SecurityPage : UserControl
     async Task LoadStatus()
     {
         var s = await Task.Run(Security.Status);
+        if (!s.Available)
+        {
+            Status.Text = "ℹ Защитник Windows на этом ПК недоступен: он удалён или отключён" + (s.OtherAv.Length > 0 ? $". Антивирус: {s.OtherAv}." : ". Другого антивируса Windows тоже не видит.") + "\nПроверки через Защитник здесь не сработают.";
+            return;
+        }
         Status.Text = (s.Passive ? $"ℹ Основной антивирус — {s.OtherAv}. Defender в пассивном режиме: проверки по запросу работают, постоянную защиту ведёт {s.OtherAv}" : s.Enabled ? "✅ Антивирус Defender работает" : "⚠ Defender выключен" + (s.OtherAv.Length > 0 ? $" (используется {s.OtherAv})" : "")) +
                       $"\n{(s.RealTime ? "✅" : "⚠")} Защита в реальном времени: {(s.RealTime ? "включена" : "выключена")}" +
                       $"\nБазы: {s.SigVersion} · {(s.SigUpdated == default ? "?" : s.SigUpdated.ToString("dd.MM.yyyy HH:mm"))}" +

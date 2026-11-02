@@ -56,7 +56,18 @@ public static class Voice
         return "custom:" + name;
     }
 
-    static readonly SpeechSynthesizer Synth = new();
+    // Windows' own speech component is missing on N/LTSC and stripped builds. It is only the last fallback, so it must never take the rest down:
+    // created on first real use, and every call to it goes through these two.
+    static SpeechSynthesizer? _synth;
+    static readonly bool NoSpeechTest = Environment.GetEnvironmentVariable("MISHKA_NO_SPEECH") == "1";
+
+    static IReadOnlyList<VoiceInformation> SystemVoices()
+    {
+        try { if (NoSpeechTest) throw new FileNotFoundException(); return SpeechSynthesizer.AllVoices; }
+        catch (Exception e) { Log.Info("windows speech unavailable: " + e.Message); return Array.Empty<VoiceInformation>(); }
+    }
+
+    public static bool HasWindowsVoices => SystemVoices().Count > 0;
     static WaveOutEvent? _out;
 
     // Speech queue: each phrase starts synthesizing as soon as it's queued and plays in order (no gaps between sentences).
@@ -86,8 +97,8 @@ public static class Voice
     }
 
     public static List<string> WindowsVoices() =>
-        SpeechSynthesizer.AllVoices.Where(v => v.Language.StartsWith("ru", StringComparison.OrdinalIgnoreCase)).Select(v => v.DisplayName)
-            .Concat(SpeechSynthesizer.AllVoices.Where(v => !v.Language.StartsWith("ru", StringComparison.OrdinalIgnoreCase)).Select(v => v.DisplayName)).ToList();
+        SystemVoices().Where(v => v.Language.StartsWith("ru", StringComparison.OrdinalIgnoreCase)).Select(v => v.DisplayName)
+            .Concat(SystemVoices().Where(v => !v.Language.StartsWith("ru", StringComparison.OrdinalIgnoreCase)).Select(v => v.DisplayName)).ToList();
 
     /// <summary>Two soft rising notes (~0.16 s): "I heard you, go on". Too short for the speech detector to take as a phrase.</summary>
     public static void Chime() => Task.Run(() =>
@@ -224,12 +235,14 @@ public static class Voice
 
     static async Task<ISampleProvider> WindowsAudio(string text, JarvisSettings s)
     {
-        var voice = SpeechSynthesizer.AllVoices.FirstOrDefault(v => v.DisplayName == s.Voice)
-                    ?? SpeechSynthesizer.AllVoices.FirstOrDefault(v => v.Language.StartsWith("ru", StringComparison.OrdinalIgnoreCase))
-                    ?? SpeechSynthesizer.DefaultVoice;
-        Synth.Voice = voice;
-        Synth.Options.SpeakingRate = Math.Clamp(s.Rate, 0.5, 3);
-        using var stream = await Synth.SynthesizeTextToStreamAsync(text);
+        var all = SystemVoices();
+        var voice = all.FirstOrDefault(v => v.DisplayName == s.Voice) ?? all.FirstOrDefault(v => v.Language.StartsWith("ru", StringComparison.OrdinalIgnoreCase)) ?? all.FirstOrDefault();
+        // No engine left at all: Jarvis still answers in text, just without sound.
+        if (voice == null) return new SilenceProvider(new WaveFormat(16000, 16, 1)).ToSampleProvider().Take(TimeSpan.FromMilliseconds(50));
+        var synth = _synth ??= new SpeechSynthesizer();
+        synth.Voice = voice;
+        synth.Options.SpeakingRate = Math.Clamp(s.Rate, 0.5, 3);
+        using var stream = await synth.SynthesizeTextToStreamAsync(text);
         var ms = new MemoryStream();
         await stream.AsStreamForRead().CopyToAsync(ms);
         ms.Position = 0;

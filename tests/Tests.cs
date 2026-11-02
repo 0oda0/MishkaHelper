@@ -676,6 +676,21 @@ public class AutoLayoutRecallTests
     }
 }
 
+public class OptionalWindowsPartsTests
+{
+    // Regression: a SpeechSynthesizer in a static field took the whole Jarvis page down on Windows without speech.
+    [Fact]
+    public void VoiceDoesNotTouchWindowsSpeechWhenLoaded()
+    {
+        var eager = typeof(Voice).GetFields(System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public)
+            .Where(f => f.FieldType == typeof(Windows.Media.SpeechSynthesis.SpeechSynthesizer)).Select(f => f.GetValue(null));
+        Assert.All(eager, Assert.Null);
+    }
+
+    [Fact]
+    public void DefenderStatusSaysWhenItCantTell() => Assert.False(new DefenderStatus(false, false, false, "?", default, default, default, "", false).Available);
+}
+
 public class EdgeGecTests
 {
     // Reference values from edge-tts drm.generate_sec_ms_gec_v2 (Python) for the same timestamps.

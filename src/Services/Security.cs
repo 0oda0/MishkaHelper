@@ -8,7 +8,7 @@ using System.Text.RegularExpressions;
 
 namespace MishkaHelper.Core;
 
-public record DefenderStatus(bool Enabled, bool Passive, bool RealTime, string SigVersion, DateTime SigUpdated, DateTime LastQuick, DateTime LastFull, string OtherAv);
+public record DefenderStatus(bool Enabled, bool Passive, bool RealTime, string SigVersion, DateTime SigUpdated, DateTime LastQuick, DateTime LastFull, string OtherAv, bool Available = true);
 public record Threat(string Name, string Severity, string Resources, DateTime When, bool Resolved, long Id);
 public record Suspect(string Name, string Path, string Where, List<string> Reasons, int Score, StartupItem? Startup = null, int? Pid = null)
 {
@@ -38,6 +38,7 @@ public static class Security
         bool en = false, rt = false, passive = false;
         string ver = "?";
         DateTime upd = default, q = default, f = default;
+        bool available = true;
         try
         {
             using var s = new ManagementObjectSearcher(@"root\Microsoft\Windows\Defender", "SELECT * FROM MSFT_MpComputerStatus");
@@ -52,7 +53,8 @@ public static class Security
                 f = Dmtf(o["FullScanEndTime"]);
             }
         }
-        catch (Exception e) { Log.Error(e); }
+        // Removed from the system or replaced by another antivirus: an ordinary state of that PC, not an error to log on every refresh.
+        catch (Exception e) when (e is ManagementException or UnauthorizedAccessException or System.Runtime.InteropServices.COMException) { available = false; Log.Info("defender unavailable: " + e.Message); }
 
         var other = new List<string>();
         try
@@ -62,7 +64,7 @@ public static class Security
                 if (o["displayName"] is string n && !n.Contains("Defender", StringComparison.OrdinalIgnoreCase) && !n.Contains("Microsoft")) other.Add(n);
         }
         catch { }
-        return new(en, passive, rt, ver, upd, q, f, string.Join(", ", other));
+        return new(en, passive, rt, ver, upd, q, f, string.Join(", ", other), available);
     }
 
     static DateTime Dmtf(object? v) => v is string s && s.Length > 0 ? ManagementDateTimeConverter.ToDateTime(s) : default;
