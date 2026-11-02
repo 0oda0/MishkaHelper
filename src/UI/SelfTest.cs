@@ -83,6 +83,39 @@ public static class SelfTest
         });
 #endif
 
+#if SECRETARY
+        await Step("seclive", async () =>   // by name only: remote on localhost, phrases go in as from the phone, everything added is taken back at the end; no sound
+        {
+            if (!filter.Contains("seclive")) return;
+            var sec = Settings.Current.Secretary; var was = sec.Enabled; var pin = Settings.Current.RemotePin;
+            int rem = Settings.Current.Reminders.Count, notes = Notes.All.Count, tasks = SecStore.Cur.Tasks.Count, trig = SecStore.Cur.Triggers.Count;
+            sec.Enabled = true; Settings.Current.RemotePin = "432198";
+            Remote.StartLocal();
+            foreach (var t in new[] { "надо купить молоко", "послезавтра в 18:00 сдать отчёт", "каждый вторник в 18:00 тренировка", "день рождения мамы 12 мая", "когда открою Блокнот, проверить титульник", "пароль от вайфая на холодильнике" })
+                L($"seclive: {t} → {System.Text.Json.JsonSerializer.Serialize(await Remote.Do("secAdd", t), new System.Text.Json.JsonSerializerOptions { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping })}");
+            L($"seclive: tasks {string.Join(" | ", Secretary.OpenTasks().Select(t => t.Text))}");
+            L($"seclive: repeats {string.Join(" | ", Settings.Current.Reminders.Where(r => r.Repeat != "").Select(r => $"{r.Text} {r.Repeat} {r.At:dd.MM HH:mm} lead={r.LeadDays}"))}");
+            L($"seclive: day log {string.Join(" | ", Secretary.DayLog())}");
+            L($"seclive: file search 'договор' → {(await SecDownloads.Find("договор")).Count}");
+            Toast.Show("", "Напоминание", "Проверка кнопок: 10 минут, час, завтра.", null, new (string, Action)[]
+            {
+                ("10 мин", () => L("seclive: snooze pressed")), ("Час", () => { }), ("Завтра", () => { }),
+            });
+            main.Navigate("Secretary");
+            L("seclive: ready");
+            var until = DateTime.Now.AddMinutes(20);
+            while (DateTime.Now < until && !File.Exists(file + ".stop")) await Task.Delay(1000);
+            Remote.Stop();
+            Settings.Current.Reminders.RemoveRange(rem, Settings.Current.Reminders.Count - rem);
+            while (Notes.All.Count > notes) Notes.Remove(Notes.All[^1]);
+            SecStore.Cur.Tasks.RemoveRange(tasks, SecStore.Cur.Tasks.Count - tasks);
+            SecStore.Cur.Triggers.RemoveRange(trig, SecStore.Cur.Triggers.Count - trig);
+            sec.Enabled = was; Settings.Current.RemotePin = pin;
+            SecStore.Save(); Settings.Save();
+            L("seclive: cleaned up");
+        });
+#endif
+
         await Step("support", async () =>   // real server: sends one test message, then waits up to 15 min for an answer in the page
         {
             if (!filter.Contains("support")) return;   // writes to the live server: only when asked by name

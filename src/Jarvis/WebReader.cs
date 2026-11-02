@@ -66,9 +66,9 @@ public static class WebReader
 
     public static WebSource? Match(string question)
     {
-        var q = Ears.Clean(question);
+        var q = RuText.Clean(question);
         return Settings.Current.Jarvis.Sources.FirstOrDefault(s =>
             (s.Keywords + "," + s.Name).Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
-                .Any(k => k.Length > 2 && q.Contains(Ears.Clean(k).Length > 5 ? Ears.Clean(k)[..^2] : Ears.Clean(k))));
+                .Any(k => k.Length > 2 && q.Contains(RuText.Clean(k).Length > 5 ? RuText.Clean(k)[..^2] : RuText.Clean(k))));
     }
 }

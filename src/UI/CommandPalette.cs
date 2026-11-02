@@ -58,6 +58,9 @@ public static class CommandPalette
 #if JARVIS
         l.AddRange(Settings.Current.Scenarios.Select(s => new Cmd("\uE8B1", "Сценарий: " + s.Name, "scenario:" + s.Id, "")));
 #endif
+#if SECRETARY
+        if (Settings.Current.Secretary.Enabled) l.AddRange(SecStore.Cur.Workspaces.Keys.Select(n => new Cmd("\uE8B9", "Набор: " + n, "set:" + n, "")));
+#endif
         l.AddRange(Widgets.Names.Select(kv => new Cmd("", "Виджет: " + kv.Value, "widget:" + kv.Key, "")));
         return l;
     }

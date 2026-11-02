@@ -142,6 +142,106 @@ public class SecretaryTests
     }
 }
 
+public class SecPlanTests
+{
+    static readonly DateTime Now = new(2026, 11, 2, 12, 0, 0);   // Monday
+    static Plan P(string s) => SecPlan.Understand(s, Now);
+
+    [Fact]
+    public void WeeklyOnDay()
+    {
+        var p = P("каждый вторник в 18:00 тренировка");
+        Assert.Equal("repeat", p.Kind); Assert.Equal("weekly", p.Repeat);
+        Assert.Equal(new DateTime(2026, 11, 3, 18, 0, 0), p.At); Assert.True(p.HasTime); Assert.Equal("Тренировка", p.Text);
+    }
+
+    [Fact]
+    public void WeeklyToday_PastTime_NextWeek() => Assert.Equal(new DateTime(2026, 11, 9, 9, 0, 0), P("по понедельникам в 9:00 планёрка").At);
+
+    [Fact]
+    public void MonthlyOnDay()
+    {
+        var p = P("каждое 5-е оплатить интернет");
+        Assert.Equal("monthly", p.Repeat); Assert.Equal(new DateTime(2026, 11, 5, 10, 0, 0), p.At); Assert.Equal("Оплатить интернет", p.Text);
+    }
+
+    [Fact] public void MonthlyPassed() => Assert.Equal(11 + 1, P("каждое 1 число отчёт").At!.Value.Month);
+    [Fact] public void Daily() => Assert.Equal(new DateTime(2026, 11, 3, 9, 0, 0), P("каждый день в 9:00 зарядка").At);
+
+    [Fact]
+    public void BirthdayIsYearlyWithWarning()
+    {
+        var p = P("день рождения мамы 12 мая");
+        Assert.Equal("yearly", p.Repeat); Assert.Equal(3, p.LeadDays); Assert.Equal(new DateTime(2027, 5, 12), p.At); Assert.False(p.HasTime);
+    }
+
+    [Fact]
+    public void OnOpen()
+    {
+        var p = P("Когда открою Word, проверить титульник");
+        Assert.Equal("open", p.Kind); Assert.Equal("Word", p.Key); Assert.Equal("Проверить титульник", p.Text);
+        Assert.Equal("Госуслуги", P("когда зайду на Госуслуги: проверить штраф").Key);
+    }
+
+    [Fact]
+    public void Tasks()
+    {
+        var t = P("надо сдать отчёт");
+        Assert.Equal("task", t.Kind); Assert.True(t.IsTask); Assert.Equal("Сдать отчёт", t.Text);
+        var d = P("завтра в 18:00 сдать отчёт");
+        Assert.Equal("remind", d.Kind); Assert.True(d.IsTask);
+        var r = P("завтра в 18:00 концерт");
+        Assert.Equal("remind", r.Kind); Assert.False(r.IsTask);
+        Assert.Equal("note", P("пароль от вайфая на холодильнике").Kind);
+    }
+
+    [Theory]
+    [InlineData("word", "WINWORD", "Документ1 - Word", null, true)]
+    [InlineData("ворд", "WINWORD", "Документ1 - Word", null, true)]
+    [InlineData("госуслуги", "chrome", "Главная", "https://www.gosuslugi.ru/", true)]
+    [InlineData("word", "chrome", "Коты", "https://cats.ru", false)]
+    public void TriggerMatch(string key, string process, string title, string? url, bool yes) => Assert.Equal(yes, SecPlan.Matches(key, process, title, url));
+
+    [Fact]
+    public void RepeatingSkipsMissedAndKeepsDay()
+    {
+        var weekly = new Reminder { At = new DateTime(2026, 10, 1, 18, 0, 0), HasTime = true, Repeat = "weekly" };
+        Assert.True(Reminders.NextAfter(weekly, Now) > Now);
+        Assert.Equal(DayOfWeek.Thursday, Reminders.NextAfter(weekly, Now).DayOfWeek);
+        var m = new Reminder { At = new DateTime(2027, 1, 31, 10, 0, 0), HasTime = true, Repeat = "monthly", RepeatDay = 31 };
+        Assert.Equal(new DateTime(2027, 2, 28, 10, 0, 0), Reminders.NextAfter(m, new DateTime(2027, 2, 1)));
+        m.At = new DateTime(2027, 2, 28, 10, 0, 0);
+        Assert.Equal(new DateTime(2027, 3, 31, 10, 0, 0), Reminders.NextAfter(m, new DateTime(2027, 3, 1)));
+    }
+
+    [Fact]
+    public void ScheduleBlockOfThatDay()
+    {
+        var page = "Расписание группы\nПонедельник\n9:00 Матан, ауд. 312\n10:45 Физика\nВторник\n9:00 История\nСреда\nНет занятий";
+        Assert.Equal(new[] { "9:00 Матан, ауд. 312", "10:45 Физика" }, SecPlan.ScheduleFor(page, Now));
+        Assert.Equal(new[] { "9:00 История" }, SecPlan.ScheduleFor(page, Now.AddDays(1)));
+        Assert.Equal(new[] { "Пара 1" }, SecPlan.ScheduleFor("3 ноября\nПара 1\n4 ноября\nПара 2", Now.AddDays(1)));
+        Assert.Null(SecPlan.ScheduleFor("Просто текст без дней", Now));
+    }
+
+    [Theory]
+    [InlineData("Яндекс <noreply@yandex.ru>", false, true)]
+    [InlineData("Иван <ivan@mail.ru>", true, true)]
+    [InlineData("Иван <ivan@mail.ru>", false, false)]
+    public void Newsletter(string from, bool unsub, bool bulk) => Assert.Equal(bulk, SecMail.IsBulk(from, unsub));
+
+    [Fact]
+    public void RuleFolders()
+    {
+        Assert.True(SecDownloads.FolderAllowed(@"C:\Users\me\Documents\Учёба", @"C:\Users\me"));
+        Assert.False(SecDownloads.FolderAllowed(@"C:\Windows\System32", @"C:\Users\me"));
+        Assert.False(SecDownloads.FolderAllowed(@"C:\Users\me\..\..\Windows", @"C:\Users\me"));
+        Assert.False(SecDownloads.FolderAllowed(@"C:\Users\me2\Documents", @"C:\Users\me"));
+        Assert.Equal("лаба", SecDownloads.RuleFor("Лаба3.pdf", new[] { new DownloadRule { Word = "лаба", Folder = "x" } })?.Word);
+        Assert.Null(SecDownloads.RuleFor("кот.jpg", new[] { new DownloadRule { Word = "лаба", Folder = "x" } }));
+    }
+}
+
 public class EdgeGecTests
 {
     // Reference values from edge-tts drm.generate_sec_ms_gec_v2 (Python) for the same timestamps.

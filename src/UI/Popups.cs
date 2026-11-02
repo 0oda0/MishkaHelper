@@ -101,13 +101,24 @@ public static class Toast
 {
     static readonly List<Window> Open = new();
 
-    public static void Show(string glyph, string title, string text, Action? onClick = null)
+    public static void Show(string glyph, string title, string text, Action? onClick = null, (string Label, Action Click)[]? buttons = null)
     {
         var w = Floating.Create(clickThrough: false);
         var head = new TextBlock { Text = title, FontSize = 14, FontWeight = FontWeights.SemiBold };
         var body = new TextBlock { Text = text, FontSize = 12, TextWrapping = TextWrapping.Wrap, MaxWidth = 280, Foreground = (Brush)Application.Current.Resources["DimBrush"], Margin = new Thickness(0, 2, 0, 0) };
         var col = new StackPanel { Margin = new Thickness(12, 0, 0, 0) };
         col.Children.Add(head); col.Children.Add(body);
+        if (buttons != null)
+        {
+            var bar = new WrapPanel { Margin = new Thickness(0, 6, 0, 0), MaxWidth = 280 };
+            foreach (var (label, click) in buttons)
+            {
+                var b = new Button { Content = label, Padding = new Thickness(8, 3, 8, 3), Margin = new Thickness(0, 0, 6, 2), FontSize = 11 };
+                b.Click += (_, _) => { click(); Close(w); };
+                bar.Children.Add(b);
+            }
+            col.Children.Add(bar);
+        }
         var row = new StackPanel { Orientation = Orientation.Horizontal };
         row.Children.Add(Floating.Icon(glyph, 26)); row.Children.Add(col);
         w.Content = Floating.Panel(row, 14);
@@ -120,7 +131,7 @@ public static class Toast
         Open.Add(w);
         Layout();
         w.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(1, TimeSpan.FromMilliseconds(200)));
-        var t = new DispatcherTimer { Interval = TimeSpan.FromSeconds(6) };
+        var t = new DispatcherTimer { Interval = TimeSpan.FromSeconds(buttons != null ? 60 : 6) };   // a choice needs time
         t.Tick += (_, _) => { t.Stop(); Close(w); };
         t.Start();
     }

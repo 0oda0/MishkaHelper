@@ -71,6 +71,18 @@ public static class SecWorkspace
         Secretary.Apply();
     }
 
+    /// <summary>A named set: its windows plus a profile and "do not disturb". One press before a lecture or a shift.</summary>
+    public static void OpenSet(string name)
+    {
+        if (!SecStore.Cur.Workspaces.TryGetValue(name, out var items)) return;
+        if (SecStore.Cur.SetOptions.TryGetValue(name, out var o))
+        {
+            if (o.Profile.Length > 0) Profiles.Apply(o.Profile);
+            if (o.Dnd) Tweaks.DoNotDisturb = true;
+        }
+        Restore(items);
+    }
+
     /// <summary>Everything opens unelevated through Explorer; programs already running are left alone.</summary>
     public static void Restore(List<SavedWindow> items)
     {
@@ -125,9 +137,66 @@ public static class SecDownloads
         _fw.Created += (_, e) => Fresh(e.Name);
     }
 
+    /// <summary>The user's own rule for this name, if any. Rules are the only thing that moves a file without a button.</summary>
+    internal static DownloadRule? RuleFor(string name, IEnumerable<DownloadRule> rules) =>
+        rules.FirstOrDefault(r => r.Word.Length > 0 && name.Contains(r.Word, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>Only real folders inside the user's profile: this process is elevated, a rule must not be able to move files elsewhere.</summary>
+    internal static bool FolderAllowed(string folder, string profile)
+    {
+        try
+        {
+            var full = System.IO.Path.GetFullPath(folder);
+            if (!full.StartsWith(profile.TrimEnd('\\') + "\\", StringComparison.OrdinalIgnoreCase)) return false;
+            var d = new DirectoryInfo(full);
+            return !(d.Exists && d.Attributes.HasFlag(FileAttributes.ReparsePoint));
+        }
+        catch { return false; }
+    }
+
+    static readonly string Profile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+
+    public static bool AddRule(string word, string folder)
+    {
+        if (word.Trim().Length < 2 || !FolderAllowed(folder, Profile)) return false;
+        SecStore.Cur.DownloadRules.Add(new DownloadRule { Word = word.Trim(), Folder = System.IO.Path.GetFullPath(folder) });
+        SecStore.Save();
+        return true;
+    }
+
+    // A browser may still be writing: wait until the file can be opened alone (up to 10 minutes).
+    static async void ApplyRule(string name, DownloadRule rule)
+    {
+        var path = System.IO.Path.Combine(Dir, name);
+        for (int i = 0; i < 120; i++)
+        {
+            await Task.Delay(5000);
+            if (!File.Exists(path)) return;
+            try { using (new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.None)) break; }
+            catch (IOException) { if (i == 119) return; }
+        }
+        try
+        {
+            if (!FolderAllowed(rule.Folder, Profile)) return;
+            var to = Move(new Item(path, name, "", rule.Folder));
+            Secretary.Notify("\uE8DE", "Файл разложен", $"{name} → {rule.Folder}", () => Shell.Open(Shell.Sys("explorer"), $"/select,\"{to}\""));
+        }
+        catch (Exception e) { Log.Error(e); }
+    }
+
+    static readonly HashSet<string> Seen = new();
+
     static void Fresh(string? name)
     {
-        if (name == null || Sort(name) == null || !Important.IsMatch(name)) return;
+        if (name == null || Sort(name) == null) return;
+        var app = System.Windows.Application.Current;
+        if (Settings.Current.Secretary.DownloadRules && RuleFor(name, SecStore.Cur.DownloadRules) is { } rule)
+        {
+            lock (Seen) if (!Seen.Add(name)) return;
+            app?.Dispatcher.BeginInvoke(() => ApplyRule(name, rule));
+            return;
+        }
+        if (!Important.IsMatch(name)) return;
         System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
             Secretary.Notify("", "Важный файл в «Загрузках»", name, () => Shell.Open(Shell.Sys("explorer"), $"/select,\"{System.IO.Path.Combine(Dir, name)}\"")));
     }
@@ -152,15 +221,93 @@ public static class SecDownloads
         Directory.CreateDirectory(i.Dest);
         var to = System.IO.Path.Combine(i.Dest, i.Name);
         for (int n = 2; File.Exists(to); n++) to = System.IO.Path.Combine(i.Dest, $"{System.IO.Path.GetFileNameWithoutExtension(i.Name)} ({n}){System.IO.Path.GetExtension(i.Name)}");
+        var source = Source(i.Path);
         from.MoveTo(to);
+        var log = SecStore.Cur.FileLog;
+        log.Insert(0, new FileRecord { Name = i.Name, Path = to, Source = source });
+        if (log.Count > 500) log.RemoveRange(500, log.Count - 500);
+        SecStore.Save();
         return to;
+    }
+
+    /// <summary>Windows notes where a download came from in the file's Zone.Identifier stream.</summary>
+    internal static string Source(string path)
+    {
+        try
+        {
+            foreach (var l in File.ReadLines(path + ":Zone.Identifier"))
+                if (l.StartsWith("HostUrl=", StringComparison.OrdinalIgnoreCase)) return l[8..].Trim();
+        }
+        catch { }
+        return "";
+    }
+
+    /// <summary>"Куда я сохранил договор?": names in the usual folders, plus everything the secretary has moved.</summary>
+    public static Task<List<FileRecord>> Find(string query) => Task.Run(() =>
+    {
+        var words = RuText.Clean(query).Split(' ', StringSplitOptions.RemoveEmptyEntries).Select(w => w.Length > 4 ? w[..^1] : w).ToArray();
+        var res = new List<FileRecord>();
+        if (words.Length == 0) return res;
+        bool Hit(string s) { var c = RuText.Clean(s); return words.All(c.Contains); }
+        foreach (var r in SecStore.Cur.FileLog.ToList().Where(r => (Hit(r.Name) || Hit(r.Source)) && File.Exists(r.Path))) res.Add(r);
+        int looked = 0;
+        var stack = new Stack<(string Path, int Depth)>();
+        foreach (var root in new[] { Dir, Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), Environment.GetFolderPath(Environment.SpecialFolder.Desktop) }.Distinct())
+            if (Directory.Exists(root)) stack.Push((root, 0));
+        // ponytail: walks the folders on each search (capped); a real index if this ever feels slow.
+        while (stack.Count > 0 && looked < 30000 && res.Count < 30)
+        {
+            var (dir, depth) = stack.Pop();
+            try
+            {
+                foreach (var f in new DirectoryInfo(dir).EnumerateFileSystemInfos())
+                {
+                    if (f.Attributes.HasFlag(FileAttributes.ReparsePoint)) continue;
+                    if (f is DirectoryInfo) { if (depth < 4 && !f.Name.StartsWith('.') && f.Name != "node_modules") stack.Push((f.FullName, depth + 1)); continue; }
+                    looked++;
+                    if (Hit(f.Name) && res.All(r => r.Path != f.FullName)) res.Add(new FileRecord { Name = f.Name, Path = f.FullName, Source = Source(f.FullName), When = f.LastWriteTime });
+                }
+            }
+            catch { }   // a folder we may not read
+        }
+        return res.OrderByDescending(r => r.When).Take(30).ToList();
+    });
+}
+
+/// <summary>The schedule itself in the summaries: reads the remembered page with Mishka's own browser, once a day per date.</summary>
+public static class SecSchedule
+{
+    public static bool NeedsLogin { get; private set; }
+    public static string LoginUrl { get; private set; } = "";
+
+    public static async Task<List<string>> Lines(DateTime day)
+    {
+        var s = Settings.Current.Secretary;
+        var store = SecStore.Cur;
+        var page = store.Remembered.FirstOrDefault(r => r.Daily && r.Target.StartsWith("http", StringComparison.OrdinalIgnoreCase));
+        if (!s.ScheduleRead || page == null) return new();
+        var key = day.ToString("yyyy-MM-dd") + page.Target;
+        if (store.ScheduleCacheDay == key) return store.ScheduleCache;
+        try
+        {
+            await Vpn.EnsureFor(page.Target);
+            var text = await WebReader.ReadText(page.Target, 30000);
+            NeedsLogin = text == "__LOGIN__";
+            LoginUrl = page.Target;
+            if (NeedsLogin) return new();
+            var lines = SecPlan.ScheduleFor(text, day) ?? new();
+            store.ScheduleCacheDay = key; store.ScheduleCache = lines;
+            SecStore.Save();
+            return lines;
+        }
+        catch (Exception e) { Log.Error(e); return new(); }
     }
 }
 
 /// <summary>Mail by IMAP, read only: the folder is opened read-only, so letters stay unread and nothing can be sent or deleted.</summary>
 public static class SecMail
 {
-    public record Letter(string From, string Subject, string Preview, DateTime When, string Web);
+    public record Letter(string From, string Subject, string Preview, DateTime When, string Web, bool Bulk);
 
     public static int Unread { get; private set; }
     public static List<Letter> Recent { get; private set; } = new();
@@ -182,6 +329,11 @@ public static class SecMail
             _ => null,
         };
     }
+
+    static readonly System.Text.RegularExpressions.Regex BulkSender = new(@"no-?reply|newsletter|news@|mailer|рассылк|promo|marketing|notifications?@", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+    /// <summary>A newsletter says so in List-Unsubscribe; automatic senders give themselves away by the address.</summary>
+    internal static bool IsBulk(string from, bool hasUnsubscribe) => hasUnsubscribe || BulkSender.IsMatch(from);
 
     public static void OpenWeb()
     {
@@ -234,10 +386,10 @@ public static class SecMail
                     var ids = await c.Inbox.SearchAsync(SearchQuery.NotSeen, cts.Token);
                     unread += ids.Count;
                     var newest = ids.OrderByDescending(u => u.Id).Take(20).ToList();
-                    var infos = newest.Count == 0 ? new List<IMessageSummary>() : (await c.Inbox.FetchAsync(newest, MessageSummaryItems.Envelope | MessageSummaryItems.UniqueId | MessageSummaryItems.PreviewText, cts.Token)).ToList();
+                    var infos = newest.Count == 0 ? new List<IMessageSummary>() : (await c.Inbox.FetchAsync(newest, new FetchRequest(MessageSummaryItems.Envelope | MessageSummaryItems.UniqueId | MessageSummaryItems.PreviewText) { Headers = new HeaderSet(new[] { "List-Unsubscribe" }) }, cts.Token)).ToList();
                     foreach (var m in infos.OrderByDescending(m => m.UniqueId.Id))
                     {
-                        var l = new Letter(m.Envelope.From.ToString(), m.Envelope.Subject ?? "(без темы)", m.PreviewText ?? "", m.Envelope.Date?.LocalDateTime ?? DateTime.Now, a.Web);
+                        var l = new Letter(m.Envelope.From.ToString(), m.Envelope.Subject ?? "(без темы)", m.PreviewText ?? "", m.Envelope.Date?.LocalDateTime ?? DateTime.Now, a.Web, IsBulk(m.Envelope.From.ToString(), m.Headers?.Contains("List-Unsubscribe") == true));
                         letters.Add(l);
                         if (m.UniqueId.Id > a.LastUid) Arrived(l);
                     }
@@ -256,6 +408,7 @@ public static class SecMail
     static void Arrived(Letter l)
     {
         var s = Settings.Current.Secretary;
+        if (l.Bulk) return;   // counted on the page as "ещё N рассылок", no toast
         var vip = s.MailImportant;
         bool important = vip.Count == 0 || vip.Any(v => (l.From + " " + l.Subject).Contains(v, StringComparison.OrdinalIgnoreCase));
         if (important)

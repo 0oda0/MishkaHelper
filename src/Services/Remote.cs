@@ -288,6 +288,10 @@ public static class Remote
                     _ when int.TryParse(arg, out var min) => PowerTimer.In(min),
                     _ => "",
                 };
+#if SECRETARY
+                if (arg != "cancel" && Settings.Current.Secretary.Enabled && Settings.Current.Secretary.ShutdownCheck && Secretary.TodoToday() is { Count: > 0 } todo)
+                    say += "\nНа сегодня не сделано: " + string.Join(", ", todo.Take(5));
+#endif
                 return new { say, power = PowerTimer.Describe() };
             case "screens":
                 return new
@@ -335,6 +339,29 @@ public static class Remote
             case "mediaDel":
                 if (int.TryParse(arg, out var di) && di >= 0 && di < Settings.Current.MediaLinks.Count) { Settings.Current.MediaLinks.RemoveAt(di); Settings.Save(); }
                 return Media();
+#if SECRETARY
+            case "secToday":
+            {
+                var s = Settings.Current.Secretary; var store = SecStore.Cur;
+                return new
+                {
+                    today = (await Secretary.Today()).Select(l => l.Text),
+                    tasks = s.Tasks ? Secretary.OpenTasks().Take(30).Select(t => new { id = t.Id, text = t.Text, due = t.Due is { } d ? When.Say(d, t.HasTime, DateTime.Now) : "", late = t.Due < DateTime.Today }) : null,
+                    pages = store.Remembered.Take(15).Select((r, i) => new { i, title = r.Title, daily = r.Daily }),
+                    sets = store.Workspaces.Keys,
+                    log = s.DayLog ? Secretary.DayLog() : new(),
+                };
+            }
+            // The phone's commands act only on the secretary's own list: an id, an index, a set name.
+            case "secAdd": return new { said = arg.Trim().Length is > 0 and <= 2000 ? SecCapture.Save(arg.Trim(), "телефон") : "" };
+            case "secDone":
+                if (SecStore.Cur.Tasks.FirstOrDefault(t => t.Id == arg) is { } done) Secretary.Finish(done);
+                return new { };
+            case "secOpen":
+                if (int.TryParse(arg, out var pi) && pi >= 0 && pi < SecStore.Cur.Remembered.Count) Secretary.Open(SecStore.Cur.Remembered[pi]);
+                return new { };
+            case "secSet": SecWorkspace.OpenSet(arg); return new { };
+#endif
 #if JARVIS
             case "ytSubs": return await YouTubeSubs(arg == "refresh");
             case "ytLogin":
@@ -375,6 +402,12 @@ public static class Remote
             profiles = Settings.Current.Profiles.Select(p => p.Name), jarvis = Edition.HasJarvis,
             apps = Settings.Current.Launchers.Select(l => l.Name), playing = await NowPlaying(),
             focus = Focus.Status(), power = PowerTimer.Describe(),
+#if SECRETARY
+            secretary = Settings.Current.Secretary.Enabled && Settings.Current.Secretary.PhoneTab,
+            todo = Settings.Current.Secretary.Enabled && Settings.Current.Secretary.ShutdownCheck ? Secretary.TodoToday() : new(),
+#else
+            secretary = false, todo = new List<string>(),
+#endif
         };
     }
 

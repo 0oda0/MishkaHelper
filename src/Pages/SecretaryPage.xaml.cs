@@ -27,6 +27,17 @@ public partial class SecretaryPage : UserControl
         ("Встречи из календаря", "За 10 минут до начала; ссылка на встречу открывается по нажатию.", () => S.Meetings, v => S.Meetings = v),
         ("Напоминать о перерыве", "После долгой работы без пауз.", () => S.Breaks, v => S.Breaks = v),
         ("Дублировать напоминания на телефон", "Через приложение Mishka.", () => S.ToPhone, v => S.ToPhone = v),
+        ("Дела с галочками", "«Надо сдать отчёт» попадает в список. Просроченное остаётся в утренней сводке.", () => S.Tasks, v => S.Tasks = v),
+        ("Повторы", "«Каждый вторник в 18 тренировка», «каждое 5-е оплатить интернет».", () => S.Repeats, v => S.Repeats = v),
+        ("Дни рождения и даты", "«День рождения мамы 12 мая» — каждый год и за 3 дня до него; такие же события из календаря.", () => S.Dates, v => S.Dates = v),
+        ("Напоминание при открытии", "«Когда открою Word, проверить титульник».", () => S.AppTriggers, v => S.AppTriggers = v),
+        ("Расписание в сводке", "Читает запомненную страницу и показывает пары на день, если там есть понятный заголовок дня.", () => S.ScheduleRead, v => S.ScheduleRead = v),
+        ("Итог дня", "Вечером: где провёл время, что сделано и что осталось.", () => S.DayLog, v => S.DayLog = v),
+        ("Заметка из выделенного", "Выдели текст и нажми клавишу: сохранится вместе с адресом страницы.", () => S.Selection, v => S.Selection = v),
+        ("Правила для «Загрузок»", "Твои правила: файлы со словом «лаба» сами уходят в выбранную папку.", () => S.DownloadRules, v => S.DownloadRules = v),
+        ("Поиск файлов", "«Куда я сохранил договор?»: ищет в «Загрузках», «Документах» и на рабочем столе, показывает, откуда файл скачан.", () => S.FileMemory, v => S.FileMemory = v),
+        ("Проверка перед выключением", "Выключаешь ПК с телефона — покажет несделанное на сегодня.", () => S.ShutdownCheck, v => S.ShutdownCheck = v),
+        ("Вкладка на телефоне", "Сводка, дела и заметки в приложении Mishka.", () => S.PhoneTab, v => S.PhoneTab = v),
         ("Не мешать в игре", "В игре и на весь экран всё ждёт в списке «Пока ты был занят».", () => S.QuietInGame, v => S.QuietInGame = v),
     };
 
@@ -79,11 +90,14 @@ public partial class SecretaryPage : UserControl
         Cards.Children.Add(MasterCard());
         if (!S.Enabled) { Cards.Children.Add(FeaturesCard()); return; }
         Cards.Children.Add(TodayCard());
+        if (S.Tasks) Cards.Children.Add(TasksCard());
         Cards.Children.Add(SearchCard());
         if (SecStore.Cur.Suggestions.Count > 0) Cards.Children.Add(WaitingCard());
         Cards.Children.Add(RememberedCard());
         if (S.AppNotes) Cards.Children.Add(NotesCard());
         if (S.Mail) Cards.Children.Add(MailCard());
+        if (S.DayLog && Secretary.DayLog() is { Count: > 0 } log) Cards.Children.Add(DayLogCard(log));
+        if (S.Repeats || S.AppTriggers) Cards.Children.Add(RepeatsCard());
         if (S.Workspace) Cards.Children.Add(WorkspaceCard());
         if (S.Downloads) Cards.Children.Add(DownloadsCard());
         Cards.Children.Add(FeaturesCard());
@@ -113,7 +127,54 @@ public partial class SecretaryPage : UserControl
             if (lines.Count == 0) b.Children.Add(UiKit.Text("Дел на сегодня нет.", 13, true));
             foreach (var l in lines)
                 b.Children.Add(l.Click != null ? Row(l.Text, ("Открыть", l.Click)) : Row(l.Text));
+            if (SecSchedule.NeedsLogin) b.Children.Add(Row("Чтобы показывать расписание, войди на сайт один раз в окне Mishka.", ("Войти", () => WebReader.OpenWindow(SecSchedule.LoginUrl, "Вход на сайт расписания"))));
         }
+        return c;
+    }
+
+    UIElement TasksCard()
+    {
+        var (c, b) = Card("Дела", "Пиши как есть: «надо сдать отчёт», «завтра купить билеты». Срок необязателен.");
+        foreach (var t in Secretary.OpenTasks().Take(20))
+        {
+            var row = new DockPanel { Margin = new Thickness(0, 2, 0, 2) };
+            var del = new Button { Content = "✕", Style = St("GhostButton"), Padding = new Thickness(8, 2, 8, 2) };
+            del.Click += (_, _) => { SecStore.Cur.Tasks.Remove(t); SecStore.Save(); Render(); };
+            DockPanel.SetDock(del, Dock.Right); row.Children.Add(del);
+            var late = t.Due < DateTime.Today;
+            var cb = new CheckBox { VerticalAlignment = VerticalAlignment.Center, Content = new TextBlock { Text = t.Text + (t.Due is { } d ? $"  ·  {When.Say(d, t.HasTime, DateTime.Now)}" : ""), TextWrapping = TextWrapping.Wrap, Foreground = (System.Windows.Media.Brush)FindResource(late ? "WarnBrush" : "TextBrush") } };
+            cb.Click += (_, _) => { Secretary.Finish(t); };
+            row.Children.Add(cb);
+            b.Children.Add(row);
+        }
+        var box = new TextBox { Padding = new Thickness(8), Margin = new Thickness(0, 6, 0, 0) };
+        box.KeyDown += (_, e) =>
+        {
+            if (e.Key != System.Windows.Input.Key.Enter || box.Text.Trim().Length == 0) return;
+            var text = box.Text.Trim();
+            var p = SecPlan.Understand(text, DateTime.Now);
+            SecStore.Cur.Tasks.Add(new SecTask { Text = p.Kind == "remind" ? p.Text : Reminders.Cap(text), Due = p.Kind == "remind" ? p.At : null, HasTime = p.HasTime });
+            SecStore.Save();
+            Render();
+        };
+        b.Children.Add(UiKit.WithHint(box, "Новое дело, Enter — добавить"));
+        return c;
+    }
+
+    UIElement DayLogCard(List<string> log)
+    {
+        var (c, b) = Card("Итог дня");
+        foreach (var l in log) b.Children.Add(Row(l));
+        return c;
+    }
+
+    UIElement RepeatsCard()
+    {
+        var (c, b) = Card("Повторы и условия", "Добавляются быстрой заметкой: «каждый вторник в 18 тренировка», «день рождения мамы 12 мая», «когда открою Word, проверить титульник».");
+        foreach (var r in Settings.Current.Reminders.Where(r => r.Repeat.Length > 0).ToList())
+            b.Children.Add(Row($"{r.Text} · {SecPlan.RepeatName(r.Repeat)} · дальше {When.Say(r.At, r.HasTime, DateTime.Now)}", ("✕", () => { Reminders.Remove(r); Render(); })));
+        foreach (var t in SecStore.Cur.Triggers.ToList())
+            b.Children.Add(Row($"Когда откроешь {t.Key}: {t.Text}", ("✕", () => { SecStore.Cur.Triggers.Remove(t); SecStore.Save(); Render(); })));
         return c;
     }
 
@@ -130,7 +191,20 @@ public partial class SecretaryPage : UserControl
             if (found.Count == 0) results.Children.Add(UiKit.Text("Ничего не нашла.", 12, true));
             foreach (var l in found.Take(12))
                 results.Children.Add(l.Click != null ? Row(l.Text, ("Открыть", l.Click)) : Row(l.Text));
+            if (S.FileMemory) Files(box.Text);
         };
+        async void Files(string query)
+        {
+            await Task.Delay(400);   // only when typing has stopped
+            if (box.Text != query) return;
+            var files = await SecDownloads.Find(query);
+            if (box.Text != query) return;
+            foreach (var f in files.Take(10))
+            {
+                var host = Uri.TryCreate(f.Source, UriKind.Absolute, out var u) ? $" · с {u.Host}" : "";
+                results.Children.Add(Row($"{f.Name}{host}", ("Показать", () => Shell.Open(Shell.Sys("explorer"), $"/select,\"{f.Path}\""))));
+            }
+        }
         b.Children.Add(box); b.Children.Add(results);
         return c;
     }
@@ -176,8 +250,9 @@ public partial class SecretaryPage : UserControl
         foreach (var a in SecStore.Cur.Mail.ToList())
             b.Children.Add(Row(a.Email, ("Убрать", () => { if (UiKit.Confirm($"Убрать почту {a.Email} и её пароль с этого ПК?")) { SecMail.Remove(a); Render(); } })));
         if (SecMail.LastError.Length > 0) { var e = UiKit.Text("Ошибка: " + SecMail.LastError, 12); e.Foreground = (System.Windows.Media.Brush)FindResource("WarnBrush"); e.TextWrapping = TextWrapping.Wrap; b.Children.Add(e); }
-        foreach (var l in SecMail.Recent.Take(5))
+        foreach (var l in SecMail.Recent.Where(x => !x.Bulk).Take(5))
             b.Children.Add(Row($"{l.From}: {l.Subject}", ("Открыть", () => { if (l.Web.Length > 0) Shell.Open(l.Web); })));
+        if (SecMail.Recent.Count(x => x.Bulk) is > 0 and var bulk) b.Children.Add(UiKit.Text($"И ещё рассылок: {bulk}", 12, true));
 
         var email = new TextBox { Padding = new Thickness(8), Margin = new Thickness(0, 8, 0, 4) };
         var pass = new PasswordBox { Padding = new Thickness(8), Margin = new Thickness(0, 0, 0, 4) };
@@ -209,14 +284,25 @@ public partial class SecretaryPage : UserControl
 
     UIElement WorkspaceCard()
     {
-        var (c, b) = Card("Где я остановился", "Открытые программы, папки и активные вкладки браузера. Запоминаются сами каждые 15 минут.");
+        var (c, b) = Card("Где я остановился и наборы", "Открытые программы, папки и активные вкладки браузера запоминаются сами каждые 15 минут. Набор с названием ещё включает профиль и «Не беспокоить», открывается с телефона и из палитры.");
         var st = SecStore.Cur;
         if (st.LastWorkspace.Count > 0) b.Children.Add(Row($"Последнее: {st.LastWorkspaceAt:dd.MM HH:mm} ({st.LastWorkspace.Count})", ("Вернуть", () => SecWorkspace.Restore(st.LastWorkspace))));
         foreach (var (name, items) in st.Workspaces.ToList())
-            b.Children.Add(Row($"{name} ({items.Count})", ("✕", () => { st.Workspaces.Remove(name); SecStore.Save(); Render(); }), ("Вернуть", () => SecWorkspace.Restore(items))));
+        {
+            b.Children.Add(Row($"{name} ({items.Count})", ("✕", () => { st.Workspaces.Remove(name); st.SetOptions.Remove(name); SecStore.Save(); Render(); }), ("Открыть", () => SecWorkspace.OpenSet(name))));
+            if (!st.SetOptions.TryGetValue(name, out var o)) st.SetOptions[name] = o = new WorkSetOptions();
+            var opts = new DockPanel { Margin = new Thickness(0, 0, 0, 6) };
+            var dnd = new CheckBox { Content = "Не беспокоить", IsChecked = o.Dnd, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 0, 0) };
+            dnd.Click += (_, _) => { o.Dnd = dnd.IsChecked == true; SecStore.Save(); };
+            DockPanel.SetDock(dnd, Dock.Right); opts.Children.Add(dnd);
+            var prof = new ComboBox { ItemsSource = new[] { "Без профиля" }.Concat(Settings.Current.Profiles.Select(p => p.Name)).ToList(), SelectedItem = o.Profile.Length > 0 ? o.Profile : "Без профиля" };
+            prof.SelectionChanged += (_, _) => { o.Profile = prof.SelectedIndex > 0 ? (string)prof.SelectedItem : ""; SecStore.Save(); };
+            opts.Children.Add(prof);
+            b.Children.Add(opts);
+        }
         Btn(b, "Сохранить как…", () =>
         {
-            var name = UiKit.Ask("Рабочее место", "Название, например «Учёба» или «Монтаж»");
+            var name = UiKit.Ask("Набор", "Название, например «Учёба» или «Монтаж»");
             if (!string.IsNullOrWhiteSpace(name)) _ = SecWorkspace.SaveNamed(name.Trim());
         });
         return c;
@@ -237,6 +323,22 @@ public partial class SecretaryPage : UserControl
                 Osd.Show("", $"Перенесено: {moved}");
                 Render();
             })));
+        }
+        if (S.DownloadRules)
+        {
+            b.Children.Add(new TextBlock { Text = "Твои правила", Style = St("Dim"), Margin = new Thickness(0, 10, 0, 2) });
+            foreach (var r in SecStore.Cur.DownloadRules.ToList())
+                b.Children.Add(Row($"«{r.Word}» → {r.Folder}", ("✕", () => { SecStore.Cur.DownloadRules.Remove(r); SecStore.Save(); Render(); })));
+            var word = new TextBox { Padding = new Thickness(8), Margin = new Thickness(0, 4, 0, 4) };
+            b.Children.Add(UiKit.WithHint(word, "Слово в имени файла, например «лаба»"));
+            Btn(b, "Выбрать папку и добавить", () =>
+            {
+                if (word.Text.Trim().Length < 2) { Osd.Show("", "Сначала напиши слово"); return; }
+                var dlg = new Microsoft.Win32.OpenFolderDialog { Title = "Куда складывать такие файлы" };
+                if (dlg.ShowDialog() != true) return;
+                if (!SecDownloads.AddRule(word.Text, dlg.FolderName)) { UiKit.Confirm("Папка должна быть внутри твоего профиля (Документы, Рабочий стол и т. п.)."); return; }
+                Render();
+            });
         }
         return c;
     }

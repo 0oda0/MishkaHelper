@@ -12,7 +12,7 @@
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
     <AssemblyName>MishkaHelper</AssemblyName>
     <RootNamespace>MishkaHelper</RootNamespace>
-    <Version>1.2.0</Version>
+    <Version>1.3.0</Version>
     <Product>Mishka Helper</Product>
     <Company>Mishka</Company>
     <!-- WinForms is only used for NotifyIcon; avoid ambiguous usings -->
@@ -48,13 +48,13 @@
     <PackageReference Include="Whisper.net" Version="1.9.1" />
     <PackageReference Include="Whisper.net.Runtime" Version="1.9.1" />
     <PackageReference Include="Whisper.net.Runtime.Vulkan" Version="1.9.1" />
-    <!-- Jarvis web sources: reads pages (e.g. a university schedule) with the user's own browser login -->
-    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4191.47" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(HasJarvis)' == 'true' Or '$(HasSecretary)' == 'true'">
     <!-- Offline speech for Jarvis' light mode and the secretary's voice notes; the model is downloaded on demand. -->
     <PackageReference Include="Vosk" Version="0.3.38" />
+    <!-- Reads pages (e.g. a university schedule) with the user's own browser login -->
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4191.47" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(HasSecretary)' == 'true'">
@@ -70,7 +70,7 @@
 
   <ItemGroup Condition="'$(HasJarvis)' != 'true' And '$(HasSecretary)' == 'true'">
     <!-- What the secretary shares with Jarvis: dates, notes, calendar, model downloads. -->
-    <Compile Include="Jarvis\When.cs;Jarvis\Notes.cs;Jarvis\Calendar.cs;Jarvis\Models.cs" />
+    <Compile Include="Jarvis\When.cs;Jarvis\Notes.cs;Jarvis\Calendar.cs;Jarvis\Models.cs;Jarvis\WebReader.cs" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(HasSecretary)' != 'true'">

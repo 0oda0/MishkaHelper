@@ -105,6 +105,7 @@ public static class Secretary
             {
                 CurrentApp = name; CurrentTitle = title;
                 if (S.AppHints) ShowHint(name);
+                if (S.AppTriggers && SecStore.Cur.Triggers.Count > 0) CheckTriggers(name, title);
             }
             if (_tick % 15 == 0) Minute();
         }
@@ -119,6 +120,73 @@ public static class Secretary
         _lastKey = key;
         if (!S.AppNotes || !HintShown.Add(key) || !SecStore.Cur.AppNotes.TryGetValue(key, out var note) || note.Trim().Length == 0) return;
         Notify("", "Заметка: " + name, note.Length > 200 ? note[..200] + "…" : note, () => SecCapture.AppNote());
+    }
+
+    static string _trigSeen = "";
+
+    // One shot: said once when that program or site comes up, then forgotten.
+    static async void CheckTriggers(string name, string title)
+    {
+        var seen = name + "|" + title;
+        if (seen == _trigSeen) return;
+        _trigSeen = seen;
+        var window = GetForegroundWindow();
+        var url = await Task.Run(() => SecCapture.BrowserUrl(window, name));
+        foreach (var t in SecStore.Cur.Triggers.Where(t => SecPlan.Matches(t.Key, name, title, url)).ToList())
+        {
+            SecStore.Cur.Triggers.Remove(t);
+            SecStore.Save();
+            Toast.Show("\uE7E7", "Ты просил напомнить", t.Text);
+            Changed?.Invoke();
+        }
+    }
+
+    public static List<SecTask> OpenTasks() =>
+        SecStore.Cur.Tasks.Where(t => t.DoneAt == null).OrderBy(t => t.Due ?? DateTime.MaxValue).ThenBy(t => t.Created).ToList();
+
+    /// <summary>What is due today or already late: morning summary, and the check before switching the PC off.</summary>
+    public static List<string> TodoToday()
+    {
+        var res = OpenTasks().Where(t => t.Due?.Date <= DateTime.Today).Select(t => t.Text).ToList();
+        res.AddRange(Reminders.Upcoming(1).Where(r => Reminders.RingAt(r).Date == DateTime.Today && Reminders.RingAt(r) > DateTime.Now && !res.Contains(r.Text)).Select(r => r.Text));
+        return res;
+    }
+
+    public static void Finish(SecTask t)
+    {
+        t.DoneAt = DateTime.Now;
+        // Finished ones stay a week for the day log, then go.
+        SecStore.Cur.Tasks.RemoveAll(x => x.DoneAt < DateTime.Now.AddDays(-7));
+        SecStore.Save();
+        Changed?.Invoke();
+    }
+
+    public static List<string> DayLog()
+    {
+        var l = new List<string>();
+        var top = ScreenTime.Top(1).Take(4).Select(x => $"{x.App} {ScreenTime.Format(x.Seconds)}").ToList();
+        if (top.Count > 0) l.Add("Больше всего: " + string.Join(", ", top));
+        var done = SecStore.Cur.Tasks.Count(t => t.DoneAt?.Date == DateTime.Today);
+        var left = OpenTasks().Count(t => t.Due?.Date <= DateTime.Today);
+        if (done > 0 || left > 0) l.Add($"Дел сделано: {done}" + (left > 0 ? $", осталось на сегодня: {left}" : ""));
+        return l;
+    }
+
+    // Birthdays and anniversaries from the calendar, 3 days ahead.
+    static readonly Regex DateEvent = new(@"день\s+рождени|\bдр\b|годовщин|birthday|anniversary", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    static async Task<List<string>> CalendarDates()
+    {
+        var res = new List<string>();
+        if (!S.Dates || !Calendar.Configured) return res;
+        for (int d = 0; d <= 3; d++)
+            try
+            {
+                foreach (var e in await Calendar.On(DateTime.Today.AddDays(d)))
+                    if (DateEvent.IsMatch(e.Title)) res.Add((d == 0 ? "Сегодня: " : $"Через {d} дн.: ") + e.Title);
+            }
+            catch (Exception e) { Log.Error(e); }
+        return res;
     }
 
     // Every 30 s.
@@ -156,11 +224,16 @@ public static class Secretary
     public static async Task<List<Line>> Today()
     {
         var l = new List<Line>();
-        foreach (var r in Reminders.Upcoming(1).Where(r => Reminders.RingAt(r).Date == DateTime.Today))
-            l.Add(new("", (r.HasTime ? r.At.ToString("HH:mm ") : "") + r.Text, null));
+        if (S.Tasks)
+            foreach (var t in OpenTasks().Where(t => t.Due?.Date <= DateTime.Today))
+                l.Add(new("\uE73E", (t.Due < DateTime.Today ? "Просрочено: " : "") + t.Text, null));
+        foreach (var r in Reminders.Upcoming(1).Where(r => Reminders.RingAt(r).Date == DateTime.Today && !(S.Tasks && OpenTasks().Any(t => t.Text == r.Text))))
+            l.Add(new("\uE787", (r.HasTime ? r.At.ToString("HH:mm ") : "") + r.Text, null));
+        foreach (var d in await CalendarDates()) l.Add(new("\uE787", d, null));
+        foreach (var line in await SecSchedule.Lines(DateTime.Today)) l.Add(new("\uE8A1", line, null));
         if (Calendar.Configured)
             try { foreach (var e in await Calendar.On(DateTime.Today)) l.Add(new("", (e.AllDay ? "" : e.Start.ToString("HH:mm ")) + e.Title, null)); } catch (Exception e) { Log.Error(e); }
-        if (S.Mail && SecMail.Unread > 0) l.Add(new("", $"Непрочитанных писем: {SecMail.Unread}", SecMail.OpenWeb));
+        if (S.Mail && SecMail.Unread > 0) l.Add(new("\uE715", $"Непрочитанных писем: {SecMail.Unread}" + (SecMail.Recent.Count(x => x.Bulk) is > 0 and var bulk ? $" (из последних {bulk} рассылки)" : ""), SecMail.OpenWeb));
         foreach (var d in SecStore.Cur.Remembered.Where(x => x.Daily)) l.Add(new("", d.Title, () => Open(d)));
         if (S.Workspace && SecStore.Cur.LastWorkspace.Count > 0 && SecStore.Cur.LastWorkspaceAt.Date < DateTime.Today)
             l.Add(new("", $"Вернуть рабочее место ({SecStore.Cur.LastWorkspaceAt:dd.MM HH:mm})", () => SecWorkspace.Restore(SecStore.Cur.LastWorkspace)));
@@ -174,15 +247,19 @@ public static class Secretary
         Toast.Show("", "Доброе утро", l.Count == 0 ? "На сегодня дел нет." : string.Join("\n", l.Take(5).Select(x => "• " + x.Text)), () => App.Current.Navigate("Secretary"));
     }
 
-    static void Evening()
+    static async void Evening()
     {
         var day = DateTime.Today.AddDays(1);
         var items = Reminders.Upcoming(2).Where(r => Reminders.RingAt(r).Date == day).Select(r => r.Text).ToList();
+        items.AddRange(await SecSchedule.Lines(day));
         var daily = SecStore.Cur.Remembered.FirstOrDefault(x => x.Daily);
-        if (items.Count == 0 && daily == null) return;
-        var text = string.Join("\n", items.Take(4).Select(x => "• " + x));
-        if (daily != null) text += (text.Length > 0 ? "\n" : "") + "Посмотреть: " + daily.Title;
-        Toast.Show("", "На завтра", text, daily != null ? () => Open(daily) : () => App.Current.Navigate("Secretary"));
+        var log = S.DayLog ? DayLog() : new();
+        if (items.Count == 0 && daily == null && log.Count == 0) return;
+        var parts = new List<string>();
+        if (log.Count > 0) parts.Add(string.Join("\n", log));
+        if (items.Count > 0) parts.Add("Завтра:\n" + string.Join("\n", items.Take(6).Select(x => "• " + x)));
+        if (daily != null) parts.Add("Посмотреть: " + daily.Title);
+        Toast.Show("\uE787", "Итог дня", string.Join("\n", parts), daily != null ? () => Open(daily) : () => App.Current.Navigate("Secretary"));
     }
 
     public static void Open(RememberedItem r)
@@ -257,7 +334,8 @@ public static class Secretary
         bool Hit(string s) { var c = RuText.Clean(s); return words.Length > 0 && words.All(w => c.Contains(w.Length > 4 ? w[..^1] : w)); }
         var l = new List<Line>();
         foreach (var r in SecStore.Cur.Remembered.Where(r => Hit(r.Title + " " + r.Target))) l.Add(new("", r.Title, () => Open(r)));
-        foreach (var (k, v) in SecStore.Cur.AppNotes.Where(kv => Hit(kv.Key + " " + kv.Value))) l.Add(new("", $"{k}: {v}", null));
+        foreach (var t in SecStore.Cur.Tasks.Where(t => Hit(t.Text))) l.Add(new("\uE73E", (t.DoneAt != null ? "Сделано: " : "Дело: ") + t.Text, null));
+        foreach (var (k, v) in SecStore.Cur.AppNotes.Where(kv => Hit(kv.Key + " " + kv.Value))) l.Add(new("\uE70B", $"{k}: {v}", null));
         foreach (var n in Notes.All.Where(n => Hit(n.Text)).OrderByDescending(n => n.When).Take(20)) l.Add(new("", $"{n.When:dd.MM} {n.Text}", null));
         return l;
     }

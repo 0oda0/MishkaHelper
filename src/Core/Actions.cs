@@ -45,6 +45,7 @@ public static class Actions
                 case "secQuick": SecCapture.Quick(); break;
                 case "secVoice": SecCapture.Quick(voice: true); break;
                 case "secRemember": SecCapture.Remember(); break;
+                case "secClip": SecCapture.FromSelection(); break;
 #endif
                 case "boost":
                     Osd.Show("", "Ускоряю…");
@@ -128,6 +129,9 @@ public static class Actions
                         var l = Settings.Current.Launchers[i];
                         Shell.Open(l.Path, l.Args);
                     }
+#if SECRETARY
+                    else if (action.StartsWith("set:")) SecWorkspace.OpenSet(action[4..]);
+#endif
                     else if (action.StartsWith("audio:")) { Audio.SetDefault(action[6..]); Osd.Show("", Audio.DefaultName(DataFlow.Render)); }
                     else if (action.StartsWith("page:")) App.Current.Navigate(action[5..]);
 #if JARVIS

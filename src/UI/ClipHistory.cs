@@ -49,6 +49,10 @@ public static class ClipHistory
         return IntPtr.Zero;
     }
 
+    /// <summary>The next change is ours (the secretary copying a selection): keep it out of the history and the date offers.</summary>
+    public static void IgnoreNext() => _ignoreNext = true;
+    public static bool IsPrivateCopy() => IsClipboardFormatAvailable(Exclude) || IsClipboardFormatAvailable(NoHistory);
+
     static void OnChange()
     {
         if (_ignoreNext) { _ignoreNext = false; return; }

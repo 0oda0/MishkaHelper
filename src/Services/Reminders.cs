@@ -42,15 +42,22 @@ public static class Reminders
         bool changed = false;
         foreach (var r in Settings.Current.Reminders.Where(r => !r.Done).ToList())
         {
-            if (!r.HasTime && !r.EveWarned && now >= r.At.Date.AddDays(-1).AddHours(19) && now < r.At.Date)
+            if (r.LeadDays > 0 && !r.EveWarned && now >= RingAt(r).Date.AddDays(-r.LeadDays).AddHours(10) && now < RingAt(r).Date)
             {
                 r.EveWarned = true; changed = true;
-                Ring("Завтра", r.Text, quiet);
+                Ring($"Через {(RingAt(r).Date - now.Date).Days} дн.", r, quiet);
+            }
+            else if (r.LeadDays == 0 && !r.HasTime && !r.EveWarned && now >= r.At.Date.AddDays(-1).AddHours(19) && now < r.At.Date)
+            {
+                r.EveWarned = true; changed = true;
+                Ring("Завтра", r, quiet);
             }
             if (now >= RingAt(r))
             {
-                r.Done = r.EveWarned = true; changed = true;
-                Ring(r.HasTime ? "Напоминание" : "Сегодня", r.Text, quiet);
+                changed = true;
+                Ring(r.HasTime ? "Напоминание" : "Сегодня", r, quiet);
+                if (r.Repeat.Length > 0) { r.At = NextAfter(r, now); r.EveWarned = false; }
+                else r.Done = r.EveWarned = true;
             }
         }
         // Keep a week of finished ones (visible in the list), then forget them.
@@ -58,10 +65,43 @@ public static class Reminders
         if (changed) Settings.Save();
     }
 
-    static void Ring(string title, string text, bool quiet)
+    /// <summary>The next ring of a repeating reminder. A PC off for a month rings once, not thirty times.</summary>
+    internal static DateTime NextAfter(Reminder r, DateTime now)
     {
-        if (quiet) { Toast.Show("", title, text, () => App.Current.Navigate("Home")); return; }
-        Toast.Show("", title, text, () => App.Current.Navigate("Home"));
+        var at = r.At;
+        do
+        {
+            at = r.Repeat switch
+            {
+                "daily" => at.AddDays(1),
+                "weekly" => at.AddDays(7),
+                "monthly" => OnDay(at.AddMonths(1), r.RepeatDay > 0 ? r.RepeatDay : at.Day),
+                "yearly" => OnDay(at.AddYears(1), r.RepeatDay > 0 ? r.RepeatDay : at.Day),
+                _ => now.AddYears(100),
+            };
+        } while ((r.HasTime ? at : at.Date.AddHours(10)) <= now);
+        return at;
+    }
+
+    static DateTime OnDay(DateTime d, int day) => new DateTime(d.Year, d.Month, Math.Min(day, DateTime.DaysInMonth(d.Year, d.Month))) + d.TimeOfDay;
+
+    /// <summary>Later = a separate one-off copy, so a repeating reminder keeps its own schedule.</summary>
+    public static void Snooze(string text, DateTime at)
+    {
+        Add(text, at, true);
+        Osd.Show("\uE823", $"Напомню в {at:HH:mm}" + (at.Date != DateTime.Today ? $", {at:dd.MM}" : ""));
+    }
+
+    static void Ring(string title, Reminder r, bool quiet)
+    {
+        var text = r.Text;
+        Toast.Show("", title, text, () => App.Current.Navigate("Home"), new (string, Action)[]
+        {
+            ("10 мин", () => Snooze(text, DateTime.Now.AddMinutes(10))),
+            ("Час", () => Snooze(text, DateTime.Now.AddHours(1))),
+            ("Завтра", () => Snooze(text, DateTime.Today.AddDays(1).AddHours(9))),
+        });
+        if (quiet) return;
         System.Media.SystemSounds.Exclamation.Play();
         Due?.Invoke($"{title}: {text}");
     }

@@ -134,6 +134,17 @@ public class SecretarySettings
     public int BreakMinutes { get; set; } = 90;
     public bool ToPhone { get; set; }
     public bool QuietInGame { get; set; } = true;
+    public bool Tasks { get; set; } = true;
+    public bool Repeats { get; set; } = true;
+    public bool AppTriggers { get; set; } = true;
+    public bool ScheduleRead { get; set; } = true;
+    public bool DayLog { get; set; } = true;
+    public bool Selection { get; set; } = true;
+    public bool DownloadRules { get; set; } = true;
+    public bool FileMemory { get; set; } = true;
+    public bool Dates { get; set; } = true;
+    public bool ShutdownCheck { get; set; } = true;
+    public bool PhoneTab { get; set; } = true;
 }
 
 public class Launcher
@@ -162,6 +173,9 @@ public class Reminder
     public bool HasTime { get; set; }
     public bool Done { get; set; }
     public bool EveWarned { get; set; }
+    public string Repeat { get; set; } = "";   // "", daily, weekly, monthly, yearly
+    public int RepeatDay { get; set; }         // monthly: the 31st stays the 31st after a short month
+    public int LeadDays { get; set; }          // warn this many days ahead (birthdays)
 }
 
 public class RadialEntry

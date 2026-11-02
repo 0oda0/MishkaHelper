@@ -101,7 +101,7 @@ public static class SecCapture
     {
         if (!Secretary.Require(S.Capture, "Быстрая заметка")) return;
         var box = new TextBox { FontSize = 16, Width = 600, Padding = new Thickness(10), BorderThickness = new Thickness(0) };
-        var status = UiKit.Text("Enter — сохранить · Esc — закрыть · «завтра в 6 сдать отчёт» станет напоминанием", 11, true);
+        var status = UiKit.Text("Enter — сохранить · Esc — закрыть · «завтра в 6 сдать отчёт», «каждый вторник в 18 тренировка», «когда открою Word, проверить титульник»", 11, true);
         var mic = new Button { Content = "", FontFamily = (System.Windows.Media.FontFamily)Application.Current.Resources["IconFont"], Padding = new Thickness(10, 6, 10, 6), Margin = new Thickness(8, 0, 0, 0), ToolTip = "Сказать голосом" };
         var row = new DockPanel();
         DockPanel.SetDock(mic, Dock.Right); row.Children.Add(mic);
@@ -136,20 +136,49 @@ public static class SecCapture
         if (voice) Listen();
     }
 
-    /// <summary>A date makes it a reminder too; the note always stays, with the program it was made in.</summary>
+    /// <summary>A date makes it a reminder, "каждый вторник" a repeating one, "надо…" a task. The note always stays.</summary>
     public static string Save(string text, string app)
     {
-        Notes.Add(app.Length > 0 ? $"[{app}] {text}" : text);
-        var when = When.Parse(text, DateTime.Now);
-        if (when != null && when.At > DateTime.Now)
+        var said = SecPlan.Apply(text, app);
+        Osd.Show("\uE73E", said);
+        return said;
+    }
+
+    // ---------- note from the selected text ----------
+    [System.Runtime.InteropServices.DllImport("user32.dll")] static extern short GetAsyncKeyState(int vk);
+    [System.Runtime.InteropServices.DllImport("user32.dll")] static extern uint GetClipboardSequenceNumber();
+
+    public static async void FromSelection()
+    {
+        if (!Secretary.Require(S.Selection, "Заметка из выделенного")) return;
+        // The hotkey's own Ctrl+Alt must be up, or the copy arrives as Ctrl+Alt+C.
+        for (int i = 0; i < 40 && new[] { 0x11, 0x12, 0x10, 0x5B }.Any(k => GetAsyncKeyState(k) < 0); i++) await Task.Delay(25);
+        var ctx = await Context();
+        // ponytail: only text on the clipboard is put back; a copied picture is replaced by the selection.
+        string? before = null;
+        try { if (Clipboard.ContainsText()) before = Clipboard.GetText(); } catch { }
+        var seq = GetClipboardSequenceNumber();
+        ClipHistory.IgnoreNext();
+        InputSim.Key("ctrl+c");
+        for (int i = 0; i < 30 && GetClipboardSequenceNumber() == seq; i++) await Task.Delay(25);
+        if (GetClipboardSequenceNumber() == seq) { Toast.Show("\uE8C8", "Секретарша", "Ничего не выделено."); return; }
+        try
         {
-            Reminders.Add(Reminders.Cap(when.Rest.Length > 0 ? when.Rest : text), when.At, when.HasTime);
-            var said = $"Записала и напомню {When.Say(when.At, when.HasTime, DateTime.Now)}";
-            Osd.Show("", said);
-            return said;
+            await Task.Delay(30);
+            if (ClipHistory.IsPrivateCopy()) { Toast.Show("\uE8C8", "Секретарша", "Это приватные данные, сохранять не буду."); return; }
+            var text = Clipboard.ContainsText() ? Clipboard.GetText().Trim() : "";
+            if (text.Length == 0) { Toast.Show("\uE8C8", "Секретарша", "В выделенном нет текста."); return; }
+            if (text.Length > 4000) text = text[..4000] + "…";
+            Notes.Add($"[{ctx.Label}] {text}" + (ctx.Url != null ? $"\nИсточник: {ctx.Url}" : ""));
+            Secretary.Apply();
+            Osd.Show("\uE73E", "Записала выделенное");
         }
-        Osd.Show("", "Записала");
-        return "Записала";
+        catch (Exception e) { Log.Error(e); }
+        finally
+        {
+            ClipHistory.IgnoreNext();
+            try { if (before != null) Clipboard.SetText(before); else Clipboard.Clear(); } catch { }
+        }
     }
 
     // ---------- "запомни": this page or window ----------

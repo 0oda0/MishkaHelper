@@ -13,7 +13,7 @@ UI language: **Russian**. Repo: `0oda0/MishkaHelper` (public). Owner talks Russi
 | Dev copy without UAC | add `-p:ApplicationManifest=<repo>\tools\app.dev.manifest` (asInvoker) and output to `test-out\dev\bin` |
 | Screenshots of every page | `MishkaHelper.exe --shots <dir>` (dev copy; runs beside the installed copy) |
 | Unit tests | `dotnet test tests` (xunit; Intents/Ears/Hotkeys/Updater/Remote/Calendar). Also run by CI before release |
-| Self-test | `MishkaHelper.exe --selftest <report.txt> [steps]`, steps: `remote,fullclean,acer modes,fans,keyboard,defender,sweep,cleanup,disk,autostart,brain,ears,voice,update` (comma list; empty = all). Admin-only steps need the real (elevated) exe |
+| Self-test | Steps `support` (live server) and `seclive` (stays open for hand checks, `<report>.stop` ends it and takes its data back) run only by name. `MishkaHelper.exe --selftest <report.txt> [steps]`, steps: `remote,fullclean,acer modes,fans,keyboard,defender,sweep,cleanup,disk,autostart,brain,ears,voice,update` (comma list; empty = all). Admin-only steps need the real (elevated) exe |
 | Install on this PC | elevated: `tools\install-local.ps1 -Source publish [-SelfTest report] [-Only steps]` |
 | Phone app (APK) | `cd mobile; $env:JAVA_HOME='C:\Users\0airo\android-tools\jdk-21.0.12.1+1'; .\gradlew.bat assembleRelease '-PbuildTools=36.0.0' '-PappVersion=X.Y.Z'` + proxy args `'-Dhttps.proxyHost=127.0.0.1' '-Dhttps.proxyPort=10809'` (owner's VPN proxy; quote -D args in PowerShell). Signed when `MISHKA_KEYSTORE`/`MISHKA_KEYSTORE_PASSWORD` env set (key: C:\Users\0airo\android-tools\mishka-release.keystore, never commit) |
 | Phone test | own emulator `mishka_test` (headless, -no-audio); never touch the owner's AVDs (HSKLearn, 9T). Real phone: `adb devices` |
@@ -91,6 +91,7 @@ src/
     Scenarios.cs       scenario engine: steps + triggers (voice/hotkey/time/events)
   Secretary/           (Full + Secretary editions; shares When/Notes/Calendar/Models from Jarvis/ via csproj)
     Secretary.cs       foreground tracking, per-app hints, morning/evening summaries, meetings, breaks, deadline offers, search; SecretarySettings = one switch per feature
+    SecPlan.cs         what a line means (task, repeat, birthday, "когда открою…"), trigger matching, schedule block of a day; pure and unit-tested
     SecCapture.cs      hotkey windows: app note, quick note, voice (SecVoice: Vosk + NAudio), "remember" (browser address via UI Automation)
     SecWork.cs         SecWorkspace (save/restore open windows), SecDownloads (proposes, moves only on a button), SecMail (MailKit, read-only IMAP)
     SecStore.cs        secretary.json next to the settings
