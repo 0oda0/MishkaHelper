@@ -19,4 +19,4 @@ jobs:
       - name: Touch the API and the database
         run: |
           curl -fsS -o /dev/null -H "apikey: $KEY" https://xifkllxvzqaudmxuzcgb.supabase.co/auth/v1/health
-          curl -fsS -o /dev/null -H "apikey: $KEY" -H "Authorization: Bearer $KEY" https://xifkllxvzqaudmxuzcgb.supabase.co/rest/v1/
+          curl -fsS -o /dev/null -X POST -H "apikey: $KEY" -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" -d "{}" https://xifkllxvzqaudmxuzcgb.supabase.co/rest/v1/rpc/ping

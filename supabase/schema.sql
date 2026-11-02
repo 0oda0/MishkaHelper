@@ -117,5 +117,11 @@ grant insert (app_version, edition) on public.tickets to authenticated;
 revoke insert on public.messages from authenticated;
 grant insert (ticket_id, body) on public.messages to authenticated;
 
+-- For .github/workflows/keepalive.yml: a real database call that reads nothing.
+create or replace function public.ping() returns boolean
+language sql stable security invoker set search_path = '' as $$ select true $$;
+revoke execute on function public.ping() from public;
+grant execute on function public.ping() to anon;
+
 -- After creating your admin account in Authentication → Users, run with its id:
 --   insert into public.admins (user_id) values ('<your user id>');
