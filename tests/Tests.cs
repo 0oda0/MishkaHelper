@@ -707,6 +707,68 @@ public class PaletteSearchTests
     [Fact] public void FullWordsAsTyped() => Assert.True(CommandPalette.Matches(Defaults.HotkeyNames["layoutFix"], "layoutFix", "замена текста"));
 }
 
+public class HotkeyKindsTests
+{
+    [Theory]
+    [InlineData("Mouse4", 0u, "Mouse4")]
+    [InlineData("Ctrl+Mouse5", 2u, "Mouse5")]
+    [InlineData("Alt+Shift+MouseMiddle", 5u, "MouseMiddle")]
+    public void MouseCombos(string combo, uint mods, string button)
+    {
+        Assert.True(MouseHotkeys.TryParse(combo, out var m, out var b));
+        Assert.Equal(mods, m); Assert.Equal(button, b);
+        Assert.False(Hotkeys.TryParse(combo, out _, out _));   // not a keyboard hotkey
+    }
+
+    [Theory]
+    [InlineData("Ctrl+Alt+R")] [InlineData("F5")] [InlineData("Ctrl+Mouse")] [InlineData("")]
+    public void NotMouse(string combo) => Assert.False(MouseHotkeys.TryParse(combo, out _, out _));
+
+    [Theory]
+    [InlineData("F8", true)] [InlineData("Pause", true)] [InlineData("Scroll", true)] [InlineData("MediaPlayPause", true)]
+    [InlineData("A", false)] [InlineData("D5", false)] [InlineData("Space", false)] [InlineData("Return", false)] [InlineData("Escape", false)] [InlineData("Ctrl+A", true)]
+    public void SingleKeysOnlyWhereSafe(string combo, bool ok) => Assert.Equal(ok, Hotkeys.TryParse(combo, out _, out _));
+
+    [Fact]
+    public void ButtonsFromMouseMessages()
+    {
+        Assert.Equal((MouseHotkeys.Middle, true), MouseHotkeys.Decode(0x207, 0));
+        Assert.Equal((MouseHotkeys.Back, true), MouseHotkeys.Decode(0x20B, 1u << 16));
+        Assert.Equal((MouseHotkeys.Forward, false), MouseHotkeys.Decode(0x20C, 2u << 16));
+        Assert.Null(MouseHotkeys.Decode(0x201, 0));   // left button: never ours
+        Assert.Null(MouseHotkeys.Decode(0x200, 0));   // a move
+    }
+
+    [Fact] public void Labels() => Assert.Equal("Ctrl+мышь «назад»", Hotkeys.Pretty("Ctrl+Mouse4"));
+
+    [Theory]
+    [InlineData(true, true, "Full", "MishkaHelper-")]
+    [InlineData(true, false, "Jarvis", "MishkaHelper-Jarvis-")]
+    [InlineData(false, true, "Secretary", "MishkaHelper-Secretary-")]
+    [InlineData(false, false, "Lite", "MishkaHelper-Lite-")]
+    public void EditionFromParts(bool j, bool s, string name, string prefix)
+    {
+        Assert.Equal(name, Edition.NameFor(j, s));
+        Assert.Equal(prefix, Edition.PrefixFor(name));
+    }
+
+    [Fact]
+    public void ReleaseGivesEveryEdition()
+    {
+        var rel = new ReleaseFiles(new Version(1, 6, 0), "", "p", new()
+        {
+            ("MishkaHelper-Setup-1.6.0.exe", "u/full", 1), ("MishkaHelper-Portable-1.6.0.zip", "u/fullzip", 1),
+            ("MishkaHelper-Lite-Setup-1.6.0.exe", "u/lite", 1), ("MishkaHelper-Secretary-Setup-1.6.0.exe", "u/sec", 1), ("MishkaHelper-Jarvis-Portable-1.6.0.zip", "u/jz", 1),
+        });
+        Assert.Equal("u/full", Updater.For(rel, "Full")!.SetupUrl);
+        Assert.Equal("u/fullzip", Updater.For(rel, "Full")!.PortableUrl);
+        Assert.Equal("u/lite", Updater.For(rel, "Lite")!.SetupUrl);
+        Assert.Equal("u/sec", Updater.For(rel, "Secretary")!.SetupUrl);
+        Assert.Null(Updater.For(rel, "Jarvis")!.SetupUrl);
+        Assert.Equal("Jarvis", Updater.For(rel, "Jarvis")!.Edition);
+    }
+}
+
 public class EdgeGecTests
 {
     // Reference values from edge-tts drm.generate_sec_ms_gec_v2 (Python) for the same timestamps.

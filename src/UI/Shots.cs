@@ -20,6 +20,11 @@ public static class Shots
             main.Navigate(p);
             await Task.Delay(p is "Devices" or "Security" or "System" ? 6000 : 2500);
             Save(main, Path.Combine(dir, p + ".png"));
+            if (p is "Settings" or "Hotkeys" && Deep<System.Windows.Controls.ScrollViewer>(main) is { } sv)
+            {
+                sv.ScrollToEnd(); await Task.Delay(500);
+                Save(main, Path.Combine(dir, p + "End.png"));
+            }
         }
 #if JARVIS
         JarvisChat.Open();
@@ -113,6 +118,23 @@ public static class Shots
             if (w.IsVisible && w.Content is System.Windows.Controls.Border b && b.Child is System.Windows.Controls.StackPanel { Orientation: System.Windows.Controls.Orientation.Horizontal } && w != main)
                 Save(w, Path.Combine(dir, "Osd.png"));
         App.Current.Quit();
+    }
+
+    /// <summary>The page's scroller: of all scrollers in the window, the one with the most to scroll.</summary>
+    static T? Deep<T>(DependencyObject root) where T : System.Windows.Controls.ScrollViewer
+    {
+        T? best = null;
+        void Walk(DependencyObject d)
+        {
+            for (int i = 0; i < VisualTreeHelper.GetChildrenCount(d); i++)
+            {
+                var c = VisualTreeHelper.GetChild(d, i);
+                if (c is T t && t.ScrollableHeight > (best?.ScrollableHeight ?? 0)) best = t;
+                Walk(c);
+            }
+        }
+        Walk(root);
+        return best;
     }
 
     static void Save(Window w, string file)

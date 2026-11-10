@@ -16,6 +16,14 @@ public static class Edition
     public const string Name = HasJarvis ? (HasSecretary ? "Full" : "Jarvis") : (HasSecretary ? "Secretary" : "Lite");
     public const string Display = Name == "Full" ? "Mishka Helper" : "Mishka Helper " + Name;
 
+    /// <summary>Which edition has exactly these parts. The tools are in every one.</summary>
+    public static string NameFor(bool jarvis, bool secretary) => jarvis ? (secretary ? "Full" : "Jarvis") : (secretary ? "Secretary" : "Lite");
+    public static string PrefixFor(string name) => name == "Full" ? "MishkaHelper-" : "MishkaHelper-" + name + "-";
+    public static string Describe(string name) => name switch
+    {
+        "Full" => "Полная: инструменты, Джарвис и секретарша", "Jarvis" => "Инструменты и Джарвис", "Secretary" => "Инструменты и секретарша", _ => "Lite: только инструменты",
+    };
+
     /// <summary>Start of this edition's release files. Full and Lite keep their old names: installed copies look for them when updating.</summary>
     public const string AssetPrefix = Name == "Full" ? "MishkaHelper-" : "MishkaHelper-" + Name + "-";
 

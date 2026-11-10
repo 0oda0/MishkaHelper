@@ -56,32 +56,46 @@ public partial class HotkeysPage : UserControl
     {
         // Free our own combos so they can be re-recorded instead of firing.
         Hotkeys.Suspend();
-        btn.Content = "Нажми сочетание… (Esc — отмена)";
+        btn.Content = "Нажми сочетание или кнопку мыши (колёсико, боковые)… Esc — отмена";
         btn.BorderBrush = (Brush)FindResource("AccentBrush");
         var win = Window.GetWindow(this)!;
         KeyEventHandler? h = null;
-        h = (_, e) =>
+        MouseButtonEventHandler? mh = null;
+        void Take(string combo)
         {
-            e.Handled = true;
-            var key = e.Key == Key.System ? e.SystemKey : e.Key;
-            if (key == Key.Escape) { Done(Settings.Current.Hotkeys.GetValueOrDefault(action, "")); return; }
-            var combo = Hotkeys.Format(e);
-            if (combo == null) return;   // waiting for a non-modifier key
             var clash = Settings.Current.Hotkeys.FirstOrDefault(kv => kv.Key != action && kv.Value == combo);
             if (clash.Key != null) Settings.Current.Hotkeys[clash.Key] = "";
             Settings.Current.Hotkeys[action] = combo;
             Settings.Save();
             Done(combo);
             if (clash.Key != null) Render();
+        }
+        h = (_, e) =>
+        {
+            e.Handled = true;
+            var key = e.Key == Key.System ? e.SystemKey : e.Key;
+            if (key == Key.Escape) { Done(Settings.Current.Hotkeys.GetValueOrDefault(action, "")); return; }
+            var combo = Hotkeys.Format(e, out var why);
+            if (why != null) { btn.Content = why; return; }
+            if (combo == null) return;   // waiting for a non-modifier key
+            Take(combo);
+        };
+        mh = (_, e) =>
+        {
+            if (Hotkeys.Format(e.ChangedButton) is not { } combo) return;   // left and right clicks keep working in the window
+            e.Handled = true;
+            Take(combo);
         };
         void Done(string text)
         {
             win.PreviewKeyDown -= h;
+            win.PreviewMouseDown -= mh;
             btn.Content = text.Length == 0 ? "не задано" : Hotkeys.Pretty(text);
             btn.ClearValue(Button.BorderBrushProperty);
             Hotkeys.Reload();
         }
         win.PreviewKeyDown += h;
+        win.PreviewMouseDown += mh;
     }
 
     void Reset_Click(object s, RoutedEventArgs e)

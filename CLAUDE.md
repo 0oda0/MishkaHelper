@@ -55,7 +55,8 @@ src/
     StartupApps.cs     autostart entries (StartupApproved), installed programs
     Security.cs        Defender (MpCmdRun/WMI), VirusTotal, suspicious sweep (WinVerifyTrust)
     Toolbox.cs         Tools page utilities (topmost, opacity, color pick, power timer, Wi-Fi passwords, ping, speedtest, crashes, privacy…)
-    Hotkeys.cs         RegisterHotKey, Pretty(), scenario hotkeys
+    Hotkeys.cs         RegisterHotKey, Pretty(), scenario hotkeys; single keys only from SingleAllowed (F-keys, Pause, media…)
+    MouseHotkeys.cs    wheel click / side buttons (+mods) via WH_MOUSE_LL on its own thread, only while one is set; injected clicks pass
     Profiles.cs        apply profiles, auto by AC/app rules (+process priority)
     Alerts.cs          threshold toasts
     (Core/Backup.cs)   backup zip: known file names only, validated before anything is replaced

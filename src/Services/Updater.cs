@@ -6,7 +6,10 @@ using System.Text.Json;
 
 namespace MishkaHelper.Core;
 
-public record UpdateInfo(Version Version, string Notes, string? SetupUrl, string? PortableUrl, string Page);
+public record UpdateInfo(Version Version, string Notes, string? SetupUrl, string? PortableUrl, string Page, string Edition = "");
+
+/// <summary>One release, with every edition's files: needed to switch editions, even without a newer version.</summary>
+public record ReleaseFiles(Version Version, string Notes, string Page, List<(string Name, string Url, long Size)> Assets);
 
 /// <summary>
 /// In-app updates from GitHub Releases, per edition (full / Lite). Installed copies run the silent installer;
@@ -51,28 +54,46 @@ public static class Updater
         return string.Join("\n", lines.Take(maxLines)) + (lines.Count > maxLines ? "\n…" : "");
     }
 
-    public static async Task<UpdateInfo?> Check()
+    public static ReleaseFiles? Latest { get; private set; }
+
+    /// <summary>The latest release and all its files, whatever its version.</summary>
+    public static async Task<ReleaseFiles> Fetch()
     {
         var json = await Http.GetStringAsync($"https://api.github.com/repos/{Repo}/releases/latest");
         using var doc = JsonDocument.Parse(json);
         var r = doc.RootElement;
-        if (!Version.TryParse(r.GetProperty("tag_name").GetString()!.TrimStart('v'), out var v) || v <= Edition.Version) return Available = null;
-
-        string? Asset(string kind, string ext)
+        Version.TryParse(r.GetProperty("tag_name").GetString()!.TrimStart('v'), out var v);
+        var assets = new List<(string, string, long)>();
+        foreach (var a in r.GetProperty("assets").EnumerateArray())
         {
-            foreach (var a in r.GetProperty("assets").EnumerateArray())
-            {
-                if (AssetMatches(a.GetProperty("name").GetString()!, kind, ext, Edition.AssetPrefix))
-                {
-                    var u = a.GetProperty("browser_download_url").GetString()!;
-                    if (a.TryGetProperty("digest", out var d) && d.GetString() is { } dg && dg.StartsWith("sha256:")) Digests[u] = dg[7..];
-                    return u;
-                }
-            }
-            return null;
+            var u = a.GetProperty("browser_download_url").GetString()!;
+            if (a.TryGetProperty("digest", out var d) && d.GetString() is { } dg && dg.StartsWith("sha256:")) Digests[u] = dg[7..];
+            assets.Add((a.GetProperty("name").GetString()!, u, a.TryGetProperty("size", out var sz) ? sz.GetInt64() : 0));
         }
-        return Available = new UpdateInfo(v, r.TryGetProperty("body", out var b) ? b.GetString() ?? "" : "",
-            Asset("Setup-", ".exe"), Asset("Portable-", ".zip"), r.GetProperty("html_url").GetString()!);
+        return Latest = new ReleaseFiles(v ?? new Version(0, 0), r.TryGetProperty("body", out var b) ? b.GetString() ?? "" : "", r.GetProperty("html_url").GetString()!, assets);
+    }
+
+    /// <summary>The install for an edition from a release: setup for installed copies, zip for portable ones. Null if the release doesn't have it.</summary>
+    public static UpdateInfo? For(ReleaseFiles rel, string edition)
+    {
+        var prefix = Edition.PrefixFor(edition);
+        string? Url(string kind, string ext) => rel.Assets.FirstOrDefault(x => AssetMatches(x.Name, kind, ext, prefix)).Url;
+        var setup = Url("Setup-", ".exe"); var zip = Url("Portable-", ".zip");
+        return setup == null && zip == null ? null : new UpdateInfo(rel.Version, rel.Notes, setup, zip, rel.Page, edition);
+    }
+
+    public static long SizeOf(ReleaseFiles rel, string edition)
+    {
+        var prefix = Edition.PrefixFor(edition);
+        var kind = IsInstalled ? "Setup-" : "Portable-";
+        return rel.Assets.FirstOrDefault(x => AssetMatches(x.Name, kind, IsInstalled ? ".exe" : ".zip", prefix)).Size;
+    }
+
+    public static async Task<UpdateInfo?> Check()
+    {
+        var rel = await Fetch();
+        if (rel.Version <= Edition.Version) return Available = null;
+        return Available = For(rel, Edition.Name);
     }
 
     /// <summary>Download and apply; the app quits at the end and the new version starts by itself.</summary>
@@ -97,7 +118,7 @@ public static class Updater
                     throw new InvalidOperationException("Файл обновления повреждён (контрольная сумма не совпала) — попробуй ещё раз");
                 }
         }
-        Log.Info($"update {Edition.Version} → {u.Version} via {Path.GetFileName(file)}");
+        Log.Info($"update {Edition.Name} {Edition.Version} → {(u.Edition.Length > 0 ? u.Edition : Edition.Name)} {u.Version} via {Path.GetFileName(file)}");
 
         var appDir = AppContext.BaseDirectory.TrimEnd('\\');
         if (file.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))

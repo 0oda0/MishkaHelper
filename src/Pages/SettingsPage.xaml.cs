@@ -51,10 +51,63 @@ public partial class SettingsPage : UserControl
                      (Edition.Name switch { "Full" => "Полная редакция: инструменты, Джарвис и секретарша.", "Jarvis" => "Редакция с Джарвисом, без секретарши. Другие — на GitHub.", "Secretary" => "Редакция с секретаршей, без Джарвиса. Другие — на GitHub.", _ => "Редакция Lite — только инструменты. Другие — на GitHub." }) +
                      $"\nДанные: {Settings.Dir}";
         if (Updater.Available is { } u) ShowUpdate(u);
+        BuildEditions();
         Loaded += async (_, _) => { Autostart.IsChecked = await Task.Run(() => Core.Autostart.Enabled); _loading = false; };
     }
 
     void Setup_Click(object s, RoutedEventArgs e) => SetupWizard.Open();
+
+    CheckBox? _wantJarvis, _wantSecretary;
+    TextBlock? _editionText;
+    Button? _switchBtn;
+
+    string Wanted => Edition.NameFor(_wantJarvis?.IsChecked == true, _wantSecretary?.IsChecked == true);
+
+    /// <summary>The parts of the program, as two switches: the matching edition is installed over this one, settings stay.</summary>
+    void BuildEditions()
+    {
+        EditionBox.Children.Add(new TextBlock { Text = "Состав программы", Style = (Style)FindResource("Dim"), Margin = new Thickness(0, 0, 0, 4) });
+        _wantJarvis = new CheckBox { Style = (Style)FindResource("Switch"), Content = "Джарвис — голосовой помощник", IsChecked = Edition.HasJarvis };
+        _wantSecretary = new CheckBox { Style = (Style)FindResource("Switch"), Content = "Секретарша — заметки, дела, сводки, почта", IsChecked = Edition.HasSecretary };
+        _editionText = UiKit.Text("", 12, true); _editionText.TextWrapping = TextWrapping.Wrap;
+        _switchBtn = new Button { Style = (Style)FindResource("AccentButton"), HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 6, 0, 0), Visibility = Visibility.Collapsed };
+        _switchBtn.Click += Switch_Click;
+        _wantJarvis.Click += (_, _) => ShowWanted();
+        _wantSecretary.Click += (_, _) => ShowWanted();
+        EditionBox.Children.Add(_wantJarvis); EditionBox.Children.Add(_wantSecretary); EditionBox.Children.Add(_editionText); EditionBox.Children.Add(_switchBtn);
+        ShowWanted();
+    }
+
+    void ShowWanted()
+    {
+        var w = Wanted;
+        bool change = w != Edition.Name;
+        var size = Updater.Latest is { } rel && Updater.SizeOf(rel, w) is > 0 and var bytes ? $", скачать {bytes / 1048576} МБ" : "";
+        _editionText!.Text = change ? $"Будет: {Edition.Describe(w)}{size}. Настройки, заметки и скачанные модели останутся." : $"Сейчас: {Edition.Describe(Edition.Name)}.";
+        _switchBtn!.Content = Updater.Available is { } u ? $"Обновить до {u.Version}: {Edition.Describe(w).ToLowerInvariant()}" : $"Перейти: {Edition.Describe(w).ToLowerInvariant()}";
+        _switchBtn.Visibility = change ? Visibility.Visible : Visibility.Collapsed;
+        if (Updater.Available != null) UpdateBtn.Visibility = change ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    async void Switch_Click(object s, RoutedEventArgs e)
+    {
+        var w = Wanted;
+        var losing = new List<string>();
+        if (Edition.HasJarvis && _wantJarvis!.IsChecked != true) losing.Add("Джарвис");
+        if (Edition.HasSecretary && _wantSecretary!.IsChecked != true) losing.Add("секретарша");
+        if (losing.Count > 0 && !UiKit.Confirm($"Из программы уйдёт: {string.Join(" и ", losing)}. Их настройки и данные останутся на диске и вернутся, если поставить снова.\n\nПродолжить?")) return;
+        _switchBtn!.IsEnabled = CheckBtn.IsEnabled = false;
+        UpdateBar.Visibility = Visibility.Visible;
+        UpdateStatus.Text = "Ищу файлы редакции…";
+        try
+        {
+            var rel = Updater.Latest ?? await Updater.Fetch();
+            var target = Updater.For(rel, w) ?? throw new InvalidOperationException("В последнем выпуске нет файлов этой редакции");
+            UpdateStatus.Text = $"Скачиваю «{Edition.Describe(w)}»… Приложение перезапустится само.";
+            await Updater.Install(target, f => Dispatcher.BeginInvoke(() => UpdateBar.Value = f));
+        }
+        catch (Exception ex) { UpdateStatus.Text = "Ошибка: " + ex.Message; _switchBtn.IsEnabled = CheckBtn.IsEnabled = true; }
+    }
 
     void ShowUpdate(UpdateInfo u)
     {
@@ -72,6 +125,7 @@ public partial class SettingsPage : UserControl
             var u = await Updater.Check();
             if (u == null) UpdateStatus.Text = $"У тебя последняя версия ({Edition.Version}).";
             else ShowUpdate(u);
+            ShowWanted();
         }
         catch (Exception ex) { UpdateStatus.Text = "Не удалось проверить: " + ex.Message; }
         CheckBtn.IsEnabled = true;
