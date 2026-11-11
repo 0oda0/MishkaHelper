@@ -143,7 +143,9 @@ public static class Shots
         var dpi = VisualTreeHelper.GetDpi(w);
         var bmp = new RenderTargetBitmap((int)(el.ActualWidth * dpi.DpiScaleX), (int)(el.ActualHeight * dpi.DpiScaleY), dpi.PixelsPerInchX, dpi.PixelsPerInchY, PixelFormats.Pbgra32);
         var bg = new DrawingVisual();
-        using (var dc = bg.RenderOpen()) dc.DrawRectangle(new SolidColorBrush(Color.FromRgb(10, 10, 18)), null, new Rect(0, 0, el.ActualWidth, el.ActualHeight));
+        // The window's own background (a light theme or a picture), else the default dark: the content itself is see-through.
+        var back = w.Background is SolidColorBrush { Color.A: 255 } or DrawingBrush ? w.Background : new SolidColorBrush(Color.FromRgb(10, 10, 18));
+        using (var dc = bg.RenderOpen()) dc.DrawRectangle(back, null, new Rect(0, 0, el.ActualWidth, el.ActualHeight));
         bmp.Render(bg);
         bmp.Render(el);
         var enc = new PngBitmapEncoder();

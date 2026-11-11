@@ -144,13 +144,25 @@ public static class LlamaServer
         _proc?.Dispose(); _proc = null; _model = null;
     }
 
+    public static bool LocalReady => Models.Has(Models.LlmModel) && Models.Has(Runtime);
+
+    /// <summary>The online brain when one is set up, else (or when it's out of reach) the local server. Throws with a readable reason.</summary>
+    static async Task<HttpResponseMessage> Post(JsonObject body, bool stream)
+    {
+        if (Online.Active && await Online.Send(body, stream, localFallback: LocalReady) is { } online) return online;
+        await EnsureRunning();
+        var req = new HttpRequestMessage(HttpMethod.Post, "/v1/chat/completions") { Content = new StringContent(body.ToJsonString(), Encoding.UTF8, "application/json") };
+        var resp = await Http.SendAsync(req, stream ? HttpCompletionOption.ResponseHeadersRead : HttpCompletionOption.ResponseContentRead);
+        if (!resp.IsSuccessStatusCode) { var e = await resp.Content.ReadAsStringAsync(); resp.Dispose(); throw new InvalidOperationException("llama.cpp: " + e); }
+        return resp;
+    }
+
     /// <summary>
     /// Streaming variant: text arrives token by token; every finished sentence goes to onSentence right away
     /// (so Jarvis starts talking early). Tool-call deltas are assembled. Returns the full assistant message.
     /// </summary>
     public static async Task<JsonObject> ChatStream(JsonArray messages, JsonArray? tools, Action<string> onSentence, int maxTokens = 600)
     {
-        await EnsureRunning();
         var body = new JsonObject
         {
             ["messages"] = messages.DeepClone(),
@@ -160,9 +172,7 @@ public static class LlamaServer
             ["chat_template_kwargs"] = new JsonObject { ["enable_thinking"] = false },
         };
         if (tools != null) body["tools"] = tools.DeepClone();
-        using var req = new HttpRequestMessage(HttpMethod.Post, "/v1/chat/completions") { Content = new StringContent(body.ToJsonString(), Encoding.UTF8, "application/json") };
-        using var resp = await Http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead);
-        if (!resp.IsSuccessStatusCode) throw new InvalidOperationException("llama.cpp: " + await resp.Content.ReadAsStringAsync());
+        using var resp = await Post(body, stream: true);
 
         var content = new StringBuilder();
         int spokenUpTo = 0;
@@ -225,7 +235,6 @@ public static class LlamaServer
     /// <summary>OpenAI-style chat completion with native tool calling. Returns the assistant message object.</summary>
     public static async Task<JsonObject> Chat(JsonArray messages, JsonArray? tools = null, int maxTokens = 600)
     {
-        await EnsureRunning();
         var body = new JsonObject
         {
             ["messages"] = messages.DeepClone(),
@@ -234,9 +243,8 @@ public static class LlamaServer
             ["chat_template_kwargs"] = new JsonObject { ["enable_thinking"] = false },
         };
         if (tools != null) body["tools"] = tools.DeepClone();
-        using var resp = await Http.PostAsync("/v1/chat/completions", new StringContent(body.ToJsonString(), Encoding.UTF8, "application/json"));
+        using var resp = await Post(body, stream: false);
         var json = await resp.Content.ReadAsStringAsync();
-        if (!resp.IsSuccessStatusCode) throw new InvalidOperationException("llama.cpp: " + json);
         var msg = JsonNode.Parse(json)!["choices"]![0]!["message"]!.AsObject();
         if (msg["content"]?.GetValue<string>() is { } c)
             msg["content"] = System.Text.RegularExpressions.Regex.Replace(c, @"<think>[\s\S]*?</think>", "").Trim();

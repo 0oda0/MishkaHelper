@@ -31,6 +31,7 @@ public partial class SettingsPage : UserControl
             };
             Accents.Children.Add(sw);
         }
+        BuildLook();
         Glass.IsChecked = s.Glass;
         OsdSwitch.IsChecked = s.Osd;
         Minimized.IsChecked = s.StartMinimized;
@@ -56,6 +57,91 @@ public partial class SettingsPage : UserControl
     }
 
     void Setup_Click(object s, RoutedEventArgs e) => SetupWizard.Open();
+
+    static string? PickColor(string current)
+    {
+        using var d = new System.Windows.Forms.ColorDialog { FullOpen = true, AnyColor = true };
+        if (ThemeManager.Parse(current) is { } c) d.Color = System.Drawing.Color.FromArgb(c.R, c.G, c.B);
+        return d.ShowDialog() == System.Windows.Forms.DialogResult.OK ? $"#{d.Color.R:X2}{d.Color.G:X2}{d.Color.B:X2}" : null;
+    }
+
+    /// <summary>Own accent, background (colour or picture), cards, interface size. Every change shows at once.</summary>
+    void BuildLook()
+    {
+        var s = Settings.Current;
+        void Redo() { Settings.Save(); ThemeManager.Apply(); App.Current.Navigate("Settings"); }
+        Button Btn(Panel p, string text, Action click)
+        {
+            var b = new Button { Content = text, Margin = new Thickness(0, 0, 8, 6) };
+            b.Click += (_, _) => click();
+            p.Children.Add(b);
+            return b;
+        }
+        Border Swatch(Color c, bool on, string tip, Action click)
+        {
+            var sw = new Border
+            {
+                Width = 34, Height = 34, CornerRadius = new CornerRadius(8), Margin = new Thickness(0, 0, 8, 6), Cursor = Cursors.Hand, ToolTip = tip,
+                Background = new SolidColorBrush(c), BorderThickness = new Thickness(on ? 3 : 1), BorderBrush = on ? (Brush)FindResource("AccentBrush") : Brushes.Gray,
+            };
+            sw.MouseLeftButtonUp += (_, _) => click();
+            return sw;
+        }
+
+        var acc = new WrapPanel();
+        Btn(acc, "Свой цвет неона…", () => { if (PickColor(s.CustomAccent) is { } h) { s.CustomAccent = h; Redo(); } });
+        if (s.CustomAccent.Length > 0) Btn(acc, "Вернуть цвет из набора", () => { s.CustomAccent = ""; Redo(); });
+        Look.Children.Add(acc);
+
+        Look.Children.Add(new TextBlock { Text = "Фон", Style = (Style)FindResource("Dim"), Margin = new Thickness(0, 8, 0, 6) });
+        var bgs = new WrapPanel();
+        var cur = s.BgColor.Length > 0 ? s.BgColor : ThemeManager.DefaultBg;
+        foreach (var (name, hex) in ThemeManager.Backgrounds)
+            bgs.Children.Add(Swatch(ThemeManager.Parse(hex)!.Value, cur.Equals(hex, StringComparison.OrdinalIgnoreCase), name, () => { s.BgColor = hex == ThemeManager.DefaultBg ? "" : hex; s.CardColor = ""; Redo(); }));
+        Btn(bgs, "Свой…", () => { if (PickColor(cur) is { } h) { s.BgColor = h; s.CardColor = ""; Redo(); } });
+        Look.Children.Add(bgs);
+
+        var cards = new WrapPanel();
+        Btn(cards, s.CardColor.Length > 0 ? "Цвет карточек: свой…" : "Цвет карточек…", () => { if (PickColor(s.CardColor) is { } h) { s.CardColor = h; Redo(); } });
+        if (s.CardColor.Length > 0) Btn(cards, "Карточки по фону", () => { s.CardColor = ""; Redo(); });
+        Btn(cards, s.BgImage.Length > 0 ? "Другая картинка…" : "Картинка на фон…", () =>
+        {
+            var d = new Microsoft.Win32.OpenFileDialog { Filter = "Картинки|*.jpg;*.jpeg;*.png;*.bmp;*.webp" };
+            if (d.ShowDialog() != true) return;
+            try { s.BgImage = ThemeManager.KeepImage(d.FileName); Redo(); } catch (Exception ex) { Osd.Show("\uE7BA", ex.Message); }
+        });
+        if (s.BgImage.Length > 0) Btn(cards, "Убрать картинку", () => { s.BgImage = ""; Redo(); });
+        Look.Children.Add(cards);
+
+        if (s.BgImage.Length > 0) Look.Children.Add(SliderRow("Затемнение картинки", 0, 95, s.BgImageDim, "%", v => { s.BgImageDim = (int)v; Settings.Save(); ThemeManager.Apply(); }));
+        Look.Children.Add(SliderRow("Размер интерфейса", 80, 150, Math.Round(s.UiScale * 100), "%", v => { s.UiScale = Math.Round(v) / 100; Settings.Save(); ThemeManager.ApplyScale(Application.Current.MainWindow); }));
+
+        var reset = new WrapPanel { Margin = new Thickness(0, 4, 0, 0) };
+        Btn(reset, "Сбросить оформление", () =>
+        {
+            s.CustomAccent = s.BgColor = s.CardColor = s.BgImage = ""; s.BgImageDim = 70; s.UiScale = 1; s.Glass = false; s.Accent = "Purple";
+            Redo();
+        });
+        Look.Children.Add(reset);
+    }
+
+    UIElement SliderRow(string label, double min, double max, double value, string unit, Action<double> set)
+    {
+        var g = new Grid { Margin = new Thickness(0, 6, 0, 4) };
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(160) });
+        g.ColumnDefinitions.Add(new ColumnDefinition());
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(56) });
+        var t = UiKit.Text(label, 13); t.VerticalAlignment = VerticalAlignment.Center;
+        var sl = new Slider { Minimum = min, Maximum = max, Value = value, IsSnapToTickEnabled = true, TickFrequency = 5, VerticalAlignment = VerticalAlignment.Center };
+        var v = UiKit.Text($"{value:0} {unit}", 12, true); v.VerticalAlignment = VerticalAlignment.Center; v.HorizontalAlignment = HorizontalAlignment.Right;
+        // Applied when the slider is let go: rescaling the window under a dragging mouse makes the slider jump.
+        sl.ValueChanged += (_, _) => v.Text = $"{sl.Value:0} {unit}";
+        sl.PreviewMouseLeftButtonUp += (_, _) => set(sl.Value);
+        sl.KeyUp += (_, _) => set(sl.Value);
+        Grid.SetColumn(sl, 1); Grid.SetColumn(v, 2);
+        g.Children.Add(t); g.Children.Add(sl); g.Children.Add(v);
+        return g;
+    }
 
     CheckBox? _wantJarvis, _wantSecretary;
     TextBlock? _editionText;

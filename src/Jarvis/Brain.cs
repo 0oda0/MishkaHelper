@@ -10,12 +10,12 @@ public static class Brain
 {
     static readonly SemaphoreSlim One = new(1, 1);
 
-    public static bool Ready => Settings.Current.Jarvis.AiEnabled && Models.Has(Models.LlmModel) && Models.Has(LlamaServer.Runtime);
+    public static bool Ready => Settings.Current.Jarvis.AiEnabled && (Online.Active || LlamaServer.LocalReady);
 
     public static void Unload() => LlamaServer.Stop();
 
     /// <summary>Start loading the model in the background so the first question is fast.</summary>
-    public static void Warmup() { if (Ready) _ = Task.Run(async () => { try { await LlamaServer.EnsureRunning(); } catch (Exception e) { Log.Error(e); } }); }
+    public static void Warmup() { if (Ready && !Online.Active) _ = Task.Run(async () => { try { await LlamaServer.EnsureRunning(); } catch (Exception e) { Log.Error(e); } }); }
 
     static readonly System.Globalization.CultureInfo Ru = new("ru-RU");
 

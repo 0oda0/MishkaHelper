@@ -38,7 +38,7 @@ src/
     Edition.cs         Full vs Lite (LITE define), version
     Native.cs          P/Invoke (DWM, hotkeys, display modes, power overlay, recycle bin…)
     Shell.cs           run console tools (OEM 866; Sys() = full System32 path), Open() via Explorer = unelevated
-    ThemeManager.cs    accent colours, glass (DWM acrylic)
+    ThemeManager.cs    accent (preset or own), background colour/picture, cards, text colour by background luminance, glass (DWM acrylic), UiScale on MainWindow Root
     Tray.cs            NotifyIcon + dark menu
     Features.cs        opens docs/index.html (landing)
   Services/            system logic, no UI
@@ -87,6 +87,7 @@ src/
     EdgeTts.cs         Microsoft Edge read-aloud voices over WebSocket (Sec-MS-GEC token); unofficial, online
     Intents.cs         offline Russian command parser, number words, app/site launch, Keys (SendInput)
     Brain.cs           LLM agent with native tool calling (pc_command, read_site, notes, diagnose)
+    Online.cs          online brain: OpenAI-compatible provider (Groq default, gpt-oss-120b) with the user's key (Secrets); LlamaServer.Post tries it first, local model is the fallback
     LlamaServer.cs     llama.cpp server child process (Vulkan, picks discrete GPU, --fit), ChildJob (kill on exit)
     Models.cs          on-demand downloads to %LocalAppData%\MishkaHelper\models (Vosk, Whisper, Qwen, resumable)
     Notes.cs           notes store + chat history (jsonl)

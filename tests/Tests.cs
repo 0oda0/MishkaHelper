@@ -785,6 +785,92 @@ public class HotkeyKindsTests
     }
 }
 
+public class LookTests
+{
+    [Fact]
+    public void TextFollowsBackground()
+    {
+        Assert.False(ThemeManager.IsLight(System.Windows.Media.Color.FromRgb(10, 10, 18)));
+        Assert.True(ThemeManager.IsLight(System.Windows.Media.Color.FromRgb(238, 240, 246)));
+        // Cards step away from the background: lighter on dark, darker on light.
+        Assert.True(ThemeManager.Step(System.Windows.Media.Color.FromRgb(10, 10, 18), 10).R > 10);
+        Assert.True(ThemeManager.Step(System.Windows.Media.Color.FromRgb(238, 240, 246), 10).R < 238);
+        Assert.Null(ThemeManager.Parse("not a colour"));
+        Assert.Equal("#FF2E97", ThemeManager.Hex(ThemeManager.Parse("#ff2e97")!.Value));
+    }
+}
+
+public class OnlineBrainTests
+{
+    [Theory]
+    [InlineData("https://api.groq.com/openai/v1", true)] [InlineData("http://127.0.0.1:1234/v1", true)] [InlineData("http://192.168.1.5:11434/v1", true)]
+    [InlineData("http://api.example.com/v1", false)] [InlineData("ftp://x", false)] [InlineData("", false)]
+    public void KeyOnlyOverSafeAddresses(string url, bool ok) => Assert.Equal(ok, Online.SafeUrl(url));
+
+    [Fact]
+    public void BodyForProvider()
+    {
+        var local = new System.Text.Json.Nodes.JsonObject { ["messages"] = new System.Text.Json.Nodes.JsonArray(), ["chat_template_kwargs"] = new System.Text.Json.Nodes.JsonObject() };
+        var b = Online.Body(local, "openai/gpt-oss-120b");
+        Assert.False(b.ContainsKey("chat_template_kwargs"));
+        Assert.Equal("openai/gpt-oss-120b", (string?)b["model"]);
+        Assert.Equal("low", (string?)b["reasoning_effort"]);
+        Assert.True(local.ContainsKey("chat_template_kwargs"));   // the local request is untouched
+        Assert.False(Online.Body(local, "qwen").ContainsKey("reasoning_effort"));
+    }
+
+    /// <summary>A fake provider on localhost: the real request path, key header, model, plain and streamed answers with a tool call.</summary>
+    [Fact]
+    public async Task TalksToProvider()
+    {
+        var port = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
+        port.Start(); int p = ((System.Net.IPEndPoint)port.LocalEndpoint).Port; port.Stop();
+        using var http = new System.Net.HttpListener();
+        http.Prefixes.Add($"http://127.0.0.1:{p}/v1/");
+        http.Start();
+        var seen = new List<(string Auth, string Body)>();
+        _ = Task.Run(async () =>
+        {
+            while (http.IsListening)
+            {
+                System.Net.HttpListenerContext ctx;
+                try { ctx = await http.GetContextAsync(); } catch { return; }
+                var body = await new StreamReader(ctx.Request.InputStream).ReadToEndAsync();
+                lock (seen) seen.Add((ctx.Request.Headers["Authorization"] ?? "", body));
+                string answer = body.Contains("\"stream\":true")
+                    ? "data: {\"choices\":[{\"delta\":{\"content\":\"Сейчас \"}}]}\n\n" +
+                      "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"c1\",\"function\":{\"name\":\"pc_command\",\"arguments\":\"{\\\"text\\\":\"}}]}}]}\n\n" +
+                      "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"arguments\":\"\\\"громче\\\"}\"}}]}}]}\n\n" +
+                      "data: [DONE]\n\n"
+                    : "{\"choices\":[{\"message\":{\"role\":\"assistant\",\"content\":\"Да\"}}]}";
+                var bytes = System.Text.Encoding.UTF8.GetBytes(answer);
+                ctx.Response.ContentType = body.Contains("\"stream\":true") ? "text/event-stream" : "application/json";
+                await ctx.Response.OutputStream.WriteAsync(bytes);
+                ctx.Response.Close();
+            }
+        });
+        var j = Settings.Current.Jarvis;
+        var keep = (j.OnlineProvider, j.OnlineUrl, j.OnlineKey, j.OnlineModel);
+        try
+        {
+            j.OnlineProvider = "custom"; j.OnlineUrl = $"http://127.0.0.1:{p}/v1"; j.OnlineModel = "test-model"; Online.Key = "sk-test";
+            Assert.True(Online.Active);
+            Assert.Equal("Да", await Online.Test());
+            var tools = new System.Text.Json.Nodes.JsonArray(new System.Text.Json.Nodes.JsonObject { ["type"] = "function" });
+            var said = new List<string>();
+            var msg = await LlamaServer.ChatStream(new System.Text.Json.Nodes.JsonArray(new System.Text.Json.Nodes.JsonObject { ["role"] = "user", ["content"] = "сделай громче" }), tools, said.Add);
+            Assert.Equal("pc_command", (string?)msg["tool_calls"]![0]!["function"]!["name"]);
+            Assert.Equal("{\"text\":\"громче\"}", (string?)msg["tool_calls"]![0]!["function"]!["arguments"]);
+            Assert.All(seen, s => Assert.Equal("Bearer sk-test", s.Auth));
+            Assert.All(seen, s => Assert.Contains("\"model\":\"test-model\"", s.Body));
+            Assert.All(seen, s => Assert.DoesNotContain("chat_template_kwargs", s.Body));
+        }
+        finally { (j.OnlineProvider, j.OnlineUrl, j.OnlineKey, j.OnlineModel) = keep; http.Stop(); }
+    }
+
+    [Fact] public void Limits() => Assert.Contains("лимит", Online.Explain(System.Net.HttpStatusCode.TooManyRequests, ""));
+}
+
 public class ScheduleWeekTests
 {
     [Fact]

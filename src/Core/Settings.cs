@@ -59,6 +59,10 @@ public class JarvisSettings
     public bool AiEnabled { get; set; }
     public string AiModel { get; set; } = "qwen3-4b-2507";
     public bool AiGpu { get; set; } = true;
+    public string OnlineProvider { get; set; } = "";   // "" = only the local model; groq / cerebras / openrouter / custom (Online.Providers)
+    public string OnlineKey { get; set; } = "";        // encrypted (Secrets)
+    public string OnlineModel { get; set; } = "";      // "" = the provider's default
+    public string OnlineUrl { get; set; } = "";        // for "custom"
     public string UserName { get; set; } = "";
     public List<string> Memory { get; set; } = new();
     public List<WebSource> Sources { get; set; } = new();
@@ -225,6 +229,12 @@ public class AppSettings
 {
     public string Accent { get; set; } = "Purple";
     public bool Glass { get; set; }
+    public string CustomAccent { get; set; } = "";   // #RRGGBB over the preset; "" = the preset
+    public string BgColor { get; set; } = "";        // "" = the default dark
+    public string CardColor { get; set; } = "";      // "" = derived from the background
+    public string BgImage { get; set; } = "";        // a copy in the data folder (ThemeManager.KeepImage)
+    public int BgImageDim { get; set; } = 70;        // % of the background colour over the picture
+    public double UiScale { get; set; } = 1.0;
     public bool StartWithWindows { get; set; } = true;
     public bool StartMinimized { get; set; } = true;
     public bool CloseToTray { get; set; } = true;

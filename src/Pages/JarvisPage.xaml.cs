@@ -15,6 +15,7 @@ public partial class JarvisPage : UserControl
         InitializeComponent();
         Cards.Children.Add(MainCard());
         Cards.Children.Add(CommandsCard());
+        Cards.Children.Add(OnlineCard());
         Cards.Children.Add(ModelsCard());
         Cards.Children.Add(SitesCard());
         Cards.Children.Add(CalendarCard());
@@ -139,6 +140,63 @@ public partial class JarvisPage : UserControl
         };
         wp.Children.Add(dl); wp.Children.Add(test); wp.Children.Add(own);
         b.Children.Add(wp);
+        return c;
+    }
+
+    /// <summary>A smarter brain online, with the user's own free key. The local model stays as the fallback.</summary>
+    UIElement OnlineCard()
+    {
+        var (c, b) = Card("Онлайн-нейросеть (умнее)",
+            "Большая модель в интернете понимает команды намного лучше локальной. Нужен бесплатный ключ. Команды и вопросы уходят выбранному сервису; " +
+            "без связи или когда кончится дневной лимит, Джарвис ответит локальной моделью (если она скачана).");
+        var items = new List<(string Key, string Name)> { ("", "Выключено — только локальная модель") };
+        items.AddRange(Online.Providers.Select(p => (p.Key, p.Name)));
+        var more = new StackPanel();
+        void Build()
+        {
+            more.Children.Clear();
+            var p = Online.Providers.FirstOrDefault(x => x.Key == J.OnlineProvider);
+            if (p == null) return;
+            if (p.Note.Length > 0) { var n = UiKit.Text(p.Note, 12, true); n.TextWrapping = TextWrapping.Wrap; more.Children.Add(n); }
+            if (p.KeysPage.Length > 0)
+            {
+                var get = new Button { Content = "Получить ключ", HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 6, 0, 6) };
+                get.Click += (_, _) => Shell.Open(p.KeysPage);
+                more.Children.Add(get);
+            }
+            if (p.Key == "custom")
+            {
+                more.Children.Add(UiKit.Text("Адрес (до /chat/completions)", 12, true));
+                var url = new TextBox { Text = J.OnlineUrl, Margin = new Thickness(0, 2, 0, 8) };
+                url.LostFocus += (_, _) => { J.OnlineUrl = url.Text.Trim(); Settings.Save(); };
+                more.Children.Add(url);
+            }
+            more.Children.Add(UiKit.Text("Ключ", 12, true));
+            var key = new PasswordBox { Margin = new Thickness(0, 2, 0, 8) };
+            if (J.OnlineKey.Length > 0) key.Password = "••••••••";   // the real key never comes back into the window
+            key.LostFocus += (_, _) => { if (key.Password != "••••••••") { Online.Key = key.Password; Settings.Save(); } };
+            more.Children.Add(key);
+            more.Children.Add(UiKit.Text("Модель" + (p.Model.Length > 0 ? $" (по умолчанию {p.Model})" : ""), 12, true));
+            var model = new TextBox { Text = J.OnlineModel, Margin = new Thickness(0, 2, 0, 8) };
+            model.LostFocus += (_, _) => { J.OnlineModel = model.Text.Trim(); Settings.Save(); };
+            more.Children.Add(model);
+            var result = UiKit.Text("", 12, true); result.TextWrapping = TextWrapping.Wrap;
+            var test = new Button { Content = "Проверить", Style = S("AccentButton"), HorizontalAlignment = HorizontalAlignment.Left };
+            test.Click += async (_, _) =>
+            {
+                if (key.Password != "••••••••") Online.Key = key.Password;
+                J.OnlineModel = model.Text.Trim(); Settings.Save();
+                if (!Online.Active) { result.Text = "Вставь ключ" + (p.Key == "custom" ? " и адрес (https://…)" : "") + "."; return; }
+                test.IsEnabled = false; result.Text = "Спрашиваю…";
+                try { result.Text = "✅ Работает. Ответ: " + await Online.Test() + (J.AiEnabled ? "" : "\nВключи «ИИ: понимать любые фразы» в карточке ниже."); }
+                catch (Exception ex) { result.Text = "❌ " + ex.Message; }
+                test.IsEnabled = true;
+            };
+            more.Children.Add(test); more.Children.Add(result);
+        }
+        Combo(b, "Сервис", items, J.OnlineProvider, v => { J.OnlineProvider = v; if (v.Length > 0) J.AiEnabled = true; Brain.Unload(); Settings.Save(); Build(); });
+        b.Children.Add(more);
+        Build();
         return c;
     }
 

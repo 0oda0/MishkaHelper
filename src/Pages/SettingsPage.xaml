@@ -11,6 +11,7 @@
                     <TextBlock Text="Оформление" Style="{StaticResource H2}"/>
                     <TextBlock Text="Цвет неона" Style="{StaticResource Dim}" Margin="0,0,0,8"/>
                     <WrapPanel x:Name="Accents"/>
+                    <StackPanel x:Name="Look"/>
                     <CheckBox x:Name="Glass" Style="{StaticResource Switch}" Content="Стекло (размытие фона, как в iOS)" Margin="0,12,0,0" Click="Glass_Click"/>
                     <CheckBox x:Name="OsdSwitch" Style="{StaticResource Switch}" Content="Всплывающая подсказка при горячих клавишах" Click="Osd_Click"/>
                 </StackPanel>
