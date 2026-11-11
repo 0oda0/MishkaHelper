@@ -318,6 +318,8 @@ public class AppSettings
     public bool ClipboardHistory { get; set; } = true;
     /// <summary>Wheel root, in order. Empty = the default wheel.</summary>
     public List<RadialEntry> Radial { get; set; } = new();
+    /// <summary>Wheels for work programs (Word, Excel, Photoshop…): shown instead of the usual one while that program is in front.</summary>
+    public List<AppWheel> AppWheels { get; set; } = Core.AppWheels.Presets();
     public DateTime LastUpdateCheck { get; set; }
 
     public JarvisSettings Jarvis { get; set; } = new();

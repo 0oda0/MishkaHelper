@@ -70,9 +70,21 @@ public static class InputSim
         ["enter"] = 0x0D, ["backspace"] = 0x08, ["tab"] = 0x09, ["esc"] = 0x1B, ["space"] = 0x20, ["delete"] = 0x2E,
         ["left"] = 0x25, ["up"] = 0x26, ["right"] = 0x27, ["down"] = 0x28, ["home"] = 0x24, ["end"] = 0x23,
         ["pageup"] = 0x21, ["pagedown"] = 0x22, ["win"] = 0x5B, ["ctrl"] = 0x11, ["alt"] = 0x12, ["shift"] = 0x10,
-        ["f5"] = 0x74, ["f11"] = 0x7A, ["play"] = 0xB3, ["next"] = 0xB0, ["prev"] = 0xB1,
-        ["volup"] = 0xAF, ["voldown"] = 0xAE, ["mute"] = 0xAD,
+        ["play"] = 0xB3, ["next"] = 0xB0, ["prev"] = 0xB1,
+        ["volup"] = 0xAF, ["voldown"] = 0xAE, ["mute"] = 0xAD, ["insert"] = 0x2D, ["printscreen"] = 0x2C, ["apps"] = 0x5D,
+        // The punctuation keys by position (US names); the same physical keys on a Russian layout.
+        [";"] = 0xBA, ["="] = 0xBB, ["plus"] = 0xBB, [","] = 0xBC, ["-"] = 0xBD, ["minus"] = 0xBD, ["."] = 0xBE, ["/"] = 0xBF,
+        ["`"] = 0xC0, ["["] = 0xDB, ["\\"] = 0xDC, ["]"] = 0xDD, ["'"] = 0xDE,
     };
+
+    static InputSim() { for (int i = 1; i <= 24; i++) Vk["f" + i] = (ushort)(0x6F + i); }
+
+    /// <summary>Whether Key() understands this combo.</summary>
+    public static bool IsKey(string combo)
+    {
+        var parts = combo.ToLowerInvariant().Split('+', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        return parts.Length > 0 && parts.All(p => Vk.ContainsKey(p) || (p.Length == 1 && char.IsLetterOrDigit(p[0]) && p[0] < 128));
+    }
 
     // Arrows and the block above them are "extended" keys. Without the flag Windows takes them for the numeric keypad,
     // where Shift doesn't select: Ctrl+Shift+Left only moved the caret.

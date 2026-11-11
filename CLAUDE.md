@@ -110,6 +110,7 @@ src/
     Controls.cs        Sparkline, Ring
     Popups.cs          Floating window base, Osd, Toast
     QuickPanel.xaml    tray flyout
+    (Core/AppWheels.cs) per-program wheels: Settings.AppWheels (process → AppKey label/keys), presets Word/Excel/Photoshop/PowerPoint; RadialMenu opens it for the foreground process, Press() refocuses and sends steps
     RadialMenu.cs      pie menu (Ctrl+Alt+R); Builtins() keyed catalog, Settings.Radial = user order/custom "act:<palette action>" items; submenus page at 11, root at 16; OpenAt(label)
     AppIcon.cs         real program/folder icons (SHGetFileInfo) for the wheel
     CommandPalette.cs  Ctrl+Alt+K search

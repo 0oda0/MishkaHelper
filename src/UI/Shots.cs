@@ -20,7 +20,7 @@ public static class Shots
             main.Navigate(p);
             await Task.Delay(p is "Devices" or "Security" or "System" ? 6000 : 2500);
             Save(main, Path.Combine(dir, p + ".png"));
-            if (p is "Settings" or "Hotkeys" && Deep<System.Windows.Controls.ScrollViewer>(main) is { } sv)
+            if (p is "Settings" or "Hotkeys" or "Radial" && Deep<System.Windows.Controls.ScrollViewer>(main) is { } sv)
             {
                 sv.ScrollToEnd(); await Task.Delay(500);
                 Save(main, Path.Combine(dir, p + "End.png"));
@@ -65,6 +65,13 @@ public static class Shots
             if (w.Content is System.Windows.Controls.Canvas) Save(w, Path.Combine(dir, "RadialCustom.png"));
         RadialMenu.Toggle();
         Settings.Current.Radial = keep;
+
+        // The wheel for a work program: this window stands in for Word.
+        RadialMenu.OpenFor(AppWheels.Presets()[0]);
+        await Task.Delay(800);
+        foreach (Window w in Application.Current.Windows)
+            if (w.Content is System.Windows.Controls.Canvas) Save(w, Path.Combine(dir, "RadialApp.png"));
+        RadialMenu.Toggle();
         await Task.Delay(200);
 
         foreach (var (sub, name) in new[] { ("Программы", "RadialPrograms"), ("Виджеты", "RadialWidgets"), ("Джарвис", "RadialJarvis") }.Where(x => Edition.HasJarvis || x.Item1 != "Джарвис"))

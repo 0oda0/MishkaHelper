@@ -38,6 +38,9 @@ public static class RadialMenu
     /// <summary>Dev/screenshots: open the wheel straight into a submenu by its label.</summary>
     public static void OpenAt(string label) { _w?.Close(); Open(label); }
 
+    /// <summary>Dev/screenshots: the wheel of a work program, whatever is in front.</summary>
+    public static void OpenFor(AppWheel aw) { _w?.Close(); Open(null, aw); }
+
     /// <summary>Every built-in root item: key (stored in settings), and the item. Order = default wheel.</summary>
     static List<(string Key, Item Item)> Builtins()
     {
@@ -133,7 +136,7 @@ public static class RadialMenu
 
     static string Short(string s) => s.Length > 18 ? s[..17] + "…" : s;
 
-    static void Open(string? startIn = null)
+    static void Open(string? startIn = null, AppWheel? forced = null)
     {
         var w = Floating.Create(clickThrough: false, noActivate: false);
         w.SizeToContent = SizeToContent.Manual;
@@ -148,7 +151,13 @@ public static class RadialMenu
         var canvas = new Canvas { Width = Size, Height = Size, Background = Brushes.Transparent };
         w.Content = canvas;
         var stack = new Stack<List<Item>>();
-        List<Item> items = Root();
+        var fgAtOpen = Native.GetForegroundWindow();   // the app the user was in
+        // A work program in front gets its own wheel; the usual one is its first segment.
+        var app = forced ?? (startIn == null ? AppWheels.For(ProcessOf(fgAtOpen)) : null);
+        List<Item> items = app == null ? Root()
+            : Paged(new List<Item> { new("\uE7AD", "Обычное колесо", Sub: Root) }
+                .Concat(app.Items.Select(k => new Item(k.Icon.Length > 0 ? k.Icon : "\uE765", k.Label, () => AppWheels.Press(fgAtOpen, k.Keys)))).ToList(), per: RootMax);
+        var home = app?.Name.ToUpperInvariant() ?? "MISHKA";
         var stack0 = startIn != null ? items.FirstOrDefault(x => x.Label == startIn) : null;
         int hover = -1;
         var paths = new List<Path>();
@@ -164,7 +173,7 @@ public static class RadialMenu
             };
             Canvas.SetLeft(hub, Size / 2 - Inner + 4); Canvas.SetTop(hub, Size / 2 - Inner + 4);
             canvas.Children.Add(hub);
-            center.Text = stack.Count > 0 ? "Назад" : "MISHKA";
+            center.Text = stack.Count > 0 ? "Назад" : home;
             canvas.Children.Add(center);
             center.Measure(new System.Windows.Size(double.PositiveInfinity, double.PositiveInfinity));
             Canvas.SetLeft(center, Size / 2 - center.Width / 2); Canvas.SetTop(center, Size / 2 - center.DesiredSize.Height / 2);
@@ -214,7 +223,7 @@ public static class RadialMenu
                 paths[hover].Effect = (System.Windows.Media.Effects.Effect)Application.Current.Resources["Glow"];
                 center.Text = items[hover].Label;
             }
-            else center.Text = stack.Count > 0 ? "Назад" : "MISHKA";
+            else center.Text = stack.Count > 0 ? "Назад" : home;
         }
 
         void Back()
@@ -253,7 +262,6 @@ public static class RadialMenu
         canvas.RenderTransform = st;
         canvas.Opacity = 0;
         _w = w;
-        var fgAtOpen = Native.GetForegroundWindow();   // the app the user was in
         w.Show();
         var hwnd = new System.Windows.Interop.WindowInteropHelper(w).Handle;
         // The hotkey owner may take the foreground; forcing it (AttachThreadInput) makes it flicker and lose focus again.
@@ -275,6 +283,14 @@ public static class RadialMenu
         st.BeginAnimation(ScaleTransform.ScaleXProperty, new DoubleAnimation(1, TimeSpan.FromMilliseconds(160)) { EasingFunction = ease });
         st.BeginAnimation(ScaleTransform.ScaleYProperty, new DoubleAnimation(1, TimeSpan.FromMilliseconds(160)) { EasingFunction = ease });
         canvas.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(1, TimeSpan.FromMilliseconds(120)));
+    }
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
+
+    static string ProcessOf(IntPtr hwnd)
+    {
+        GetWindowThreadProcessId(hwnd, out var pid);
+        try { using var p = System.Diagnostics.Process.GetProcessById((int)pid); return p.ProcessName; } catch { return ""; }
     }
 
     static Geometry Segment(double a0, double a1)

@@ -785,6 +785,40 @@ public class HotkeyKindsTests
     }
 }
 
+public class AppWheelTests
+{
+    [Fact]
+    public void PresetsAreAllPressable()
+    {
+        foreach (var w in AppWheels.Presets())
+            foreach (var k in w.Items) Assert.True(AppWheels.Valid(k.Keys), $"{w.Name}: {k.Label} = {k.Keys}");
+    }
+
+    [Theory]
+    [InlineData("ctrl+b", true)] [InlineData("alt w f f", true)] [InlineData("ctrl+;", true)] [InlineData("alt+=", true)] [InlineData("[", true)] [InlineData("f24", true)]
+    [InlineData("ctrl+unknown", false)] [InlineData("", false)] [InlineData("ctrl+ж", false)]
+    public void Keys(string keys, bool ok) => Assert.Equal(ok, AppWheels.Valid(keys));
+
+    [Theory]
+    [InlineData("Ctrl+Shift+N", "ctrl+shift+n")] [InlineData("Ctrl+OemPlus", "ctrl+=")] [InlineData("Ctrl+Alt+D1", "ctrl+alt+1")] [InlineData("F5", "f5")] [InlineData("Ctrl+Oem1", "ctrl+;")]
+    public void FromRecorder(string combo, string keys) => Assert.Equal(keys, AppWheels.FromHotkey(combo));
+
+    [Fact]
+    public void MatchesProcess()
+    {
+        var keep = Settings.Current.AppWheels;
+        try
+        {
+            Settings.Current.AppWheels = AppWheels.Presets();
+            Assert.Equal("Excel", AppWheels.For("EXCEL")?.Name);
+            Assert.Null(AppWheels.For("notepad"));
+            Settings.Current.AppWheels[0].Enabled = false;
+            Assert.Null(AppWheels.For("winword"));
+        }
+        finally { Settings.Current.AppWheels = keep; }
+    }
+}
+
 public class LookTests
 {
     [Fact]
