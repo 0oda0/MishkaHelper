@@ -190,6 +190,7 @@ class LinkService : Service() {
                 event("Текст с ПК в буфере", m.optString("text").take(80))
             }
             "toast" -> event("Mishka", m.optString("text"))
+            "act" -> NotifListener.act(this, m.optString("id"), m.optInt("i", -1), if (m.has("text")) m.optString("text") else null)
             "file" -> Thread { download(m.optString("id"), m.optString("name")) }.start()
         }
     }

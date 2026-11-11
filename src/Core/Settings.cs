@@ -154,6 +154,8 @@ public class SecretarySettings
     public bool Milestones { get; set; } = true;
     public bool Habits { get; set; } = true;
     public bool LongSession { get; set; } = true;
+    public bool CheckIns { get; set; } = true;          // asks about the day's plans a few times a day
+    public List<int> CheckInHours { get; set; } = new() { 12, 17 };
     public string Name { get; set; } = "Секретарша";
     public string Tone { get; set; } = "work";   // work, friend, short
     public bool SpeakMorning { get; set; }       // the morning summary aloud (needs Jarvis' voice); off: no sound unless asked for
@@ -279,6 +281,8 @@ public class AppSettings
     public bool PhoneNotifications { get; set; } = true;   // show the phone app's notifications as toasts
     /// <summary>Game mode turns itself on when a full-screen game is in front.</summary>
     public bool FocusAuto { get; set; } = true;
+    /// <summary>FPS and temperatures in the corner while game mode is on.</summary>
+    public bool GameOverlay { get; set; } = true;
     /// <summary>Game mode never mutes these (process names): voice chat must keep working.</summary>
     public List<string> FocusKeepSound { get; set; } = new() { "discord", "teamspeak", "ts3client_win64", "mumble", "telegram", "zoom" };
     /// <summary>Couch remote: streaming services and favourite channels, opened in the default browser.</summary>
@@ -308,6 +312,17 @@ public class AppSettings
 
     public JarvisSettings Jarvis { get; set; } = new();
     public List<Scenario> Scenarios { get; set; } = new();
+    public MouseSettings Mouse { get; set; } = new();
+    public List<string> AppKit { get; set; } = new();   // winget ids picked on «Программы для нового ПК»
+}
+
+public class MouseSettings
+{
+    public bool HoldWheelRadial { get; set; }          // hold the wheel → the wheel menu; a short click stays a click
+    public bool TaskbarVolume { get; set; } = true;    // scroll over the taskbar → volume
+    public bool Gestures { get; set; }                 // hold a side button and move → an action; a short click stays a click
+    public string GestureButton { get; set; } = "Mouse5";
+    public Dictionary<string, string> GestureActions { get; set; } = new() { ["up"] = "quick", ["down"] = "widgets", ["left"] = "palette", ["right"] = "clipboard" };
 }
 
 public static class Settings

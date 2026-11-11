@@ -56,7 +56,9 @@ src/
     Security.cs        Defender (MpCmdRun/WMI), VirusTotal, suspicious sweep (WinVerifyTrust)
     Toolbox.cs         Tools page utilities (topmost, opacity, color pick, power timer, Wi-Fi passwords, ping, speedtest, crashes, privacy…)
     Hotkeys.cs         RegisterHotKey, Pretty(), scenario hotkeys; single keys only from SingleAllowed (F-keys, Pause, media…)
-    MouseHotkeys.cs    wheel click / side buttons (+mods) via WH_MOUSE_LL on its own thread, only while one is set; injected clicks pass
+    MouseHotkeys.cs    WH_MOUSE_LL on its own thread: wheel/side-button hotkeys, wheel-over-taskbar volume, hold wheel → radial, side-button gestures; held presses are replayed if unused; injected input passes
+    Fps.cs             real-time ETW session (DXGI Present 42, D3D9 Present 1) counting frames of one pid; needs admin; stopped on exit (ETW sessions outlive processes)
+    Care.cs            Windows Update COM search, winget (real exe in WindowsApps, never the user alias when elevated) upgrade table parse / install set, dust (CPU °C under load per day, care.json), battery report XML by month
     Profiles.cs        apply profiles, auto by AC/app rules (+process priority)
     Alerts.cs          threshold toasts
     (Core/Backup.cs)   backup zip: known file names only, validated before anything is replaced
@@ -112,6 +114,7 @@ src/
     CommandPalette.cs  Ctrl+Alt+K search
     ClipHistory.cs     Ctrl+Alt+V clipboard history (message-only window, AddClipboardFormatListener; only pinned items persist)
     Widgets.cs / WidgetsExtra.cs  20 desktop widgets (partial class)
+    GameOverlay.cs     click-through corner line: FPS / CPU / GPU, follows game mode
     JarvisUi.cs        orb + chat window + JarvisInput (Ctrl+Alt+Enter typed request, silent answer)
     Shots.cs / SelfTest.cs  dev tooling
 mobile/                Android app «Mishka» (Kotlin + Compose, minSdk 26): Link (discovery, HTTP), LinkService (foreground WS, ring, files), NotifListener, ShareActivity, Cleaner (big/APK/dupes/old downloads), MainActivity tabs ПК/Пульт(WebView of the remote page)/Чистка. CI builds Mishka-Phone.apk only if repo secrets MISHKA_KEYSTORE_B64 + MISHKA_KEYSTORE_PASSWORD exist

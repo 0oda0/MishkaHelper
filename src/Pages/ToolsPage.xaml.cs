@@ -132,6 +132,14 @@ public partial class ToolsPage : UserControl
             await RustDesk.Open(f => Dispatcher.BeginInvoke(() => btn.Content = $"Скачиваю… {f * 100:0}%"));
             btn.Content = "Открыть RustDesk";
         });
+        BtnAsync(rd, "Попросить друга помочь", async btn =>
+        {
+            var id = await RustDesk.AskHelp(f => Dispatcher.BeginInvoke(() => btn.Content = $"Скачиваю… {f * 100:0}%"));
+            btn.Content = "Попросить друга помочь";
+            if (id == null) { Osd.Show("\uE946", "RustDesk открыт — ID видно в его окне"); return; }
+            System.Windows.Clipboard.SetText(RustDesk.Message(id));
+            MessageBox.Show(Window.GetWindow(this), $"Сообщение для друга скопировано — вставь его в чат.\n\nТвой ID: {id}\nПароль показан в окне RustDesk. Назови его другу, только когда он будет готов подключиться, и смотри, что он делает.", "Помощь друга");
+        });
         b.Children.Add(rd);
         return c;
     }

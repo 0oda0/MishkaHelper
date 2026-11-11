@@ -39,6 +39,8 @@ public static class Actions
                     break;
                 case "widgets": Widgets.ToggleAll(); break;
                 case "focus": Focus.Toggle(); break;
+            case "overlay": GameOverlay.Toggle(); break;
+            case "replay": if (!InputSim.Key("win+alt+g")) Shell.Open("ms-settings:gaming-gamedvr"); else Osd.Show("\uE714", "Записано: последние 30 секунд"); break;
                 case "layoutFix": LayoutFix.Run(); break;
                 case "setup": SetupWizard.Open(); break;
 #if SECRETARY

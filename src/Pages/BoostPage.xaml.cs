@@ -29,6 +29,8 @@ public partial class BoostPage : UserControl
             "large" => LargeTab(_cts.Token),
             "dups" => DupsTab(_cts.Token),
             "apps" => AppsTab(),
+            "care" => CareTab(),
+            "kit" => KitTab(),
             _ => null,
         };
     }

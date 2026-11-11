@@ -739,6 +739,22 @@ public class HotkeyKindsTests
         Assert.Null(MouseHotkeys.Decode(0x200, 0));   // a move
     }
 
+    [Theory]
+    [InlineData(0, -100, "up")] [InlineData(0, 90, "down")] [InlineData(-80, 20, "left")] [InlineData(70, -30, "right")] [InlineData(30, 20, null)]
+    public void Gestures(int dx, int dy, string? dir) => Assert.Equal(dir, MouseHotkeys.Gesture(dx, dy));
+
+    [Fact]
+    public void AlertSpeaksOncePerEpisode()
+    {
+        var raised = new HashSet<string>();
+        Assert.True(Alerts.Step(raised, "ram", 93, 92, 8));
+        Assert.False(Alerts.Step(raised, "ram", 95, 92, 8));   // still high: quiet
+        Assert.False(Alerts.Step(raised, "ram", 88, 92, 8));   // just under: not over yet
+        Assert.False(Alerts.Step(raised, "ram", 93, 92, 8));
+        Assert.False(Alerts.Step(raised, "ram", 80, 92, 8));   // really back to normal
+        Assert.True(Alerts.Step(raised, "ram", 93, 92, 8));
+    }
+
     [Fact] public void Labels() => Assert.Equal("Ctrl+мышь «назад»", Hotkeys.Pretty("Ctrl+Mouse4"));
 
     [Theory]
@@ -766,6 +782,87 @@ public class HotkeyKindsTests
         Assert.Equal("u/sec", Updater.For(rel, "Secretary")!.SetupUrl);
         Assert.Null(Updater.For(rel, "Jarvis")!.SetupUrl);
         Assert.Equal("Jarvis", Updater.For(rel, "Jarvis")!.Edition);
+    }
+}
+
+public class ScheduleWeekTests
+{
+    [Fact]
+    public void CheckInsOncePerHour()
+    {
+        var hours = new List<int> { 12, 17 };
+        var d = new DateTime(2026, 11, 11);
+        Assert.False(Secretary.CheckInDue(hours, default, d.AddHours(11)));
+        Assert.True(Secretary.CheckInDue(hours, default, d.AddHours(12.5)));
+        Assert.False(Secretary.CheckInDue(hours, d.AddHours(12.5), d.AddHours(13)));   // already asked
+        Assert.True(Secretary.CheckInDue(hours, d.AddHours(12.5), d.AddHours(17.1)));
+        Assert.False(Secretary.CheckInDue(hours, default, d.AddHours(21)));             // came back late: no stale question
+    }
+
+    [Fact]
+    public void WholeWeekFromOnePage()
+    {
+        var text = "Расписание\nПонедельник\n09:30 Матанализ ауд. 214\n11:20 Физика\nВторник\n13:10 Английский\nЧетверг\n09:30 Программирование";
+        var w = SecSchedule.Week(text, new DateTime(2026, 11, 11));   // a Wednesday
+        Assert.Equal(new[] { "2026-11-09", "2026-11-10", "2026-11-12" }, w.Keys.OrderBy(k => k));
+        Assert.Equal(2, w["2026-11-09"].Count);
+    }
+}
+
+public class CareTests
+{
+    const string Table = "   - \r   \\ \r" + @"Имя                     ИД                       Версия    Доступно   Источник
+----------------------------------------------------------------------------------
+Audacity 3.7.7          Audacity.Audacity        3.7.7     4.0.2      winget
+Git                     Git.Git                  2.55.0.4  2.56.0.4   winget
+Adobe Acrobat (64-bit)  XPDP273C0XHQH2           25.001    26.002     msstore
+3 обновлений доступно.
+";
+
+    [Fact]
+    public void WingetTable()
+    {
+        var l = Care.ParseTable(Table);
+        Assert.Equal(3, l.Count);
+        Assert.Equal(("Audacity 3.7.7", "Audacity.Audacity", "3.7.7", "4.0.2"), (l[0].Name, l[0].Id, l[0].Version, l[0].Available));
+        Assert.Equal("Adobe Acrobat (64-bit)", l[2].Name);
+        Assert.Empty(Care.ParseTable("Нет доступных обновлений."));
+    }
+
+    [Theory]
+    [InlineData("Git.Git", true)] [InlineData("Notepad++.Notepad++", true)] [InlineData("a & del c:", false)] [InlineData("x\"y", false)] [InlineData("-a", false)]
+    public void IdsAreSafe(string id, bool ok) => Assert.Equal(ok, Care.IsSafeId(id));
+
+    [Fact]
+    public void RustDeskId()
+    {
+        Assert.Equal("123456789", RustDesk.ParseId("enc_id = ''\nid = '123456789'\npassword = ''"));
+        Assert.Null(RustDesk.ParseId("enc_id = '00xyz'"));
+        Assert.Contains("123 456 789", RustDesk.Message("123456789"));
+    }
+
+    [Fact] public void SetFromText() => Assert.Equal(new[] { "Git.Git", "Valve.Steam" }, Care.ParseSet("Git.Git, Valve.Steam\ngit.git; rm&x"));
+
+    [Fact]
+    public void DustNeedsTwoMonths()
+    {
+        var d = new Dictionary<string, double[]>();
+        var start = new DateTime(2026, 1, 1);
+        for (int i = 0; i < 90; i++) d[start.AddDays(i).ToString("yyyy-MM-dd")] = new[] { (i < 30 ? 70.0 : 82.0) * 50, 50 };
+        Assert.Null(Care.Dust(d, start.AddDays(40)));
+        var t = Care.Dust(d, start.AddDays(89))!.Value;
+        Assert.Equal(70, t.Then, 1); Assert.Equal(82, t.Now, 1);
+    }
+
+    [Fact]
+    public void BatteryMonths()
+    {
+        var xml = @"<BatteryReport xmlns=""http://schemas.microsoft.com/battery/2012""><Batteries><Battery><DesignCapacity>50000</DesignCapacity><FullChargeCapacity>40000</FullChargeCapacity></Battery></Batteries>
+<History><HistoryEntry LocalStartDate=""2026-08-10T09:00:00"" DesignCapacity=""50000"" FullChargeCapacity=""45000""/><HistoryEntry LocalStartDate=""2026-08-20T09:00:00"" DesignCapacity=""50000"" FullChargeCapacity=""43000""/>
+<HistoryEntry LocalStartDate=""2026-09-05T09:00:00"" DesignCapacity=""50000"" FullChargeCapacity=""41000""/></History></BatteryReport>";
+        var r = Care.ParseBattery(xml)!.Value;
+        Assert.Equal(80, r.Now);
+        Assert.Equal(new[] { 88, 82 }, r.Months.Select(m => m.Percent));
     }
 }
 

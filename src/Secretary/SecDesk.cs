@@ -58,7 +58,7 @@ public static class SecInbox
                     ("Напомнить", () => { Reminders.Add(i.Text, i.At ?? DateTime.Now.AddDays(1), i.HasTime); Remove(i); Osd.Show("", "Напоминание добавлено"); }),
                     ("Не надо", () => Remove(i)),
                 };
-            case "overdue":
+            case "overdue" or "plan":
                 return new (string, Action)[]
                 {
                     ("Сделано", () => { if (Task() is { } t) Secretary.Finish(t); Remove(i); }),
@@ -192,7 +192,9 @@ public static class SecAsk
         return SecSchedule.Problem(day) switch
         {
             "login" => new("Сайт просит вход. Войди один раз в окне Mishka, потом спроси снова.", new (string, Action)[] { ("Войти", () => WebReader.OpenWindow(page.Target, "Вход на сайт расписания")), open }),
-            "offline" => new("Сайт не открылся. Бывает, что сайты вуза не пускают через VPN: попробуй без него.", new[] { open }),
+            "offline" => new(Vpn.IsUp()
+                ? "Сайт не открылся: похоже, его не пускает VPN. Выключи VPN на минуту и спроси снова — неделя запомнится, дальше VPN не помешает. Или скопируй страницу расписания (Ctrl+A, Ctrl+C) и нажми «Из буфера» на странице «Секретарша»."
+                : "Сайт не открылся. Попробуй позже или скопируй страницу расписания (Ctrl+A, Ctrl+C) и нажми «Из буфера» на странице «Секретарша».", new[] { open }),
             "empty" => new($"На сайте пусто: {Day(day, now).ToLowerInvariant()} занятий не нашла.", new[] { open }),
             _ => new("Страница открылась, но день на ней не нашла. Показать сайт?", new[] { open }),
         };

@@ -56,4 +56,42 @@ public static class RustDesk
         }
         Process.Start(new ProcessStartInfo(exe) { UseShellExecute = true });
     }
+
+    /// <summary>
+    /// "Помоги мне": RustDesk opens and the message for the friend (with this PC's ID) goes to the clipboard.
+    /// The password stays in RustDesk's own window: it changes every session, and only the person at the PC should hand it out.
+    /// </summary>
+    public static async Task<string?> AskHelp(Action<double>? progress = null)
+    {
+        await Open(progress);
+        for (int i = 0; i < 30; i++)
+        {
+            if (Id() is { } id) return id;
+            await Task.Delay(500);
+        }
+        return null;
+    }
+
+    /// <summary>This PC's RustDesk ID from its config (written on its first start).</summary>
+    public static string? Id()
+    {
+        foreach (var dir in new[] { Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), @"ServiceProfiles\LocalService\AppData\Roaming") })
+        {
+            try
+            {
+                var f = Path.Combine(dir, "RustDesk", "config", "RustDesk.toml");
+                if (File.Exists(f) && ParseId(File.ReadAllText(f)) is { } id) return id;
+            }
+            catch { }
+        }
+        return null;
+    }
+
+    internal static string? ParseId(string toml) =>
+        System.Text.RegularExpressions.Regex.Match(toml, @"(?m)^\s*id\s*=\s*['""](\d{6,12})['""]") is { Success: true } m ? m.Groups[1].Value : null;
+
+    public static string Message(string id) =>
+        $"Помоги с компьютером, пожалуйста. Поставь RustDesk (rustdesk.com) и подключись: ID {Spaced(id)}. Пароль скажу, когда будешь готов.";
+
+    static string Spaced(string id) => string.Join(" ", Enumerable.Range(0, (id.Length + 2) / 3).Select(i => id.Substring(i * 3, Math.Min(3, id.Length - i * 3))));
 }

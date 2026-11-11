@@ -45,7 +45,8 @@ public static class Hotkeys
                 if (MouseHotkeys.TryParse(t.Value, out var sm, out var sb)) mouse[(sm, sb)] = "scenario:" + sc.Id;
                 else if (TryParse(t.Value, out var m2, out var vk2) && Native.RegisterHotKey(_src.Handle, next, m2 | Native.MOD_NOREPEAT, vk2))
                     Ids[next++] = "scenario:" + sc.Id;
-        MouseHotkeys.Set(mouse);
+        var mx = Settings.Current.Mouse;
+        MouseHotkeys.Set(mouse, mx.HoldWheelRadial || mx.TaskbarVolume || mx.Gestures);
         MouseHotkeys.Pause(false);
         if (Failed.Count > 0) Log.Info("hotkeys taken by other apps: " + string.Join(", ", Failed.Select(a => $"{a}={Settings.Current.Hotkeys[a]}")));
     }

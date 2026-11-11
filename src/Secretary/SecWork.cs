@@ -296,7 +296,9 @@ public static class SecSchedule
         var s = Settings.Current.Secretary;
         var store = SecStore.Cur;
         var page = Page;
-        if (!s.ScheduleRead || page == null) return new();
+        if (!s.ScheduleRead) return new();
+        if (!fresh && store.ScheduleWeek.TryGetValue(day.ToString("yyyy-MM-dd"), out var kept)) return kept;
+        if (page == null) return new();
         var key = day.ToString("yyyy-MM-dd") + "|" + page.Target;
         if (!fresh && store.ScheduleCacheDay == key && store.ScheduleCache.Count > 0) return store.ScheduleCache;
         if (!fresh && Days.TryGetValue(key, out var known)) return known;
@@ -337,12 +339,43 @@ public static class SecSchedule
         var read = await WebReader.ReadWith(url, ClickWords(day, DateTime.Now), SameWeek(day, DateTime.Now));
         if (read.Login) { store.ScheduleProblem = "login"; return null; }
         if (read.Failed) { store.ScheduleProblem = "offline"; return null; }
+        foreach (var text in read.Texts) Keep(Week(text, day));
         foreach (var text in read.Texts)
             if (SecPlan.ScheduleFor(text, day) is { } found) return found;
         store.ScheduleProblem = "notfound";
         // Kept for looking into a site the reader doesn't understand; it stays in the protected data folder.
         try { File.WriteAllText(System.IO.Path.Combine(Settings.Dir, "schedule-last.txt"), string.Join("\n=====\n", read.Texts)); } catch { }
         return null;
+    }
+
+    /// <summary>Every day of the week of `day` that the page text has a heading for.</summary>
+    internal static Dictionary<string, List<string>> Week(string text, DateTime day)
+    {
+        var monday = day.Date.AddDays(-(((int)day.DayOfWeek + 6) % 7));
+        var res = new Dictionary<string, List<string>>();
+        for (int i = 0; i < 7; i++)
+            if (SecPlan.ScheduleFor(text, monday.AddDays(i)) is { } l) res[monday.AddDays(i).ToString("yyyy-MM-dd")] = l;
+        return res;
+    }
+
+    static void Keep(Dictionary<string, List<string>> days)
+    {
+        var w = SecStore.Cur.ScheduleWeek;
+        foreach (var (k, v) in days) w[k] = v;
+        foreach (var k in w.Keys.Where(k => DateTime.TryParse(k, out var d) && d < DateTime.Today.AddDays(-14)).ToList()) w.Remove(k);
+    }
+
+    /// <summary>
+    /// The schedule copied by hand (Ctrl+A, Ctrl+C on the page): works whatever the site does. At the weekend it's taken as next week's.
+    /// Returns how many days were found.
+    /// </summary>
+    public static int FromText(string text, DateTime now)
+    {
+        var day = now.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday ? now.Date.AddDays(7) : now.Date;
+        var days = Week(text, day);
+        Keep(days);
+        if (days.Count > 0) { SecStore.Cur.ScheduleProblem = ""; SecStore.Save(); }
+        return days.Count;
     }
 
     internal static bool SameWeek(DateTime day, DateTime now)

@@ -52,8 +52,11 @@ public class SecStore
     public List<FileRecord> FileLog { get; set; } = new();
     public string ScheduleCacheDay { get; set; } = "";
     public List<string> ScheduleCache { get; set; } = new();
+    /// <summary>"yyyy-MM-dd" → that day's lines: the whole week is kept from one good read, so a site that won't open later (VPN) doesn't matter.</summary>
+    public Dictionary<string, List<string>> ScheduleWeek { get; set; } = new();
     public DateTime LastMorning { get; set; }
     public DateTime LastEvening { get; set; }
+    public DateTime LastCheckIn { get; set; }
 
     static readonly string FilePath = Path.Combine(Settings.Dir, "secretary.json");
     static SecStore? _cur;

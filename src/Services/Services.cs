@@ -22,6 +22,8 @@ public static class Services
         Try(Reminders.Start);
         Try(ClipHistory.Start);
         Try(AutoLayout.Apply);
+        SysMon.Updated += Care.Track;
+        Focus.Changed += () => Application.Current?.Dispatcher.BeginInvoke(GameOverlay.Follow);
 #if SECRETARY
         Try(Secretary.Start);
 #endif
@@ -43,6 +45,7 @@ public static class Services
             if (_tick % 12 == 3) Try(AutoTheme);                         // every minute
             if (_tick % 60 == 1) await Devices.CheckBatteries();          // every 5 min
             if (_tick % 360 == 2) await Scheduled();                     // every 30 min
+            if (_tick % 360 == 7) Try(Care.Daily);
         };
         _jobs.Start();
 
@@ -77,6 +80,7 @@ public static class Services
     public static void Stop()
     {
         _jobs?.Stop();
+        Try(Fps.Stop);   // ETW sessions outlive the process that started them
 #if JARVIS
         Try(Jarvis.Stop);
         Try(Brain.Unload);

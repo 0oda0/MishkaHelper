@@ -29,6 +29,13 @@ public static class InputSim
         if (dbl) Send(M(down), M(up));
     }
 
+    /// <summary>One edge of the wheel or a side button: MouseMiddle / Mouse4 / Mouse5.</summary>
+    public static void Button(string button, bool down)
+    {
+        if (button == "MouseMiddle") Send(M(down ? 0x0020u : 0x0040u));
+        else Send(M(down ? 0x0080u : 0x0100u, data: button == "Mouse4" ? 1 : 2));
+    }
+
     public static void Scroll(int notches) => Send(M(0x0800, data: notches * 120));
 
     /// <summary>Tap on the screen picture: relative 0..1 coordinates of the primary screen.</summary>

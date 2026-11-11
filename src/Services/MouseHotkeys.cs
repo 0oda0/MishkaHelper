@@ -53,11 +53,12 @@ public static class MouseHotkeys
 
     public static bool Active => _thread != 0;
 
-    /// <summary>Replaces all mouse hotkeys. An empty map removes the hook entirely.</summary>
-    public static void Set(Dictionary<(uint Mods, string Button), string> map)
+    /// <summary>Replaces all mouse hotkeys. Without hotkeys and extras the hook is removed entirely.</summary>
+    public static void Set(Dictionary<(uint Mods, string Button), string> map, bool extras = false)
     {
         lock (Map) { Map.Clear(); foreach (var kv in map) Map[kv.Key] = kv.Value; }
-        if (map.Count > 0 && _thread == 0)
+        bool need = map.Count > 0 || extras;
+        if (need && _thread == 0)
         {
             var started = new ManualResetEventSlim();
             new Thread(() =>
@@ -71,7 +72,7 @@ public static class MouseHotkeys
             }) { IsBackground = true, Name = "Mouse hotkeys", Priority = ThreadPriority.AboveNormal }.Start();
             started.Wait(2000);
         }
-        else if (map.Count == 0 && _thread != 0)
+        else if (!need && _thread != 0)
         {
             PostThreadMessage(_thread, 0x0012 /* WM_QUIT */, IntPtr.Zero, IntPtr.Zero);
             _thread = 0;
@@ -100,20 +101,100 @@ public static class MouseHotkeys
         _ => null,
     };
 
+    // A press held back to see what it becomes: a wheel hold (menu), a side-button gesture, or, if neither, the plain click it was.
+    static string? _held;
+    static int _x0, _y0;
+    static bool _moved, _fired;
+    static System.Threading.Timer? _holdTimer;
+    const int HoldMs = 350, Slop = 12, GestureMin = 60;
+
+    static void Ui(Action a) => System.Windows.Application.Current?.Dispatcher.BeginInvoke(a);
+
     static IntPtr OnMouse(int code, IntPtr w, IntPtr l)
     {
         if (code < 0 || _paused) return CallNextHookEx(_hook, code, w, l);
         int msg = (int)w;
-        if (msg is not (0x207 or 0x208 or 0x20B or 0x20C)) return CallNextHookEx(_hook, code, w, l);   // the hot path: moves pass at once
+        if (msg == 0x200 && _held == null) return CallNextHookEx(_hook, code, w, l);   // the hot path: moves pass at once
         var info = Marshal.PtrToStructure<MSLL>(l);
-        if ((info.Flags & 1) != 0) return CallNextHookEx(_hook, code, w, l);   // injected clicks, e.g. from the phone remote
+        if ((info.Flags & 1) != 0) return CallNextHookEx(_hook, code, w, l);   // injected input: the phone remote, and our own replayed clicks
+        var mx = Settings.Current.Mouse;
+
+        if (msg == 0x200)
+        {
+            if (Math.Abs(info.X - _x0) > Slop || Math.Abs(info.Y - _y0) > Slop) _moved = true;
+            // A wheel hold that moves is the browser's autoscroll: hand the press back and step aside.
+            if (_moved && _held == Middle && !_fired) { Release(replayDown: true); }
+            return CallNextHookEx(_hook, code, w, l);
+        }
+        if (msg == 0x20A)
+        {
+            if (!mx.TaskbarVolume || !OverTaskbar(info.X, info.Y)) return CallNextHookEx(_hook, code, w, l);
+            int step = (short)(info.MouseData >> 16) > 0 ? 2 : -2;
+            Ui(() => { Audio.Volume += step; Osd.Show("\uE767", "Громкость", Audio.Volume); });
+            return (IntPtr)1;
+        }
         if (Decode(msg, info.MouseData) is not { } b) return CallNextHookEx(_hook, code, w, l);
-        if (!b.Down) return Swallowed.Remove(b.Button) ? (IntPtr)1 : CallNextHookEx(_hook, code, w, l);
+        if (!b.Down)
+        {
+            if (Swallowed.Remove(b.Button)) return (IntPtr)1;
+            if (_held == b.Button)
+            {
+                if (_held != Middle && _moved && Gesture(info.X - _x0, info.Y - _y0) is { } dir
+                    && mx.GestureActions.GetValueOrDefault(dir, "") is { Length: > 0 } act)
+                    Ui(() => { Log.Info("mouse gesture " + dir); Actions.Run(act); });
+                else if (!_fired) Replay(b.Button);
+                _held = null; _holdTimer?.Dispose();
+                return (IntPtr)1;
+            }
+            return CallNextHookEx(_hook, code, w, l);
+        }
         string? action;
         lock (Map) Map.TryGetValue((Mods(), b.Button), out action);
-        if (action == null) return CallNextHookEx(_hook, code, w, l);
-        Swallowed.Add(b.Button);
-        System.Windows.Application.Current?.Dispatcher.BeginInvoke(() => { Log.Info("mouse hotkey " + action); Actions.Run(action); });
+        if (action != null)
+        {
+            Swallowed.Add(b.Button);
+            Ui(() => { Log.Info("mouse hotkey " + action); Actions.Run(action); });
+            return (IntPtr)1;
+        }
+        if (_held != null || Mods() != 0) return CallNextHookEx(_hook, code, w, l);
+        bool hold = b.Button == Middle && mx.HoldWheelRadial;
+        bool gesture = b.Button != Middle && mx.Gestures && b.Button == mx.GestureButton;
+        if (!hold && !gesture) return CallNextHookEx(_hook, code, w, l);
+        _held = b.Button; _x0 = info.X; _y0 = info.Y; _moved = _fired = false;
+        if (hold)
+            _holdTimer = new System.Threading.Timer(_ =>
+            {
+                if (_held != Middle || _moved) return;
+                _fired = true;
+                Ui(RadialMenu.Toggle);
+            }, null, HoldMs, Timeout.Infinite);
         return (IntPtr)1;
+    }
+
+    /// <summary>Gives a held press back as it was: the down now; its up then passes on its own.</summary>
+    static void Release(bool replayDown)
+    {
+        var b = _held; _held = null; _holdTimer?.Dispose();
+        if (replayDown && b != null) Ui(() => InputSim.Button(b, down: true));
+    }
+
+    static void Replay(string button) => Ui(() => { InputSim.Button(button, true); InputSim.Button(button, false); });
+
+    /// <summary>Which way a held side-button moved: the longer axis wins; too short is no gesture.</summary>
+    internal static string? Gesture(int dx, int dy) =>
+        Math.Max(Math.Abs(dx), Math.Abs(dy)) < GestureMin ? null
+        : Math.Abs(dx) > Math.Abs(dy) ? (dx > 0 ? "right" : "left") : (dy > 0 ? "down" : "up");
+
+    [StructLayout(LayoutKind.Sequential)] struct POINT { public int X, Y; }
+    [DllImport("user32.dll")] static extern IntPtr WindowFromPoint(POINT p);
+    [DllImport("user32.dll")] static extern IntPtr GetAncestor(IntPtr h, uint flags);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetClassName(IntPtr h, System.Text.StringBuilder s, int n);
+
+    static bool OverTaskbar(int x, int y)
+    {
+        var root = GetAncestor(WindowFromPoint(new POINT { X = x, Y = y }), 2 /* GA_ROOT */);
+        var sb = new System.Text.StringBuilder(64);
+        GetClassName(root, sb, 64);
+        return sb.ToString() is "Shell_TrayWnd" or "Shell_SecondaryTrayWnd";
     }
 }

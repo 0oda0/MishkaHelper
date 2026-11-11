@@ -64,6 +64,13 @@ public static class Tweaks
     }
 
     /// <summary>Sticky keys popup after 5×Shift (classic game annoyance).</summary>
+    /// <summary>Windows' Dynamic Lock: locks the PC a minute after the Bluetooth-paired phone is out of range.</summary>
+    public static bool DynamicLock
+    {
+        get { using var k = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows NT\CurrentVersion\Winlogon"); return k?.GetValue("EnableGoodbye") is int v && v == 1; }
+        set { using var k = Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\Windows NT\CurrentVersion\Winlogon"); k.SetValue("EnableGoodbye", value ? 1 : 0, RegistryValueKind.DWord); }
+    }
+
     public static bool StickyKeysShortcut
     {
         get

@@ -117,9 +117,13 @@ public static class Phone
             case "notif":
                 var n = new Notification(S(m, "app"), S(m, "title"), S(m, "text"), DateTime.Now);
                 lock (Notifications) { Notifications.Insert(0, n); if (Notifications.Count > 50) Notifications.RemoveAt(50); }
-                if (Focus.On) Interlocked.Increment(ref Focus.HeldNotifications);   // shown as one summary when the game ends
+                bool call = S(m, "call") == "true";
+                var buttons = Buttons(S(m, "id"), n.Title, m["actions"] as JsonArray);
+                // A call gets through even in a game: it's the one thing that can't wait until later.
+                if (Focus.On && !call) Interlocked.Increment(ref Focus.HeldNotifications);   // shown as one summary when the game ends
                 else if (Settings.Current.PhoneNotifications)
-                    Application.Current?.Dispatcher.BeginInvoke(() => Toast.Show("", $"{n.App}: {n.Title}", n.Text.Length > 160 ? n.Text[..160] + "…" : n.Text));
+                    Application.Current?.Dispatcher.BeginInvoke(() => Toast.Show(call ? "\uE717" : "\uE8EA", call ? $"Звонок: {n.Title}" : $"{n.App}: {n.Title}",
+                        n.Text.Length > 160 ? n.Text[..160] + "…" : n.Text, null, buttons.Length > 0 ? buttons : null));
                 Fire();
                 break;
             case "clip":
@@ -128,6 +132,27 @@ public static class Phone
                     Application.Current?.Dispatcher.BeginInvoke(() => { try { Clipboard.SetText(text); Osd.Show("", "Текст с телефона в буфере"); } catch { } });
                 break;
         }
+    }
+
+    /// <summary>The notification's own buttons, pressed on the phone. A reply asks for the text here first.</summary>
+    static (string, Action)[] Buttons(string id, string to, JsonArray? actions)
+    {
+        if (id.Length == 0 || actions == null) return Array.Empty<(string, Action)>();
+        var list = new List<(string, Action)>();
+        for (int i = 0; i < actions.Count && i < 3; i++)
+        {
+            if (actions[i] is not JsonObject a) continue;
+            int idx = i;
+            var title = S(a, "title");
+            if (S(a, "reply") == "true")
+                list.Add((title.Length > 0 ? title : "Ответить", () =>
+                {
+                    var text = UiKit.Ask("Ответ", $"Ответ для «{to}» уйдёт с телефона");
+                    if (text.Length > 0) _ = Send(new { t = "act", id, i = idx, text });
+                }));
+            else list.Add((title, () => _ = Send(new { t = "act", id, i = idx })));
+        }
+        return list.ToArray();
     }
 
     static async Task<bool> Send(object o)

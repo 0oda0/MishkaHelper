@@ -268,6 +268,11 @@ public static class Secretary
         if (S.Meetings || S.Prep) _ = Prepare(now);
         if (S.Habits && _tick % 1800 == 0) CheckHabits(now);
         if (S.LongSession && S.Tasks) CheckLongSession(now);
+        if (S.CheckIns && S.Tasks && idle < 60_000 && !CurrentFullScreen && !Focus.On && CheckInDue(S.CheckInHours, store.LastCheckIn, now))
+        {
+            store.LastCheckIn = now; SecStore.Save();
+            CheckIn(now);
+        }
         if (S.Workspace && _tick % 450 == 0 && idle < 5 * 60_000) _ = SecWorkspace.AutoSave();
         if (S.Mail && _tick % (Math.Max(5, S.MailMinutes) * 30) == 15) _ = SecMail.Check();
     }
@@ -369,6 +374,29 @@ public static class Secretary
             }
         }
         catch (Exception e) { Log.Error(e); }
+    }
+
+    /// <summary>A check-in hour has come and there was no check-in since it. Pure, for tests.</summary>
+    internal static bool CheckInDue(List<int> hours, DateTime last, DateTime now) =>
+        hours.Where(h => h is >= 0 and < 24).Select(h => now.Date.AddHours(h)).Any(at => now >= at && last < at && (now - at).TotalHours < 3);
+
+    /// <summary>
+    /// "Как дела с планами?": today's open tasks land in the window, each with Сделано / На завтра, so the day gets sorted in a few clicks.
+    /// No plans at all → it asks what they are, with one press to write them down.
+    /// </summary>
+    static void CheckIn(DateTime now)
+    {
+        var today = OpenTasks().Where(t => t.Due == null || t.Due?.Date <= now.Date).Take(6).ToList();
+        if (today.Count == 0)
+        {
+            Toast.Show("\uE70B", S.Name, now.Hour < 15 ? "Что на сегодня в планах? Запишу и напомню." : "Что ещё хочешь успеть сегодня или завтра?",
+                null, new (string, Action)[] { ("Записать", () => SecCapture.Quick()), ("Не сейчас", () => { }) });
+            return;
+        }
+        foreach (var t in today) SecInbox.Add(new InboxItem { Kind = "plan", Title = "Как с этим?", Text = t.Text, Ref = t.Id, At = t.Due });
+        Toast.Show("\uE70B", "Как дела с планами?", string.Join("\n", today.Take(3).Select(t => "• " + t.Text)) + (today.Count > 3 ? $"\nи ещё {today.Count - 3}" : ""),
+            () => SecDesk.Open(activate: true), new (string, Action)[] { ("Отметить", () => SecDesk.Open(activate: true)), ("Позже", () => { SecStore.Cur.LastCheckIn = DateTime.Now.AddHours(-3); SecStore.Save(); }) });
+        ToPhoneIfAway($"Как дела с планами? {today[0].Text}" + (today.Count > 1 ? $" и ещё {today.Count - 1}" : ""));
     }
 
     static void CheckHabits(DateTime now)

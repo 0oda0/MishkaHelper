@@ -66,6 +66,8 @@ public partial class ControlsPage : UserControl
         AddSwitch("Тёмная тема Windows", () => Tweaks.DarkTheme, v => Tweaks.DarkTheme = v);
         AddSwitch("Эффекты прозрачности", () => Tweaks.Transparency, v => Tweaks.Transparency = v);
         AddSwitch("Игровой режим Windows", () => Tweaks.GameMode, v => Tweaks.GameMode = v);
+        AddSwitch("Тишина в играх включается сама (звук только у игры и голосовых чатов)", () => Settings.Current.FocusAuto, v => { Settings.Current.FocusAuto = v; Settings.Save(); });
+        AddSwitch("Оверлей в игре: FPS, загрузка и температуры в углу", () => Settings.Current.GameOverlay, v => { Settings.Current.GameOverlay = v; Settings.Save(); GameOverlay.Follow(); });
         AddSwitch("Анимации интерфейса", () => Tweaks.Animations, v => Tweaks.Animations = v);
         AddSwitch("Показывать расширения файлов", () => Tweaks.ShowExtensions, v => Tweaks.ShowExtensions = v);
         AddSwitch("Показывать скрытые файлы", () => Tweaks.ShowHidden, v => Tweaks.ShowHidden = v);

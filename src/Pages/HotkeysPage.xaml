@@ -14,6 +14,12 @@
         </Border>
 
         <Border Style="{StaticResource Card}">
+            <StackPanel x:Name="MouseBox">
+                <TextBlock Text="Мышь" Style="{StaticResource H2}"/>
+            </StackPanel>
+        </Border>
+
+        <Border Style="{StaticResource Card}">
             <StackPanel>
                 <TextBlock Text="Профили" Style="{StaticResource H2}"/>
                 <StackPanel x:Name="ProfileRows"/>

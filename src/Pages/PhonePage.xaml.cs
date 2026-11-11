@@ -107,6 +107,17 @@ public partial class PhonePage : UserControl
         var sw = new CheckBox { Style = S("Switch"), Content = "Показывать всплывающими на ПК", IsChecked = Settings.Current.PhoneNotifications };
         sw.Click += (_, _) => { Settings.Current.PhoneNotifications = sw.IsChecked == true; Settings.Save(); };
         b.Children.Add(sw);
+        b.Children.Add(UiKit.Text("Звонок показывается даже в игре; с кнопками «Ответить» / «Отклонить» телефона. На сообщения можно ответить прямо отсюда.", 11, true));
+        var dl = new CheckBox { Style = S("Switch"), Content = "Блокировать ПК, когда телефон ушёл (динамическая блокировка Windows)", IsChecked = Tweaks.DynamicLock, Margin = new Thickness(0, 6, 0, 0) };
+        dl.Click += (_, _) =>
+        {
+            Tweaks.DynamicLock = dl.IsChecked == true;
+            if (dl.IsChecked == true) Osd.Show("\uE72E", "Телефон должен быть сопряжён с ПК по Bluetooth");
+        };
+        b.Children.Add(dl);
+        var bt = new Button { Content = "Сопрячь телефон по Bluetooth", HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 4, 0, 0) };
+        bt.Click += (_, _) => Shell.Open("ms-settings:bluetooth");
+        b.Children.Add(bt);
         List<Phone.Notification> list;
         lock (Phone.Notifications) list = Phone.Notifications.Take(12).ToList();
         if (list.Count == 0) b.Children.Add(UiKit.Text("Пока пусто.", 12, true));

@@ -11,6 +11,8 @@
             <RadioButton Style="{StaticResource Segment}" Content="Большие файлы" GroupName="tab" Tag="large" Checked="Tab_Checked"/>
             <RadioButton Style="{StaticResource Segment}" Content="Дубликаты" GroupName="tab" Tag="dups" Checked="Tab_Checked"/>
             <RadioButton Style="{StaticResource Segment}" Content="Программы" GroupName="tab" Tag="apps" Checked="Tab_Checked"/>
+            <RadioButton Style="{StaticResource Segment}" Content="Обслуживание" GroupName="tab" Tag="care" Checked="Tab_Checked"/>
+            <RadioButton Style="{StaticResource Segment}" Content="Программы для нового ПК" GroupName="tab" Tag="kit" Checked="Tab_Checked"/>
         </WrapPanel>
         <ContentControl x:Name="Body"/>
     </StackPanel>

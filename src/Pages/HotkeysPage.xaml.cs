@@ -23,6 +23,45 @@ public partial class HotkeysPage : UserControl
         ProfileRows.Children.Clear();
         foreach (var p in Settings.Current.Profiles) ProfileRows.Children.Add(Row("profile:" + p.Name, "Профиль «" + p.Name + "»"));
         RenderLaunchers();
+        RenderMouse();
+    }
+
+    void RenderMouse()
+    {
+        while (MouseBox.Children.Count > 1) MouseBox.Children.RemoveAt(1);
+        var m = Settings.Current.Mouse;
+        CheckBox Sw(string text, bool on, Action<bool> set)
+        {
+            var c = new CheckBox { Style = (Style)FindResource("Switch"), Content = text, IsChecked = on, Margin = new Thickness(0, 4, 0, 0) };
+            c.Click += (_, _) => { set(c.IsChecked == true); Settings.Save(); Hotkeys.Reload(); RenderMouse(); };
+            MouseBox.Children.Add(c);
+            return c;
+        }
+        Sw("Колёсико над панелью задач меняет громкость", m.TaskbarVolume, v => m.TaskbarVolume = v);
+        Sw("Удержать колёсико — радиальное меню (короткий клик работает как обычно)", m.HoldWheelRadial, v => m.HoldWheelRadial = v);
+        Sw("Жесты: держи боковую кнопку и веди мышь в сторону", m.Gestures, v => m.Gestures = v);
+        if (!m.Gestures) return;
+        var which = new ComboBox { Width = 220, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 6, 0, 4) };
+        which.Items.Add(new ComboBoxItem { Content = "Кнопка «вперёд»", Tag = MouseHotkeys.Forward });
+        which.Items.Add(new ComboBoxItem { Content = "Кнопка «назад»", Tag = MouseHotkeys.Back });
+        which.SelectedIndex = m.GestureButton == MouseHotkeys.Back ? 1 : 0;
+        which.SelectionChanged += (_, _) => { m.GestureButton = (string)((ComboBoxItem)which.SelectedItem).Tag; Settings.Save(); Hotkeys.Reload(); };
+        MouseBox.Children.Add(which);
+        var names = Defaults.HotkeyNames.Where(k => Defaults.Available(k.Key)).ToList();
+        foreach (var (dir, label) in new[] { ("up", "Вверх ↑"), ("down", "Вниз ↓"), ("left", "Влево ←"), ("right", "Вправо →") })
+        {
+            var row = new DockPanel { Margin = new Thickness(0, 2, 0, 2) };
+            var t = UiKit.Text(label, 13); t.Width = 90; t.VerticalAlignment = VerticalAlignment.Center;
+            var pick = new ComboBox { Width = 380, HorizontalAlignment = HorizontalAlignment.Left };
+            pick.Items.Add(new ComboBoxItem { Content = "ничего", Tag = "" });
+            foreach (var (key, name) in names) pick.Items.Add(new ComboBoxItem { Content = name, Tag = key });
+            var cur = m.GestureActions.GetValueOrDefault(dir, "");
+            pick.SelectedItem = pick.Items.Cast<ComboBoxItem>().FirstOrDefault(i => (string)i.Tag == cur) ?? pick.Items[0];
+            pick.SelectionChanged += (_, _) => { m.GestureActions[dir] = (string)((ComboBoxItem)pick.SelectedItem).Tag; Settings.Save(); };
+            row.Children.Add(t); row.Children.Add(pick);
+            MouseBox.Children.Add(row);
+        }
+        MouseBox.Children.Add(UiKit.Text("Короткое нажатие кнопки без движения работает как обычно («назад» / «вперёд» в браузере).", 11, true));
     }
 
     UIElement Row(string action, string name)
