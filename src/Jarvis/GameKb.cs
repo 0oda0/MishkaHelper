@@ -33,6 +33,7 @@ public class GameBase
     public List<string> Exe { get; set; } = new();   // process names (without .exe) that mean "this game is in front"
     public int AppId { get; set; }
     public string Wiki { get; set; } = "";       // MediaWiki api.php the base was built from
+    public string WikiLang { get; set; } = "en";
     public DateTime Built { get; set; }
     public string Status { get; set; } = "";     // "" ready; otherwise what is happening or what went wrong
     public double Done { get; set; }             // 0..1 while building
@@ -52,7 +53,7 @@ public static class GameKb
     {
         ("about", "Об игре", "\uE946"), ("stage", "Этапы и сюжет", "\uE8A1"), ("location", "Локации", "\uE707"), ("boss", "Боссы", "\uE7EF"),
         ("quest", "Задания", "\uE73E"), ("character", "Персонажи", "\uE77B"), ("item", "Предметы", "\uE7B8"), ("mechanic", "Механики", "\uE90F"),
-        ("problem", "Проблемы и решения", "\uE90A"), ("found", "Найдено по запросу", "\uE721"),
+        ("arc", "Линии персонажей", "\uE8D4"), ("problem", "Проблемы и решения", "\uE90A"), ("found", "Найдено по запросу", "\uE721"),
     };
     public static string KindName(string k) => Kinds.FirstOrDefault(x => x.Key == k).Name ?? k;
 

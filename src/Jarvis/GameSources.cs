@@ -33,7 +33,7 @@ public static class GameSources
     public static async Task<int> SteamFind(string name)
     {
         var j = await Get($"https://store.steampowered.com/api/storesearch/?term={E(name)}&l=russian&cc=RU");
-        return j?["items"]?[0]?["id"]?.GetValue<int>() ?? 0;
+        return (j?["items"] as JsonArray)?.FirstOrDefault()?["id"]?.GetValue<int>() ?? 0;   // [0] of an empty array throws
     }
 
     public static async Task<SteamInfo?> Steam(int appId)
@@ -126,7 +126,7 @@ public static class GameSources
     public static async Task<string?> Search(string api, string query)
     {
         var j = await Get($"{api}?action=query&list=search&srsearch={E(query)}&srlimit=1&format=json");
-        return j?["query"]?["search"]?[0]?["title"]?.GetValue<string>();
+        return (j?["query"]?["search"] as JsonArray)?.FirstOrDefault()?["title"]?.GetValue<string>();
     }
 
     public static string PageUrl(string api, string title) => api.Replace("api.php", "index.php") + "?title=" + E(title.Replace(' ', '_'));

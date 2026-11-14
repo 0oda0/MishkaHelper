@@ -57,7 +57,7 @@ public static class LlamaServer
     static readonly int Port = int.TryParse(Environment.GetEnvironmentVariable("MISHKA_LLAMA_PORT"), out var p) ? p : 18765;
     static Process? _proc;
     static string? _model;
-    static readonly HttpClient Http = new() { BaseAddress = new Uri($"http://127.0.0.1:{Port}"), Timeout = TimeSpan.FromMinutes(3) };
+    static readonly HttpClient Http = new() { BaseAddress = new Uri($"http://127.0.0.1:{Port}"), Timeout = TimeSpan.FromMinutes(10) };   // a long write-up on a busy GPU takes minutes
     static readonly SemaphoreSlim StartLock = new(1, 1);
 
     static string Exe => Path.Combine(Models.PathOf(Runtime), "llama-server.exe");

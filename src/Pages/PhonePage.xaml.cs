@@ -50,6 +50,7 @@ public partial class PhonePage : UserControl
     {
         var s = Settings.Current;
         var (c, b) = Card(Phone.Connected ? "Подключён" : "Не подключён");
+        if (!Phone.Connected) _ = WarnPublic(b);
         if (Phone.Connected && Phone.Last is { } st)
         {
             b.Children.Add(UiKit.Text(st.Name, 16, weight: FontWeights.SemiBold));
@@ -74,6 +75,27 @@ public partial class PhonePage : UserControl
             b.Children.Add(UiKit.Text($"Компьютер: {Environment.MachineName} · {Remote.LocalIp()}", 12, true));
         }
         return c;
+    }
+
+    /// <summary>The usual reason the phone can't connect: Windows thinks the home Wi-Fi is a public one.</summary>
+    async Task WarnPublic(StackPanel b)
+    {
+        var nets = await Remote.PublicLans();
+        if (nets.Count == 0) return;
+        var warn = UiKit.Text($"Сеть «{string.Join("», «", nets)}» в Windows отмечена как общественная — в такой сети Windows не пускает телефон к ПК. " +
+            "Если это твоя домашняя сеть, сделай её частной.", 12);
+        warn.Foreground = (System.Windows.Media.Brush)FindResource("WarnBrush");
+        warn.TextWrapping = TextWrapping.Wrap; warn.Margin = new Thickness(0, 6, 0, 6);
+        b.Children.Insert(1, warn);
+        var row = new WrapPanel();
+        foreach (var n in nets)
+            Btn(row, $"Сделать «{n}» домашней", async () =>
+            {
+                if (!UiKit.Confirm($"Отметить сеть «{n}» как частную (домашнюю)?\n\nДелай так только дома: в частной сети Windows разрешает устройствам видеть этот ПК.")) return;
+                await Remote.MakePrivate(n);
+                Render();
+            }, true);
+        b.Children.Insert(2, row);
     }
 
     UIElement ActionsCard()

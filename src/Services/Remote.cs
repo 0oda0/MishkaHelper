@@ -198,6 +198,27 @@ public static class Remote
         System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(a), Encoding.UTF8.GetBytes(b));
 
     /// <summary>6 random digits (crypto RNG). Older 4-digit PINs are replaced: 10 000 variants is too few for a remote with full keyboard control.</summary>
+    /// <summary>
+    /// Wi-Fi or cable networks Windows calls "public". The remote's firewall rule is for private (home) networks only,
+    /// so on a network marked public the phone can't get in — the usual reason it "doesn't connect".
+    /// </summary>
+    public static async Task<List<string>> PublicLans()
+    {
+        var o = await Shell.RunAsync("powershell", "-NoProfile -Command \"Get-NetConnectionProfile | Where-Object { $_.NetworkCategory -eq 'Public' } | " +
+            "Where-Object { (Get-NetAdapter -InterfaceAlias $_.InterfaceAlias -ErrorAction SilentlyContinue).PhysicalMediaType -match '802' } | ForEach-Object { $_.InterfaceAlias }\"", 20000, System.Text.Encoding.UTF8);
+        return o.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Where(SafeAlias).ToList();
+    }
+
+    internal static bool SafeAlias(string a) => a.Length is > 0 and < 80 && System.Text.RegularExpressions.Regex.IsMatch(a, @"^[\p{L}\p{N} ._()#-]+$");
+
+    /// <summary>Marks a network private (home): only on the user's button, and only a name Windows itself just gave.</summary>
+    public static async Task MakePrivate(string alias)
+    {
+        if (!SafeAlias(alias)) return;
+        await Shell.RunAsync("powershell", $"-NoProfile -Command \"Set-NetConnectionProfile -InterfaceAlias '{alias}' -NetworkCategory Private\"", 20000);
+        Log.Info("network made private: " + alias);
+    }
+
     public static void EnsurePin()
     {
         var s = Settings.Current;

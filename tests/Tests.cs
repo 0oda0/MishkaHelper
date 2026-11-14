@@ -848,6 +848,10 @@ public class GameKbTests
         Assert.Equal(3, GameBuilder.Search(b, "").Count());
         Assert.Equal("Тётушка Этель", GameBuilder.Rank(b, "как победить Этель?").First().Title);   // question words don't block the match
         Assert.Empty(GameBuilder.Rank(b, "как победить?"));
+        Assert.Equal(GameBuilder.Norm("Касадор"), GameBuilder.Norm("Казадор"));
+        Assert.Equal(GameBuilder.Norm("Астарион"), GameBuilder.Norm("Астарийон"));
+        Assert.Equal(GameBuilder.Norm("Сзар"), GameBuilder.Norm("Сзарр"));
+        Assert.Equal("Тётушка Этель", GameBuilder.Search(b, "тетушка").First().Title);
     }
 
     [Theory]
@@ -855,6 +859,10 @@ public class GameKbTests
     [InlineData("Please try again in 1m3.2s.", 63.2)]
     [InlineData("Please try again in 2h10m.", 7800)]
     public void ProviderSaysWhen(string body, double seconds) => Assert.Equal(seconds, Online.RetryAfter(body)!.Value.TotalSeconds, 1);
+
+    [Theory]
+    [InlineData("WiFi", true)] [InlineData("Беспроводная сеть 2", true)] [InlineData("Ethernet (USB)", true)] [InlineData("x'; Remove-Item C:\\", false)] [InlineData("", false)]
+    public void NetworkNames(string alias, bool ok) => Assert.Equal(ok, Remote.SafeAlias(alias));
 
     [Fact] public void NoWaitWithoutHint() => Assert.Null(Online.RetryAfter("quota exceeded"));
 }
