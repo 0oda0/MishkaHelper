@@ -64,14 +64,24 @@ public static class Online
         try
         {
             await Vpn.EnsureFor(Url);
-            var req = new HttpRequestMessage(HttpMethod.Post, Url + "/chat/completions")
-            { Content = new StringContent(Body(localBody, Model).ToJsonString(), Encoding.UTF8, "application/json") };
-            req.Headers.Authorization = new("Bearer", Key);
-            var resp = await Http.SendAsync(req, stream ? HttpCompletionOption.ResponseHeadersRead : HttpCompletionOption.ResponseContentRead);
-            if (resp.IsSuccessStatusCode) { LastError = ""; return resp; }
-            var err = await resp.Content.ReadAsStringAsync();
-            var code = resp.StatusCode;
-            resp.Dispose();
+            HttpResponseMessage resp;
+            string err;
+            HttpStatusCode code;
+            for (int attempt = 0; ; attempt++)
+            {
+                var req = new HttpRequestMessage(HttpMethod.Post, Url + "/chat/completions")
+                { Content = new StringContent(Body(localBody, Model).ToJsonString(), Encoding.UTF8, "application/json") };
+                req.Headers.Authorization = new("Bearer", Key);
+                resp = await Http.SendAsync(req, stream ? HttpCompletionOption.ResponseHeadersRead : HttpCompletionOption.ResponseContentRead);
+                if (resp.IsSuccessStatusCode) { LastError = ""; return resp; }
+                err = await resp.Content.ReadAsStringAsync();
+                code = resp.StatusCode;
+                resp.Dispose();
+                // The per-minute limit says when to come back: a short wait is worth it, the daily one isn't.
+                if (code == HttpStatusCode.TooManyRequests && attempt < 4 && RetryAfter(err) is { } wait && wait <= TimeSpan.FromSeconds(90))
+                { Log.Info($"online brain: per-minute limit, waiting {wait.TotalSeconds:0} s"); await Task.Delay(wait + TimeSpan.FromSeconds(1)); continue; }
+                break;
+            }
             LastError = Explain(code, err);
             Log.Info($"online brain {(int)code}: {(err.Length > 300 ? err[..300] : err)}");
             if (localFallback && code is HttpStatusCode.TooManyRequests or >= HttpStatusCode.InternalServerError) return null;
@@ -85,8 +95,18 @@ public static class Online
         }
     }
 
+    /// <summary>"Please try again in 12.5s" / "in 1m3.2s" from the provider's limit message.</summary>
+    internal static TimeSpan? RetryAfter(string body)
+    {
+        var m = System.Text.RegularExpressions.Regex.Match(body, @"try again in (?:(\d+)h)?(?:(\d+)m)?(?:([\d.]+)s)?", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        if (!m.Success || m.Length < 14) return null;
+        double S(int g) => double.TryParse(m.Groups[g].Value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var v) ? v : 0;
+        return TimeSpan.FromSeconds(S(1) * 3600 + S(2) * 60 + S(3));
+    }
+
     internal static string Explain(HttpStatusCode code, string body) => code switch
     {
+        HttpStatusCode.TooManyRequests when RetryAfter(body) is { } w && w < TimeSpan.FromMinutes(5) => "Сервис просит подождать минуту: слишком много запросов подряд.",
         HttpStatusCode.Unauthorized => "Ключ не подошёл. Скопируй его заново со страницы ключей.",
         HttpStatusCode.Forbidden => "Сервис не пускает: возможно, он недоступен из твоей страны. Включи VPN.",
         HttpStatusCode.TooManyRequests => "Бесплатный лимит на сегодня закончился. Завтра снова заработает.",

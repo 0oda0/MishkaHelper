@@ -314,7 +314,7 @@ public static class Secretary
     {
 #if JARVIS
         var l = await Today();
-        if (Settings.Current.Jarvis.Speak) _ = Voice.Say(SecVoiceTone.Greeting(DateTime.Now, S) + ". " + (l.Count == 0 ? "На сегодня дел нет." : string.Join(". ", l.Take(4).Select(x => x.Text))));
+        if (Edition.HasJarvis && Settings.Current.Jarvis.Speak) _ = Voice.Say(SecVoiceTone.Greeting(DateTime.Now, S) + ". " + (l.Count == 0 ? "На сегодня дел нет." : string.Join(". ", l.Take(4).Select(x => x.Text))));
 #else
         await Task.CompletedTask;
 #endif

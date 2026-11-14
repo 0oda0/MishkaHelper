@@ -525,13 +525,16 @@ public static partial class Widgets
         var root = Header("\uE787", "Ближайшие дела", list);
         var add = new Button { Content = "+ Добавить", Style = (Style)Application.Current.Resources["GhostButton"], HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 6, 0, 0),
             ToolTip = "Напиши как есть: «в пятницу сдать отчёт», «завтра в 18:00 тренировка»" };
+        add.Visibility = Edition.HasJarvis || Edition.HasSecretary ? Visibility.Visible : Visibility.Collapsed;
+        add.Click += (_, _) =>
+        {
 #if JARVIS
-        add.Click += (_, _) => JarvisInput.Toggle();
-#elif SECRETARY
-        add.Click += (_, _) => SecCapture.Quick();
-#else
-        add.Visibility = Visibility.Collapsed;
+            if (Edition.HasJarvis) { JarvisInput.Toggle(); return; }
 #endif
+#if SECRETARY
+            if (Edition.HasSecretary) SecCapture.Quick();
+#endif
+        };
         root.Children.Add(add);
 
         async void Load()
@@ -544,14 +547,14 @@ public static partial class Widgets
                     catch { }
 #endif
             #if SECRETARY
-            if (Settings.Current.Secretary.Enabled)
+            if (Edition.HasSecretary && Settings.Current.Secretary.Enabled)
                 foreach (var line in await SecSchedule.Lines(DateTime.Today))
                     if (SecPlan.LineTime(line) is { } lt && DateTime.Today + lt >= DateTime.Now) items.Add((DateTime.Today + lt, true, line, null));
 #endif
             list.Children.Clear();
             var tasks = new List<(string Text, Action Done)>();
 #if SECRETARY
-            if (Settings.Current.Secretary.Enabled && Settings.Current.Secretary.Tasks)
+            if (Edition.HasSecretary && Settings.Current.Secretary.Enabled && Settings.Current.Secretary.Tasks)
                 foreach (var t in Secretary.OpenTasks().Take(6)) tasks.Add((t.Due is { } due ? $"{t.Text} · {due:dd.MM}" : t.Text, () => Secretary.Finish(t)));
 #endif
             if (items.Count == 0 && tasks.Count == 0) { list.Children.Add(UiKit.Text((Edition.HasJarvis ? "На неделю ничего. Скажи или напиши Джарвису: " : Edition.HasSecretary ? "На неделю ничего. Нажми «Добавить» и напиши: " : "На неделю ничего. ") + "«в пятницу сдать отчёт».", 12, true)); return; }

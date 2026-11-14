@@ -22,6 +22,7 @@ public static class Defaults
         ["focus"] = "Игровой режим (тишина, звук только у игры)",
         ["overlay"] = "Оверлей в игре: FPS и температуры",
         ["replay"] = "Записать последние 30 секунд игры (Xbox Game Bar)",
+        ["gameKb"] = "Игровой помощник: база знаний этой игры",
         ["widgets"] = "Показать/скрыть виджеты",
         ["fanMax"] = "Вентиляторы на максимум",
         ["jarvis"] = "Джарвис: слушать команду",
@@ -55,7 +56,7 @@ public static class Defaults
 
     /// <summary>Jarvis and secretary actions exist only in the editions that have them.</summary>
     public static bool Available(string action) =>
-        (Edition.HasJarvis || !action.StartsWith("jarvis")) && (Edition.HasSecretary || !action.StartsWith("sec"));
+        (Edition.HasJarvis || !action.StartsWith("jarvis")) && (Edition.HasSecretary || !action.StartsWith("sec")) && (Edition.HasGames || !action.StartsWith("game"));
 
     public static void Fill(AppSettings s)
     {
@@ -87,6 +88,7 @@ public static class Defaults
             ["topmost"] = "Ctrl+Alt+T",
             ["opacity"] = "Ctrl+Alt+Y",
             ["killFg"] = "Ctrl+Alt+F4",
+            ["gameKb"] = "Ctrl+Alt+F1",
             ["colorPick"] = "Ctrl+Alt+C",
             ["screenOff"] = "", ["keepAwake"] = "", ["lock"] = "", ["night"] = "Ctrl+Alt+N",
             ["wifi"] = "", ["bt"] = "", ["recycle"] = "", ["explorer"] = "",

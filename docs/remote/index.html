@@ -77,6 +77,19 @@ nav button{border-radius:0;background:none;padding:14px 0;font-size:12px;min-wid
     <div class="c" id="secSetsBox" hidden><div class="m">Наборы (откроются на ПК)</div><div class="r" id="secSets"></div></div>
   </section>
 
+  <section id="t-game" hidden>
+    <div class="c"><select id="kbGame" onchange="loadKb(this.value)"></select>
+      <p id="kbNote" class="m"></p>
+      <select id="kbStage" onchange="kbSetStage()"></select><br><br>
+      <input id="kbQ" type="search" placeholder="Поиск: босс, предмет, локация…" oninput="kbFill()"><br><br>
+      <select id="kbKind" onchange="kbFill()"></select></div>
+    <div class="c" id="kbEntry" hidden><div class="m" id="kbMeta"></div><h3 id="kbTitle" style="margin:6px 0"></h3><div id="kbText" style="white-space:pre-line;line-height:1.5"></div>
+      <br><button id="kbReveal" onclick="kbRevealNow()" hidden>Показать спойлер</button></div>
+    <div class="c"><div id="kbList"></div></div>
+    <div class="c"><input id="kbAskQ" type="text" placeholder="Спросить: как победить…, где найти…" enterkeyhint="send" onkeydown="if(event.key==='Enter')kbAsk()">
+      <br><br><button onclick="kbAsk()">Спросить</button><p id="kbAns" class="m" style="white-space:pre-line"></p></div>
+  </section>
+
   <section id="t-media" hidden>
     <div class="c"><div class="r" id="svc"></div></div>
     <div class="c"><input id="mq" type="search" placeholder="Найти видео или фильм" enterkeyhint="search" onkeydown="if(event.key==='Enter')find('yt')"><br><br>
@@ -134,7 +147,7 @@ nav button{border-radius:0;background:none;padding:14px 0;font-size:12px;min-wid
 </div>
 
 <nav id="nav" hidden>
-  <button data-t="main" class="on">Пульт</button><button data-t="sec" id="navSec" hidden>Дела</button><button data-t="media">Медиа</button><button data-t="pad">Тачпад</button><button data-t="kb">Клава</button><button data-t="scr">Экран</button><button data-t="files">Файлы</button>
+  <button data-t="main" class="on">Пульт</button><button data-t="sec" id="navSec" hidden>Дела</button><button data-t="game" id="navGame" hidden>Игра</button><button data-t="media">Медиа</button><button data-t="pad">Тачпад</button><button data-t="kb">Клава</button><button data-t="scr">Экран</button><button data-t="files">Файлы</button>
 </nav>
 
 <script>
@@ -185,6 +198,7 @@ function render(s) {
   $('bat').textContent = s.battery >= 0 ? (s.ac ? '⚡' : '🔋') + s.battery + '%' : '';
   $('jv').hidden = !s.jarvis;
   $('navSec').hidden = BLE || !s.secretary;
+  $('navGame').hidden = BLE || !s.games;
   todoNow = s.todo || [];
   $('subsBox').hidden = BLE || !s.jarvis;   // reading subscriptions uses the full edition's built-in browser
   if (!$('prof').childElementCount) for (const p of s.profiles) { const b = document.createElement('button'); b.textContent = p; b.onclick = () => api('profile', p); $('prof').append(b); }
@@ -234,6 +248,53 @@ async function secAdd() {
   $('secSaid').textContent = '…';
   const j = await api('secAsk', t);
   if (j) { $('secSaid').textContent = j.said; $('secSaid').style.whiteSpace = 'pre-line'; $('secIn').value = ''; loadSec(); }
+}
+
+// ---- game helper ----
+let kb = null, kbCur = null;
+async function loadGames() {
+  const j = await api('kbList'); if (!j) return;
+  const sel = $('kbGame'); sel.replaceChildren();
+  for (const g of j.games) { const o = document.createElement('option'); o.value = g.key; o.textContent = g.name + ' (' + g.count + ')'; sel.append(o); }
+  if (!j.games.length) { $('kbNote').textContent = 'Баз пока нет: собери их на ПК, страница «Игры».'; return; }
+  const key = j.games.some(g => g.key === j.current) ? j.current : (kb && kb.key) || j.games[0].key;
+  sel.value = key; loadKb(key);
+}
+async function loadKb(key) {
+  kb = await api('kb', key); if (!kb || kb.error) return;
+  $('kbNote').textContent = 'Записей: ' + kb.entries.length + '. Спойлеры дальше твоего этапа скрыты.';
+  const st = $('kbStage'); st.replaceChildren();
+  const add = (sel, v, t) => { const o = document.createElement('option'); o.value = v; o.textContent = t; sel.append(o); };
+  add(st, kb.stages.length + 1, 'Я прошёл всё — без скрытия');
+  for (const s of kb.stages) add(st, s.n, 'Я на этапе ' + s.n + (kb.progress > kb.stages.length || s.n <= kb.progress ? ': ' + s.name : ''));
+  st.value = kb.progress > kb.stages.length ? kb.stages.length + 1 : kb.progress;
+  const k = $('kbKind'); k.replaceChildren(); add(k, '', 'Всё');
+  for (const x of kb.kinds) add(k, x.key, x.name);
+  kbFill();
+}
+function kbHidden(e) { return kb.progress <= kb.stages.length && e.stage > kb.progress; }
+function kbFill() {
+  if (!kb) return;
+  const words = $('kbQ').value.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(w => w.length > 1).map(w => w.length > 6 ? w.slice(0, -2) : w.length > 4 ? w.slice(0, -1) : w);
+  const kind = $('kbKind').value;
+  const list = kb.entries.filter(e => (!kind || e.kind === kind) && words.every(w => (e.title + ' ' + e.en + ' ' + e.text).toLowerCase().includes(w))).slice(0, 150);
+  $('kbList').replaceChildren(...list.map(e => { const b = btn((kbHidden(e) && e.spoiler ? 'Спойлер · этап ' + e.stage : e.title), () => kbShow(e)); b.style.display = 'block'; b.style.width = '100%'; b.style.textAlign = 'left'; b.style.margin = '6px 0'; return b; }));
+  if (!list.length) $('kbList').replaceChildren(para('Ничего не нашлось. Спроси ниже — или поищи в окне базы на ПК.'));
+}
+async function kbShow(e) {
+  kbCur = e; $('kbEntry').hidden = false;
+  $('kbTitle').textContent = kbHidden(e) && e.spoiler ? 'Спойлер · этап ' + e.stage : e.title; $('kbMeta').textContent = ((kb.kinds.find(k => k.key === e.kind) || {}).name || '') + (e.stage ? ' · этап ' + e.stage : '');
+  $('kbText').textContent = e.text || 'Загружаю…';
+  const hide = kbHidden(e); $('kbText').style.filter = hide ? 'blur(7px)' : ''; $('kbReveal').hidden = !hide;
+  scrollTo(0, 0);
+  if (!e.text) { const j = await api('kbOpen', kb.key + '\t' + e.id); if (j && j.text) { e.text = j.text; if (kbCur === e) $('kbText').textContent = j.text; } }
+}
+function kbRevealNow() { $('kbText').style.filter = ''; if (kbCur) $('kbTitle').textContent = kbCur.title; $('kbReveal').hidden = true; }
+async function kbSetStage() { if (!kb) return; kb.progress = +$('kbStage').value; await api('kbProgress', kb.key + '\t' + kb.progress); kbFill(); }
+async function kbAsk() {
+  const q = $('kbAskQ').value.trim(); if (!q || !kb) return;
+  $('kbAns').textContent = 'Думаю…';
+  const j = await api('kbAsk', kb.key + '\t' + q); $('kbAns').textContent = j ? j.answer : 'Нет связи с ПК';
 }
 
 // ---- power ----
@@ -347,7 +408,8 @@ for (const [id, cmd, label] of [['vol', 'volume', 'vv'], ['bri', 'brightness', '
 // ---- tabs ----
 function go(t) {
   for (const x of document.querySelectorAll('nav button')) x.classList.toggle('on', x.dataset.t === t);
-  for (const s of ['main', 'sec', 'media', 'pad', 'kb', 'scr', 'files']) $('t-' + s).hidden = s !== t;
+  for (const s of ['main', 'sec', 'game', 'media', 'pad', 'kb', 'scr', 'files']) $('t-' + s).hidden = s !== t;
+  if (t === 'game') loadGames();
   if (t === 'scr' && !BLE) refreshScreen();
   if (t === 'sec') loadSec();
   if (t === 'media') { loadMedia(); if (!$('subsBox').hidden && !subsLoaded) loadSubs(false); }

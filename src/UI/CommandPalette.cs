@@ -69,10 +69,10 @@ public static class CommandPalette
         l.AddRange(Settings.Current.Profiles.Select(p => new Cmd(p.Icon, "Профиль: " + p.Name, "profile:" + p.Name, "")));
         l.AddRange(Settings.Current.Launchers.Select((x, i) => new Cmd("", "Запустить: " + x.Name, "launch:" + i, "")));
 #if JARVIS
-        l.AddRange(Settings.Current.Scenarios.Select(s => new Cmd("\uE8B1", "Сценарий: " + s.Name, "scenario:" + s.Id, "")));
+        if (Edition.HasJarvis) l.AddRange(Settings.Current.Scenarios.Select(s => new Cmd("\uE8B1", "Сценарий: " + s.Name, "scenario:" + s.Id, "")));
 #endif
 #if SECRETARY
-        if (Settings.Current.Secretary.Enabled) l.AddRange(SecStore.Cur.Workspaces.Keys.Select(n => new Cmd("\uE8B9", "Набор: " + n, "set:" + n, "")));
+        if (Edition.HasSecretary && Settings.Current.Secretary.Enabled) l.AddRange(SecStore.Cur.Workspaces.Keys.Select(n => new Cmd("\uE8B9", "Набор: " + n, "set:" + n, "")));
 #endif
         l.AddRange(Widgets.Names.Select(kv => new Cmd("", "Виджет: " + kv.Value, "widget:" + kv.Key, "")));
         return l;

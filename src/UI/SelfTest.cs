@@ -143,6 +143,45 @@ public static class SelfTest
         });
 #endif
 
+        await Step("kbapi", async () =>   // by name only: the phone's game tab calls, straight through the remote's handler
+        {
+            if (!filter.Contains("kbapi")) return;
+            string J(object? o) => System.Text.Json.JsonSerializer.Serialize(o, new System.Text.Json.JsonSerializerOptions { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping });
+            L("kbapi: list " + J(await Remote.Do("kbList", "")));
+            var kb = J(await Remote.Do("kb", "steam-1086940"));
+            L($"kbapi: kb {kb.Length} chars, starts {kb[..Math.Min(300, kb.Length)]}");
+            var b = GameKb.All().First(x => x.Key == "steam-1086940");
+            var item = b.Entries.First(e => e.Kind == "item" && e.Text.Length == 0);
+            L("kbapi: open " + J(await Remote.Do("kbOpen", b.Key + "	" + item.Id)));
+            L("kbapi: ask " + J(await Remote.Do("kbAsk", b.Key + "	как победить Этель?")));
+            var was = b.Progress;
+            await Remote.Do("kbProgress", b.Key + "	3");
+            L($"kbapi: progress set → {GameKb.All().First(x => x.Key == b.Key).Progress}");
+            await Remote.Do("kbProgress", b.Key + "	" + was);
+        });
+
+        await Step("gamekb", async () =>   // by name only, game in MISHKA_GAME: builds its base with whatever brain is set up (no sound), writes what came out
+        {
+            if (!filter.Contains("gamekb")) return;
+            var name = Environment.GetEnvironmentVariable("MISHKA_GAME") ?? "Probably Stolen";
+            var id = await GameSources.SteamFind(name);
+            L($"gamekb: steam folder check: {GameKb.Steam(@"D:\SteamLibrary\steamapps\common\Baldurs Gate 3\bin\bg3.exe")}");
+            L($"gamekb: {name} → steam {id}, brain online={Online.Active} local={LlamaServer.LocalReady}");
+            var g = id > 0 ? new GameKb.Game("steam-" + id, name, "", id, "") : GameKb.Manual("", name) with { Key = GameKb.Key(name) };
+            var t0 = DateTime.Now;
+            await GameBuilder.Build(g);
+            var b = GameKb.All().First(x => x.Key == g.Key);
+            L($"gamekb: {(DateTime.Now - t0).TotalMinutes:0.0} min, status='{b.Status}', wiki={b.Wiki}, stages={b.Stages.Count}, entries={b.Entries.Count}");
+            foreach (var st in b.Stages) L($"  stage {st.N}: {st.Name} — {st.Summary}");
+            foreach (var grp in b.Entries.GroupBy(e => e.Kind)) L($"  {grp.Key}: {grp.Count()} (with text {grp.Count(e => e.Text.Length > 0)})");
+            foreach (var e in b.Entries.Where(e => e.Text.Length > 0).GroupBy(e => e.Kind).SelectMany(x => x.Take(2)))
+                L($"  [{e.Kind} st{e.Stage}{(e.Spoiler ? " spoiler" : "")}] {e.Title} / {e.TitleEn}: {(e.Text.Length > 300 ? e.Text[..300] + "…" : e.Text)}");
+            var item = b.Entries.FirstOrDefault(e => e.Kind == "item");
+            if (item != null) { await GameBuilder.Expand(b, item); L($"  expand item: {item.Title}: {item.Text}"); }
+            foreach (var q in new[] { "босс", "оружие" }) L($"  search '{q}': {string.Join(", ", GameBuilder.Search(b, q).Take(5).Select(e => e.Title))}");
+            L($"  answer: {await GameBuilder.Answer(b, "С чего начать новичку?")}");
+        });
+
 #if SECRETARY
         await Step("secsched", async () =>   // by name only, URL in MISHKA_SCHED_URL: the owner signs in once in the window, then the real page is read until the day is found
         {

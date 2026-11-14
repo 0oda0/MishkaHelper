@@ -325,6 +325,14 @@ public class AppSettings
     public JarvisSettings Jarvis { get; set; } = new();
     public List<Scenario> Scenarios { get; set; } = new();
     public MouseSettings Mouse { get; set; } = new();
+    // Game helper
+    public bool GameOffers { get; set; } = true;                 // offer to build a base when a new game comes to the front
+    public List<string> GamesDeclined { get; set; } = new();     // "not for this game"
+    public bool GameKbOnTop { get; set; } = true;
+    public double GameKbWidth { get; set; } = 1000;
+    public double GameKbHeight { get; set; } = 680;
+    public double? GameKbLeft { get; set; }
+    public double? GameKbTop { get; set; }
     public List<string> AppKit { get; set; } = new();   // winget ids picked on «Программы для нового ПК»
 }
 

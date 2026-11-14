@@ -769,6 +769,14 @@ public class HotkeyKindsTests
     }
 
     [Fact]
+    public void ModulesFile()
+    {
+        var m = Modules.Parse("jarvis=1\r\nsecretary=0\ngames = 1\nbad line");
+        Assert.True(m["jarvis"]); Assert.False(m["secretary"]); Assert.True(m["games"]);
+        Assert.Empty(Modules.Parse(""));
+    }
+
+    [Fact]
     public void ReleaseGivesEveryEdition()
     {
         var rel = new ReleaseFiles(new Version(1, 6, 0), "", "p", new()
@@ -783,6 +791,72 @@ public class HotkeyKindsTests
         Assert.Null(Updater.For(rel, "Jarvis")!.SetupUrl);
         Assert.Equal("Jarvis", Updater.For(rel, "Jarvis")!.Edition);
     }
+}
+
+public class GameKbTests
+{
+    [Fact]
+    public void PlainText()
+    {
+        Assert.Equal("Привет\nмир & co", GameSources.Plain("<p>Привет</p><script>x()</script><b>мир</b> &amp; co [edit]"));
+    }
+
+    [Fact]
+    public void PlotSection()
+    {
+        var t = "Intro text\n== Gameplay ==\nfight\n== Plot ==\nThe hero wakes.\n=== Act 2 ===\nMore.\n== Reception ==\ngood";
+        Assert.Equal("The hero wakes.\n=== Act 2 ===\nMore.", GameSources.Section(t, new[] { "Synopsis", "Plot" }));
+        Assert.Equal("", GameSources.Section(t, new[] { "Сюжет" }));
+    }
+
+    [Theory]
+    [InlineData("Baldur’s Gate 3", "Baldur's Gate 3", true)]
+    [InlineData("Probably Stolen", "Probably Stolen – симулятор магазина в киберпанке", true)]
+    [InlineData("Baldur's Gate II", "Baldur's Gate 3", false)]
+    public void SameGame(string a, string b, bool same) => Assert.Equal(same, GameSources.Similar(a, b));
+
+    [Fact]
+    public void SteamManifest()
+    {
+        var acf = "\"AppState\"\n{\n\t\"appid\"\t\t\"1086940\"\n\t\"name\"\t\t\"Baldur's Gate 3\"\n\t\"installdir\"\t\t\"Baldurs Gate 3\"\n}";
+        Assert.Equal("1086940", GameKb.AcfValue(acf, "appid"));
+        Assert.Equal("Baldurs Gate 3", GameKb.AcfValue(acf, "installdir"));
+        Assert.Null(GameKb.AcfValue(acf, "missing"));
+        Assert.Null(GameKb.Steam(@"C:\Program Files\Notepad\notepad.exe"));
+    }
+
+    [Fact]
+    public void JsonFromChatter()
+    {
+        Assert.Equal(2, (GameBuilder.ParseJson("Вот ответ:\n```json\n[{\"i\":1},{\"i\":2}]\n```") as System.Text.Json.Nodes.JsonArray)!.Count);
+        Assert.Equal("x", GameBuilder.ParseJson("ok {\"a\":\"x\"} done")!["a"]!.GetValue<string>());
+        Assert.Null(GameBuilder.ParseJson("нет json"));
+    }
+
+    [Fact]
+    public void SearchFindsByRussianAndOriginal()
+    {
+        var b = new GameBase { Entries =
+        {
+            new KbEntry { Kind = "boss", Title = "Тётушка Этель", TitleEn = "Auntie Ethel", Text = "Ведьма-карга. Слабость: огонь." },
+            new KbEntry { Kind = "item", Title = "Меч", TitleEn = "Sword" },
+            new KbEntry { Kind = "location", Title = "Роща друидов", Text = "Здесь живёт Этель неподалёку." },
+        } };
+        Assert.Equal("Тётушка Этель", GameBuilder.Search(b, "этели").First().Title);   // ending cut; title hit beats a text hit
+        Assert.Equal("Тётушка Этель", GameBuilder.Search(b, "ethel").Single().Title);
+        Assert.Empty(GameBuilder.Search(b, "дракон"));
+        Assert.Equal(3, GameBuilder.Search(b, "").Count());
+        Assert.Equal("Тётушка Этель", GameBuilder.Rank(b, "как победить Этель?").First().Title);   // question words don't block the match
+        Assert.Empty(GameBuilder.Rank(b, "как победить?"));
+    }
+
+    [Theory]
+    [InlineData("Rate limit reached. Please try again in 12.5s. Need more tokens?", 12.5)]
+    [InlineData("Please try again in 1m3.2s.", 63.2)]
+    [InlineData("Please try again in 2h10m.", 7800)]
+    public void ProviderSaysWhen(string body, double seconds) => Assert.Equal(seconds, Online.RetryAfter(body)!.Value.TotalSeconds, 1);
+
+    [Fact] public void NoWaitWithoutHint() => Assert.Null(Online.RetryAfter("quota exceeded"));
 }
 
 public class AppWheelTests

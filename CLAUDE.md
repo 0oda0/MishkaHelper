@@ -7,8 +7,8 @@ UI language: **Russian**. Repo: `0oda0/MishkaHelper` (public). Owner talks Russi
 
 | What | Command |
 |---|---|
-| Build Full (everything) | `dotnet build src` |
-| Other editions | `dotnet build src -p:Flavor=Jarvis` / `Secretary` / `Lite` (tools only). Defines: `JARVIS`, `SECRETARY`. Asset names `MishkaHelper-Setup-` and `MishkaHelper-Lite-` must stay: installed copies look for them when updating |
+| Build (everything) | `dotnet build src` — the one build CI ships; parts are switched at runtime by `modules.ini` beside the exe (installer checkboxes / Settings «Состав программы»), no file = all on |
+| Trimmed builds (dev only) | `dotnet build src -p:Flavor=Jarvis` / `Secretary` / `Lite`. Defines: `JARVIS`, `SECRETARY`; `Edition.HasX` = compiled in && `Modules.X`. CI still publishes the setup/zip under the old names `MishkaHelper-{Lite,Jarvis,Secretary}-` (copies; zips carry a matching modules.ini) because 1.x copies look for them |
 | Release folder | `dotnet publish src/MishkaHelper.csproj -c Release -r win-x64 --self-contained [-p:Flavor=Lite] -o publish` |
 | Dev copy without UAC | add `-p:ApplicationManifest=<repo>\tools\app.dev.manifest` (asInvoker) and output to `test-out\dev\bin` |
 | Screenshots of every page | `MishkaHelper.exe --shots <dir>` (dev copy; runs beside the installed copy) |
@@ -35,7 +35,7 @@ src/
     Settings.cs        AppSettings JSON model (AppPaths.Data\settings.json) incl. JarvisSettings, Scenario, WebSource
     Defaults.cs        first-run values, hotkey names/defaults, migrations (Jarvis.Version)
     Actions.cs         single dispatcher for every action key (hotkeys, tray, radial, palette, scenarios)
-    Edition.cs         Full vs Lite (LITE define), version
+    Edition.cs         Edition.HasJarvis/HasSecretary/HasGames (compiled in && Modules), Modules = modules.ini beside the exe, version
     Native.cs          P/Invoke (DWM, hotkeys, display modes, power overlay, recycle bin…)
     Shell.cs           run console tools (OEM 866; Sys() = full System32 path), Open() via Explorer = unelevated
     ThemeManager.cs    accent (preset or own), background colour/picture, cards, text colour by background luminance, glass (DWM acrylic), UiScale on MainWindow Root
@@ -87,6 +87,10 @@ src/
     EdgeTts.cs         Microsoft Edge read-aloud voices over WebSocket (Sec-MS-GEC token); unofficial, online
     Intents.cs         offline Russian command parser, number words, app/site launch, Keys (SendInput)
     Brain.cs           LLM agent with native tool calling (pc_command, read_site, notes, diagnose)
+    GameKb.cs          game helper: GameBase/KbEntry JSON per game (Data\games), game in front (Steam appmanifest / Epic / GOG / known exe), offer + Ctrl+Alt+F1 toggle
+    GameSources.cs     Steam appdetails (ru), Wikipedia plot section, game wiki via MediaWiki API (known map + Fandom slug guess), PCGamingWiki issues
+    GameBuilder.cs     brain writes Russian entries in batches of 4 (stages+plot, categories picked by the brain, items = titles only, Expand on open, Lookup, Answer); saved after each step
+    GameKbWindow.cs / GamesPage.cs  base window (search, kind/stage filters, spoiler blur past Progress, ask box) and the «Игры» page
     Online.cs          online brain: OpenAI-compatible provider (Groq default, gpt-oss-120b) with the user's key (Secrets); LlamaServer.Post tries it first, local model is the fallback
     LlamaServer.cs     llama.cpp server child process (Vulkan, picks discrete GPU, --fit), ChildJob (kill on exit)
     Models.cs          on-demand downloads to %LocalAppData%\MishkaHelper\models (Vosk, Whisper, Qwen, resumable)
@@ -124,7 +128,7 @@ supabase/schema.sql    support chat tables and row-level security: the app holds
 docs/admin/            support admin panel (static, GitHub Pages, signs in to Supabase; user text only via textContent)
 docs/remote/           phone remote page: served by Remote.cs (embedded) over Wi-Fi, and by GitHub Pages (HTTPS → Web Bluetooth)
 docs/features/         landing page (index.html + img/*.png) shipped as <app>\docs
-installer/MishkaHelper.iss   Inno Setup, FLAVOR env = ""/Lite, one AppId for both; uninstall asks to delete AppData/models
+installer/MishkaHelper.iss   Inno Setup, one installer with [Components] (jarvis/secretary/games) → {app}\modules.ini; keeps an upgraded copy's parts (its modules.ini, else the old edition from DisplayName); one AppId
 tests/                 xunit project (InternalsVisibleTo MishkaHelper.Tests)
 tools/                 install-local.ps1, app.dev.manifest, make-icon.ps1
 .github/workflows/keepalive.yml  pings the support server every 2 days: free Supabase projects pause when idle

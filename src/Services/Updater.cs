@@ -93,7 +93,7 @@ public static class Updater
     {
         var rel = await Fetch();
         if (rel.Version <= Edition.Version) return Available = null;
-        return Available = For(rel, Edition.Name);
+        return Available = For(rel, "Full");
     }
 
     /// <summary>Download and apply; the app quits at the end and the new version starts by itself.</summary>
@@ -118,7 +118,7 @@ public static class Updater
                     throw new InvalidOperationException("Файл обновления повреждён (контрольная сумма не совпала) — попробуй ещё раз");
                 }
         }
-        Log.Info($"update {Edition.Name} {Edition.Version} → {(u.Edition.Length > 0 ? u.Edition : Edition.Name)} {u.Version} via {Path.GetFileName(file)}");
+        Log.Info($"update {Edition.Name} {Edition.Version} → {u.Version} via {Path.GetFileName(file)}");
 
         var appDir = AppContext.BaseDirectory.TrimEnd('\\');
         if (file.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))

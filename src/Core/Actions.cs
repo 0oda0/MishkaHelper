@@ -9,6 +9,7 @@ public static class Actions
     {
         try
         {
+            if (!Defaults.Available(action)) return;   // a part that's switched off
             switch (action)
             {
                 case "radial": RadialMenu.Toggle(); break;
@@ -80,6 +81,7 @@ public static class Actions
                 case "features": Features.Open(); break;
 #if JARVIS
                 case "jarvis": Jarvis.Listen(); break;
+                case "gameKb": GameKb.Toggle(); break;
                 case "jarvisChat": JarvisChat.Open(); break;
                 case "jarvisType": JarvisInput.Toggle(); break;
                 case "jarvisToggle":
@@ -134,12 +136,12 @@ public static class Actions
                         Shell.Open(l.Path, l.Args);
                     }
 #if SECRETARY
-                    else if (action.StartsWith("set:")) SecWorkspace.OpenSet(action[4..]);
+                    else if (action.StartsWith("set:") && Edition.HasSecretary) SecWorkspace.OpenSet(action[4..]);
 #endif
                     else if (action.StartsWith("audio:")) { Audio.SetDefault(action[6..]); Osd.Show("", Audio.DefaultName(DataFlow.Render)); }
                     else if (action.StartsWith("page:")) App.Current.Navigate(action[5..]);
 #if JARVIS
-                    else if (action.StartsWith("scenario:") && Settings.Current.Scenarios.FirstOrDefault(s => s.Id == action[9..]) is { } sc) _ = Scenarios.Run(sc);
+                    else if (action.StartsWith("scenario:") && Edition.HasJarvis && Settings.Current.Scenarios.FirstOrDefault(s => s.Id == action[9..]) is { } sc) _ = Scenarios.Run(sc);
 #endif
                     break;
             }

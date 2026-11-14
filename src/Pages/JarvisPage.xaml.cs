@@ -144,7 +144,7 @@ public partial class JarvisPage : UserControl
     }
 
     /// <summary>A smarter brain online, with the user's own free key. The local model stays as the fallback.</summary>
-    UIElement OnlineCard()
+    internal static UIElement OnlineCard()
     {
         var (c, b) = Card("Онлайн-нейросеть (умнее)",
             "Большая модель в интернете понимает команды намного лучше локальной. Нужен бесплатный ключ. Команды и вопросы уходят выбранному сервису; " +

@@ -105,6 +105,7 @@ public static class RadialMenu
             ("wifi", new("\uE701", "Wi-Fi", () => Actions.Run("wifi"))),
             ("taskmgr", new("\uE9D9", "Диспетчер", () => Actions.Run("taskmgr"))),
         };
+        l.RemoveAll(x => x.Item1 == "jarvis" && !Edition.HasJarvis || x.Item1 == "secretary" && !Edition.HasSecretary);
         if (Acer.Available) l.Insert(l.FindIndex(x => x.Item1 == "screenshot"), ("fans", new("\uE9CA", "Вентиляторы", () => Actions.Run("fanMax"))));
         return l;
     }

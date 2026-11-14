@@ -27,25 +27,28 @@ jobs:
         run: dotnet test tests -c Release
 
       # Folders, not single-file: native speech/GPU libraries must sit where their loaders look for them.
-      - name: Publish (Full, Jarvis, Secretary, Lite)
+      # One build with everything; the installer's checkboxes (and the settings page) choose the parts.
+      - name: Publish
         shell: pwsh
-        run: |
-          dotnet publish src/MishkaHelper.csproj -c Release -r win-x64 --self-contained -p:Version=$env:APP_VERSION -o publish
-          foreach ($f in 'Jarvis', 'Secretary', 'Lite') {
-            dotnet clean src/MishkaHelper.csproj -c Release -r win-x64
-            dotnet publish src/MishkaHelper.csproj -c Release -r win-x64 --self-contained -p:Version=$env:APP_VERSION -p:Flavor=$f -o "publish-$($f.ToLower())"
-          }
+        run: dotnet publish src/MishkaHelper.csproj -c Release -r win-x64 --self-contained -p:Version=$env:APP_VERSION -o publish
 
       - name: Installers and portable zips
         shell: pwsh
         run: |
           choco install innosetup -y --no-progress
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
-          $env:FLAVOR = ""; & $iscc installer\MishkaHelper.iss
+          & $iscc installer\MishkaHelper.iss
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
           Get-ChildItem publish -Exclude *.pdb, *.xml | Compress-Archive -DestinationPath "dist\MishkaHelper-Portable-$env:APP_VERSION.zip"
-          foreach ($f in 'Jarvis', 'Secretary', 'Lite') {
-            $env:FLAVOR = $f; & $iscc installer\MishkaHelper.iss
-            Get-ChildItem "publish-$($f.ToLower())" -Exclude *.pdb, *.xml | Compress-Archive -DestinationPath "dist\MishkaHelper-$f-Portable-$env:APP_VERSION.zip"
+          # Copies under the old edition names: copies of 1.x look for exactly these. The installer keeps each edition's parts;
+          # the portable zips carry the matching modules.ini.
+          $parts = @{ Lite = "jarvis=0`r`nsecretary=0`r`ngames=0"; Secretary = "jarvis=0`r`nsecretary=1`r`ngames=0"; Jarvis = "jarvis=1`r`nsecretary=0`r`ngames=1" }
+          foreach ($f in $parts.Keys) {
+            Copy-Item "dist\MishkaHelper-Setup-$env:APP_VERSION.exe" "dist\MishkaHelper-$f-Setup-$env:APP_VERSION.exe"
+            Remove-Item publish-old -Recurse -Force -ErrorAction SilentlyContinue
+            Copy-Item publish publish-old -Recurse
+            Set-Content publish-old\modules.ini $parts[$f] -NoNewline
+            Get-ChildItem publish-old -Exclude *.pdb, *.xml | Compress-Archive -DestinationPath "dist\MishkaHelper-$f-Portable-$env:APP_VERSION.zip"
           }
           Get-ChildItem dist | Format-Table Name, Length
 

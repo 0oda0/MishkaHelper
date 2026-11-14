@@ -25,6 +25,7 @@ public static class SetupWizard
     {
         "Jarvis" or "Scenarios" => Edition.HasJarvis,
         "Secretary" => Edition.HasSecretary,
+        "Games" => Edition.HasGames,
         _ => true,
     };
 
@@ -52,7 +53,7 @@ public static class SetupWizard
             ("Горячие клавиши", () => new HotkeysPage()),
         };
 #if SECRETARY
-        steps.Add(("Секретарша", SecretaryStep));
+        if (Edition.HasSecretary) steps.Add(("Секретарша", SecretaryStep));
 #endif
         int i = 0;
         void Show()

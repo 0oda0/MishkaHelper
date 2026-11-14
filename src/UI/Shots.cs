@@ -14,9 +14,9 @@ public static class Shots
         // Dev copies aren't elevated, so the LAN remote can't bind; localhost is enough to show its QR on the Tools page.
         if (!Remote.Running) try { Remote.StartLocal(); } catch { }
         await Task.Delay(1500);
-        foreach (var p in new[] { "Jarvis", "Scenarios", "Home", "Controls", "System", "Devices", "Phone", "Nitro", "Boost", "Security", "Tools", "Profiles", "Hotkeys", "Radial", "Widgets", "Settings", "Support", "Secretary" })
+        foreach (var p in new[] { "Jarvis", "Scenarios", "Home", "Controls", "System", "Devices", "Phone", "Nitro", "Boost", "Security", "Tools", "Profiles", "Hotkeys", "Radial", "Widgets", "Settings", "Support", "Secretary", "Games" })
         {
-            if (p is "Jarvis" or "Scenarios" && !Edition.HasJarvis || p == "Secretary" && !Edition.HasSecretary) continue;
+            if (p is "Jarvis" or "Scenarios" && !Edition.HasJarvis || p == "Secretary" && !Edition.HasSecretary || p == "Games" && !Edition.HasGames) continue;
             main.Navigate(p);
             await Task.Delay(p is "Devices" or "Security" or "System" ? 6000 : 2500);
             Save(main, Path.Combine(dir, p + ".png"));
@@ -33,6 +33,28 @@ public static class Shots
         await Task.Delay(800);
         foreach (Window w in Application.Current.Windows)
             if (w.Title == "Джарвис") { Save(w, Path.Combine(dir, "JarvisChat.png")); w.Close(); }
+#endif
+
+#if JARVIS
+        // The game base window, on the first base there is: a boss open, then a search.
+        if (Edition.HasGames && GameKb.All().FirstOrDefault(x => x.Entries.Any(e => e.Kind == "boss")) is { } kbBase)
+        {
+            GameKbWindow.Open(kbBase, IntPtr.Zero);
+            await Task.Delay(1200);
+            foreach (Window w in Application.Current.Windows)
+                if (w.Title.EndsWith("база знаний"))
+                {
+                    Save(w, Path.Combine(dir, "GameKb.png"));
+                    if (Deep<System.Windows.Controls.ListBox>(w) is { } lb)
+                    {
+                        lb.SelectedItem = lb.Items.Cast<System.Windows.Controls.ListBoxItem>().FirstOrDefault(i => i.Tag is KbEntry { Kind: "boss" });
+                        await Task.Delay(500); Save(w, Path.Combine(dir, "GameKbBoss.png"));
+                        lb.SelectedItem = lb.Items.Cast<System.Windows.Controls.ListBoxItem>().FirstOrDefault(i => i.Tag is KbEntry { Kind: "stage", Stage: > 1 });
+                        await Task.Delay(500); Save(w, Path.Combine(dir, "GameKbSpoiler.png"));
+                    }
+                    w.Close();
+                }
+        }
 #endif
 
         SetupWizard.Open();
@@ -128,7 +150,7 @@ public static class Shots
     }
 
     /// <summary>The page's scroller: of all scrollers in the window, the one with the most to scroll.</summary>
-    static T? Deep<T>(DependencyObject root) where T : System.Windows.Controls.ScrollViewer
+    static T? Deep<T>(DependencyObject root) where T : FrameworkElement
     {
         T? best = null;
         void Walk(DependencyObject d)
@@ -136,7 +158,7 @@ public static class Shots
             for (int i = 0; i < VisualTreeHelper.GetChildrenCount(d); i++)
             {
                 var c = VisualTreeHelper.GetChild(d, i);
-                if (c is T t && t.ScrollableHeight > (best?.ScrollableHeight ?? 0)) best = t;
+                if (c is T t && (best == null || t is System.Windows.Controls.ScrollViewer sv && sv.ScrollableHeight > ((best as System.Windows.Controls.ScrollViewer)?.ScrollableHeight ?? 0))) best = t;
                 Walk(c);
             }
         }

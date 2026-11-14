@@ -98,6 +98,14 @@ public partial class App : Application
         _main?.Navigate(page);
     }
 
+    /// <summary>Starts a fresh copy once this one has gone (the single-instance lock would turn it away while we're still here).</summary>
+    public void Restart()
+    {
+        var exe = Environment.ProcessPath!;
+        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(Shell.Sys("cmd.exe"), $"/c ping -n 3 127.0.0.1 >nul & start \"\" \"{exe}\"") { CreateNoWindow = true, UseShellExecute = false });
+        Quit();
+    }
+
     public void Quit()
     {
         Services.Stop();

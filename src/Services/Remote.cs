@@ -289,7 +289,7 @@ public static class Remote
                     _ => "",
                 };
 #if SECRETARY
-                if (arg != "cancel" && Settings.Current.Secretary.Enabled && Settings.Current.Secretary.ShutdownCheck && Secretary.TodoToday() is { Count: > 0 } todo)
+                if (arg != "cancel" && Edition.HasSecretary && Settings.Current.Secretary.Enabled && Settings.Current.Secretary.ShutdownCheck && Secretary.TodoToday() is { Count: > 0 } todo)
                     say += "\nНа сегодня не сделано: " + string.Join(", ", todo.Take(5));
 #endif
                 return new { say, power = PowerTimer.Describe() };
@@ -339,6 +339,44 @@ public static class Remote
             case "mediaDel":
                 if (int.TryParse(arg, out var di) && di >= 0 && di < Settings.Current.MediaLinks.Count) { Settings.Current.MediaLinks.RemoveAt(di); Settings.Save(); }
                 return Media();
+#if JARVIS
+            // Game helper: the bases, read on the phone while the game stays full-screen on the PC.
+            case "kbList" when Edition.HasGames:
+            {
+                var cur = GameKb.Current()?.Key;
+                return new { current = cur, games = GameKb.All().Select(b => new { key = b.Key, name = b.Name, count = b.Entries.Count }) };
+            }
+            case "kb" when Edition.HasGames:
+            {
+                if (GameKb.All().FirstOrDefault(x => x.Key == arg) is not { } b) return new { error = "нет базы" };
+                return new
+                {
+                    key = b.Key, name = b.Name, progress = b.Progress,
+                    stages = b.Stages.Select(s => new { n = s.N, name = s.Name }),
+                    kinds = GameKb.Kinds.Where(k => b.Entries.Any(e => e.Kind == k.Key)).Select(k => new { key = k.Key, name = k.Name }),
+                    entries = b.Entries.Select(e => new { id = e.Id, kind = e.Kind, title = e.Title, en = e.TitleEn, text = e.Text, stage = e.Stage, spoiler = e.Spoiler }),
+                };
+            }
+            case "kbOpen" when Edition.HasGames:   // "key\tid": an entry without text yet gets written now
+            {
+                var parts = arg.Split('\t', 2);
+                if (parts.Length < 2 || GameKb.All().FirstOrDefault(x => x.Key == parts[0]) is not { } b || b.Entries.FirstOrDefault(x => x.Id == parts[1]) is not { } e) return new { text = "" };
+                await GameBuilder.Expand(b, e);
+                return new { text = e.Text, title = e.Title };
+            }
+            case "kbAsk" when Edition.HasGames:   // "key\tquestion"
+            {
+                var parts = arg.Split('\t', 2);
+                if (parts.Length < 2 || GameKb.All().FirstOrDefault(x => x.Key == parts[0]) is not { } b) return new { answer = "" };
+                try { return new { answer = await GameBuilder.Answer(b, parts[1]) }; } catch (Exception ex) { return new { answer = "Не получилось: " + ex.Message }; }
+            }
+            case "kbProgress" when Edition.HasGames:   // "key\tstage"
+            {
+                var parts = arg.Split('\t', 2);
+                if (parts.Length == 2 && int.TryParse(parts[1], out var stage) && GameKb.All().FirstOrDefault(x => x.Key == parts[0]) is { } b) { b.Progress = stage; GameKb.Save(b); }
+                return new { ok = true };
+            }
+#endif
 #if SECRETARY
             case "secToday":
             {
@@ -387,7 +425,7 @@ public static class Remote
             case "shutdown": Process.Start(new ProcessStartInfo(Shell.Sys("shutdown"), "/s /t 30") { CreateNoWindow = true, UseShellExecute = false }); return new { say = "Выключение через 30 с" };
             case "cancelShutdown": Process.Start(new ProcessStartInfo(Shell.Sys("shutdown"), "/a") { CreateNoWindow = true, UseShellExecute = false }); return new { say = "Выключение отменено" };
 #if JARVIS
-            case "say":
+            case "say" when Edition.HasJarvis:
                 var tcs = new TaskCompletionSource<string>();
                 void OnMsg(string t, bool user) { if (!user) tcs.TrySetResult(t); }
                 Jarvis.Message += OnMsg;
@@ -401,12 +439,12 @@ public static class Remote
         {
             pc = Environment.MachineName, volume = Audio.Volume, muted = Audio.Muted, output = Audio.DefaultName(NAudio.CoreAudioApi.DataFlow.Render), brightness = Display.Brightness,
             cpu = st.CpuTemp, ram = Math.Round(st.Ram), battery = bat.Present ? bat.Percent : -1, ac = bat.OnAc,
-            profiles = Settings.Current.Profiles.Select(p => p.Name), jarvis = Edition.HasJarvis,
+            profiles = Settings.Current.Profiles.Select(p => p.Name), jarvis = Edition.HasJarvis, games = Edition.HasGames,
             apps = Settings.Current.Launchers.Select(l => l.Name), playing = await NowPlaying(),
             focus = Focus.Status(), power = PowerTimer.Describe(),
 #if SECRETARY
-            secretary = Settings.Current.Secretary.Enabled && Settings.Current.Secretary.PhoneTab,
-            todo = Settings.Current.Secretary.Enabled && Settings.Current.Secretary.ShutdownCheck ? Secretary.TodoToday() : new(),
+            secretary = Edition.HasSecretary && Settings.Current.Secretary.Enabled && Settings.Current.Secretary.PhoneTab,
+            todo = Edition.HasSecretary && Settings.Current.Secretary.Enabled && Settings.Current.Secretary.ShutdownCheck ? Secretary.TodoToday() : new(),
 #else
             secretary = false, todo = new List<string>(),
 #endif

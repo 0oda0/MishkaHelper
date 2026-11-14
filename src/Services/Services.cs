@@ -25,13 +25,11 @@ public static class Services
         SysMon.Updated += Care.Track;
         Focus.Changed += () => Application.Current?.Dispatcher.BeginInvoke(GameOverlay.Follow);
 #if SECRETARY
-        Try(Secretary.Start);
+        if (Edition.HasSecretary) Try(Secretary.Start);
 #endif
 #if JARVIS
-        Try(Scenarios.Start);
-        // "Не включать при запуске": off at launch whatever it was last time; the switch on the Jarvis page turns it on for this session.
-        if (!Settings.Current.Jarvis.StartWithApp && Settings.Current.Jarvis.Enabled) { Settings.Current.Jarvis.Enabled = false; Settings.Save(); }
-        _ = Jarvis.Start();
+        if (Edition.HasGames) Try(GameKb.Start);
+        if (Edition.HasJarvis) StartJarvis();
 #endif
 
         _jobs = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
@@ -40,6 +38,9 @@ public static class Services
             _tick++;
             Try(Profiles.CheckApps);
             Try(Focus.Check);
+#if JARVIS
+            if (Edition.HasGames && _tick % 2 == 0) Try(GameKb.Check);
+#endif
             if (_tick % 12 == 5) Try(AutoLayout.Apply);                  // every minute: Caramba may have started or quit
             if (_tick % 60 == 4) _ = Support.CheckReplies();             // every 5 min
             if (_tick % 12 == 3) Try(AutoTheme);                         // every minute
@@ -76,6 +77,16 @@ public static class Services
         _wasDark = shouldBeDark;
         if (Tweaks.DarkTheme != shouldBeDark) Tweaks.DarkTheme = shouldBeDark;
     }
+
+#if JARVIS
+    static void StartJarvis()
+    {
+        Try(Scenarios.Start);
+        // "Не включать при запуске": off at launch whatever it was last time; the switch on the Jarvis page turns it on for this session.
+        if (!Settings.Current.Jarvis.StartWithApp && Settings.Current.Jarvis.Enabled) { Settings.Current.Jarvis.Enabled = false; Settings.Save(); }
+        _ = Jarvis.Start();
+    }
+#endif
 
     public static void Stop()
     {

@@ -31,6 +31,7 @@ public partial class MainWindow : Window
             {
                 "Jarvis" or "Scenarios" => Edition.HasJarvis,
                 "Secretary" => Edition.HasSecretary,
+                "Games" => Edition.HasGames,
                 "Nitro" => Acer.Available,
                 _ => true,
             };
@@ -62,6 +63,7 @@ public partial class MainWindow : Window
 #if JARVIS
             "Jarvis" => new JarvisPage(),
             "Scenarios" => new ScenariosPage(),
+            "Games" => new GamesPage(),
 #endif
             "Profiles" => new ProfilesPage(),
             "Hotkeys" => new HotkeysPage(),
