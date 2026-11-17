@@ -453,12 +453,16 @@ private fun DeckKeyView(k: DeckKey?, w: androidx.compose.ui.unit.Dp, h: androidx
             }
         }
         val low = h < 96.dp
+        // Text grows with the key: a phone's key stays as it was, a tablet's big key gets big letters.
+        val side = minOf(w.value, h.value)
+        val labelSp = (side * 0.1f).coerceIn(12f, 26f).sp
+        val liveSp = (side * (if (k.w > 1 || k.h > 1) 0.2f else 0.18f)).coerceIn(16f, 48f).sp
         val icon = Deck.picture(k.img) ?: if (k.emoji.isEmpty() && k.kind == "open") icons[k.value] else null
         val graph = k.style == "graph" && k.live.isNotEmpty()
         Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(4.dp).let { if (graph) it.align(Alignment.TopCenter) else it }) {
             @Composable fun Face() {
                 if (icon != null) Image(icon.asImageBitmap(), null, Modifier.size(minOf(w, h) * (if (low || graph) 0.24f else 0.38f)))
-                else if (k.emoji.isNotEmpty()) Text(k.emoji, fontSize = (minOf(w.value, h.value) * (if (low || graph) 0.2f else 0.3f)).coerceIn(14f, 54f).sp)
+                else if (k.emoji.isNotEmpty()) Text(k.emoji, fontSize = (side * (if (low || graph) 0.2f else 0.3f)).coerceIn(14f, 90f).sp)
             }
             @Composable fun Live() {
                 // The ring holds the number inside it, so it never runs over the label.
@@ -468,14 +472,14 @@ private fun DeckKeyView(k: DeckKey?, w: androidx.compose.ui.unit.Dp, h: androidx
                         drawArc(Color(0x22FFFFFF), 135f, 270f, false, style = st)
                         drawArc(level, 135f, 270f * frac, false, style = st)
                     }
-                    Text(live.optString("l:" + k.live, "…"), color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    Text(live.optString("l:" + k.live, "…"), color = Color.White, fontWeight = FontWeight.Bold, fontSize = (side * 0.09f).coerceIn(13f, 30f).sp)
                 }
                 else if (k.live.isNotEmpty()) Text(live.optString("l:" + k.live, "…"), color = if (k.style.isEmpty()) Cyan else Color.White, fontWeight = FontWeight.Bold,
-                    fontSize = (if (k.w > 1 || k.h > 1) 20 else 16).sp, modifier = Modifier.padding(horizontal = 4.dp))
+                    fontSize = liveSp, modifier = Modifier.padding(horizontal = 4.dp))
             }
-            if (low || graph) Row(verticalAlignment = Alignment.CenterVertically) { Face(); Live(); if (graph) Text(" " + k.label, color = Color.White, fontSize = 12.sp, maxLines = 1) }
+            if (low || graph) Row(verticalAlignment = Alignment.CenterVertically) { Face(); Live(); if (graph) Text(" " + k.label, color = Color.White, fontSize = labelSp, maxLines = 1) }
             else { Face(); Live() }
-            if (!graph) Text(k.label, color = Color.White, fontSize = 12.sp, maxLines = if (low) 1 else 2, textAlign = TextAlign.Center, overflow = TextOverflow.Ellipsis)
+            if (!graph) Text(k.label, color = Color.White, fontSize = labelSp, maxLines = if (low) 1 else 2, textAlign = TextAlign.Center, overflow = TextOverflow.Ellipsis)
         }
     }
 }
