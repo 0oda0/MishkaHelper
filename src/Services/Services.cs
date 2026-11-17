@@ -39,7 +39,7 @@ public static class Services
             Try(Profiles.CheckApps);
             Try(Focus.Check);
 #if JARVIS
-            if (Edition.HasGames && _tick % 2 == 0) Try(GameKb.Check);
+            if (Edition.HasGames && _tick % 2 == 0) { Try(GameKb.Check); Try(GameBuilder.AfterGame); }
 #endif
             if (_tick % 12 == 5) Try(AutoLayout.Apply);                  // every minute: Caramba may have started or quit
             if (_tick % 60 == 4) _ = Support.CheckReplies();             // every 5 min

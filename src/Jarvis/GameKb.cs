@@ -181,7 +181,12 @@ public static class GameKb
         // Steam also ships tools (Wallpaper Engine…): a game is offered once it's actually played full-screen.
         if (!Focus.On && !Focus.FullScreenNow()) return;
         var g = Current();
-        if (g == null || All().Any(b => b.Key == g.Key) || Settings.Current.GamesDeclined.Contains(g.Key) || !Offered.Add(g.Key)) return;
+        if (g != null && All().FirstOrDefault(b => b.Key == g.Key) is { } have)
+        {
+            if (g.Exe.Length > 0 && !have.Exe.Contains(g.Exe, StringComparer.OrdinalIgnoreCase)) { have.Exe.Add(g.Exe); Save(have); }   // see Toggle
+            return;
+        }
+        if (g == null || Settings.Current.GamesDeclined.Contains(g.Key) || !Offered.Add(g.Key)) return;
         Toast.Show("\uE7FC", "Игровой помощник", $"Собрать базу знаний по «{g.Name}» на русском? Сюжет по этапам, локации, боссы, предметы, проблемы. Займёт 5–15 минут, играть можно.",
             null, new (string, Action)[]
             {
@@ -203,8 +208,56 @@ public static class GameKb
             Toast.Show("\uE7FC", g.Name, "Базы по этой игре ещё нет. Собрать?", null, new (string, Action)[] { ("Собрать", () => _ = GameBuilder.Build(g)) });
             return;
         }
+        // A base made by name doesn't know the game's exe: learnt here, so Playing() sees the game even when it's not in front.
+        if (g.Exe.Length > 0 && !b.Exe.Contains(g.Exe, StringComparer.OrdinalIgnoreCase)) { b.Exe.Add(g.Exe); Save(b); }
         GameKbWindow.Open(b, fg);
     }
+
+    /// <summary>
+    /// A game is on: game mode, something full-screen, or a game with a base running (alt-tabbed into its base window counts too).
+    /// The local model leaves the video card to it then.
+    /// </summary>
+    public static bool Playing()
+    {
+        if (Focus.On || Focus.FullScreenNow()) return true;
+        foreach (var b in All())
+            foreach (var e in b.Exe)
+            {
+                var ps = Process.GetProcessesByName(e);
+                foreach (var p in ps) p.Dispose();
+                if (ps.Length > 0) return true;
+            }
+        return false;
+    }
+
+    /// <summary>Games Steam has installed on this PC (every library folder), tools and runtimes left out.</summary>
+    public static List<Game> SteamLibrary()
+    {
+        var res = new List<Game>();
+        try
+        {
+            var steam = Microsoft.Win32.Registry.GetValue(@"HKEY_CURRENT_USER\Software\Valve\Steam", "SteamPath", null) as string
+                     ?? Microsoft.Win32.Registry.GetValue(@"HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\Valve\Steam", "InstallPath", null) as string;
+            if (steam == null) return res;
+            var vdf = Path.Combine(steam, "steamapps", "libraryfolders.vdf");
+            var libs = new List<string> { Path.Combine(steam, "steamapps") };
+            if (File.Exists(vdf))
+                foreach (Match m in Regex.Matches(File.ReadAllText(vdf), "\"path\"\\s+\"([^\"]+)\""))
+                    libs.Add(Path.Combine(m.Groups[1].Value.Replace(@"\\", @"\"), "steamapps"));
+            foreach (var lib in libs.Distinct(StringComparer.OrdinalIgnoreCase).Where(Directory.Exists))
+                foreach (var acf in Directory.GetFiles(lib, "appmanifest_*.acf"))
+                {
+                    var t = File.ReadAllText(acf);
+                    if (!int.TryParse(AcfValue(t, "appid"), out var id) || AcfValue(t, "name") is not { Length: > 0 } name) continue;
+                    if (NotGame.IsMatch(name) || res.Any(g => g.AppId == id)) continue;
+                    res.Add(new("steam-" + id, name, "", id, Path.Combine(lib, "common", AcfValue(t, "installdir") ?? "")));
+                }
+        }
+        catch (Exception e) { Log.Error(e); }
+        return res.OrderBy(g => g.Name).ToList();
+    }
+
+    static readonly Regex NotGame = new(@"(?i)redistributable|wallpaper engine|soundpad|blender|steamvr|proton|steam linux runtime|dedicated server|\bsdk\b|benchmark|retroarch|tabletop simulator|\btools?\b");
 
     /// <summary>Adds the program in front (or any process) as a game, for ones not found by their folder.</summary>
     public static Game Manual(string exe, string name) => new(Key(exe), name, exe, 0, "");

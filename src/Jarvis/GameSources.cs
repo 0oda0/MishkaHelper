@@ -123,10 +123,47 @@ public static class GameSources
 
     static string Cut(string s, int max) => s.Length <= max ? s : s[..max] + "…";
 
-    public static async Task<string?> Search(string api, string query)
+    public static async Task<string?> Search(string api, string query) => (await SearchMany(api, query, 1)).FirstOrDefault();
+
+    public static async Task<List<string>> SearchMany(string api, string query, int n)
     {
-        var j = await Get($"{api}?action=query&list=search&srsearch={E(query)}&srlimit=1&format=json");
-        return (j?["query"]?["search"] as JsonArray)?.FirstOrDefault()?["title"]?.GetValue<string>();
+        var j = await Get($"{api}?action=query&list=search&srsearch={E(query)}&srlimit={n}&format=json");
+        return (j?["query"]?["search"] as JsonArray)?.Select(x => x?["title"]?.GetValue<string>() ?? "").Where(t => t.Length > 0).ToList() ?? new();
+    }
+
+    /// <summary>
+    /// What a character page says about their story: the sections named like "Involvement", "Personal quest", "Recruitment"
+    /// (a whole page is mostly approval tables and quotes). Falls back to the page's beginning.
+    /// </summary>
+    public static async Task<string> Story(string api, string title, int max)
+    {
+        var j = await Get($"{api}?action=parse&page={E(title)}&prop=sections&redirects=1&format=json");
+        var want = (j?["parse"]?["sections"] as JsonArray)?.OfType<JsonObject>()
+            .Where(s => Regex.IsMatch(s["line"]?.ToString() ?? "", @"(?i)^(involvement|personal quest|recruitment|storyline|story|plot|сюжет|участие в сюжете|личн\w* задани|как завербовать)"))
+            .Select(s => s["index"]?.ToString() ?? "").Where(i => i.Length > 0).Take(4).ToList() ?? new();
+        var sb = new System.Text.StringBuilder();
+        foreach (var i in want)
+        {
+            var h = await Get($"{api}?action=parse&page={E(title)}&section={i}&prop=text&redirects=1&disablelimitreport=1&format=json");
+            var html = h?["parse"]?["text"]?["*"]?.GetValue<string>() ?? "";
+            html = Regex.Replace(html, @"<(div|table)[^>]*(class=""[^""]*\btoc\b|id=""toc"")[\s\S]*?</\1>", "", RegexOptions.IgnoreCase);
+            sb.Append(Regex.Replace(Plain(html), @"\[edit section[^\]]*\]", "")).Append("\n\n");
+            if (sb.Length > max) break;
+        }
+        return sb.Length > 400 ? Cut(sb.ToString().Trim(), max) : await Text(api, title, max);
+    }
+
+    /// <summary>
+    /// Pages this one leads to, in the order its opening text mentions them: an ingredient → the salt made of it → the potion.
+    /// One hop is enough to answer "what is it for".
+    /// </summary>
+    public static async Task<List<string>> Linked(string api, string title, string intro, int n)
+    {
+        var j = await Get($"{api}?action=query&prop=links&plnamespace=0&pllimit=100&redirects=1&titles={E(title)}&format=json");
+        var links = (j?["query"]?["pages"] as JsonObject)?.FirstOrDefault().Value?["links"] as JsonArray;
+        return links?.Select(l => l?["title"]?.GetValue<string>() ?? "")
+            .Select(t => (t, at: intro.IndexOf(t, StringComparison.OrdinalIgnoreCase))).Where(x => x.at >= 0 && x.t != title)
+            .OrderBy(x => x.at).Select(x => x.t).Take(n).ToList() ?? new();
     }
 
     public static string PageUrl(string api, string title) => api.Replace("api.php", "index.php") + "?title=" + E(title.Replace(' ', '_'));

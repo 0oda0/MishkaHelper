@@ -320,6 +320,8 @@ public class AppSettings
     public List<RadialEntry> Radial { get; set; } = new();
     /// <summary>Wheels for work programs (Word, Excel, Photoshop…): shown instead of the usual one while that program is in front.</summary>
     public List<AppWheel> AppWheels { get; set; } = Core.AppWheels.Presets();
+    /// <summary>The phone as a stream deck (Core/Deck.cs).</summary>
+    public DeckSettings Deck { get; set; } = Core.Deck.Default();
     public DateTime LastUpdateCheck { get; set; }
 
     public JarvisSettings Jarvis { get; set; } = new();

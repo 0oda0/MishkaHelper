@@ -31,10 +31,12 @@ public static class GameBuilder
                 () => App.Current.Navigate("Games"));
             return;
         }
-        // The local model needs the video card; next to a running game it gets none, and every step times out.
-        if (!Online.Active && (Focus.On || Focus.FullScreenNow()))
+        // The local model needs the video card; next to a running game it gets none (on the processor a build would take hours).
+        // So it waits: AfterGame starts it once the game is closed.
+        if (!Online.Active && GameKb.Playing())
         {
-            Toast.Show("", "Игровой помощник", "Пока идёт игра, видеокарта занята — локальная нейросеть не справится. Соберу после игры, или подключи бесплатный ключ на странице «Игры»: с ним можно прямо во время игры.",
+            lock (Later) { if (Later.Any(x => x.Key == g.Key)) return; Later.Add(g); }
+            Toast.Show("\uE7FC", "Игровой помощник", $"«{g.Name}»: соберу, как только закончишь играть — пока идёт игра, видеокарта занята. С бесплатным ключом на странице «Игры» можно прямо во время игры.",
                 () => App.Current.Navigate("Games"));
             return;
         }
@@ -43,8 +45,12 @@ public static class GameBuilder
         if (g.Exe.Length > 0 && !b.Exe.Contains(g.Exe, StringComparer.OrdinalIgnoreCase)) b.Exe.Add(g.Exe);
         var failed = new List<string>();
         void Step(string what, double done) { b.Status = what; b.Done = done; GameKb.Save(b); Log.Info($"game kb {b.Key}: {what}"); }
+        bool turn = false;
         try
         {
+            // One build at a time: two would share one model and both crawl.
+            if (One.CurrentCount == 0) Step("В очереди…", b.Done);
+            await One.WaitAsync(); turn = true;
             Osd.Show("", $"Собираю базу: {g.Name}");
             // 1. What the game is: Steam's own Russian description.
             Step("Описание из Steam…", 0.02);
@@ -121,7 +127,21 @@ public static class GameBuilder
             GameKb.Save(b);
             Toast.Show("", "База не дособрана", $"{b.Name}: {e.Message}. Уже собранное сохранено; продолжить можно на странице «Игры».");
         }
-        finally { lock (Running) Running.Remove(g.Key); }
+        finally { if (turn) One.Release(); lock (Running) Running.Remove(g.Key); }
+    }
+
+    static readonly SemaphoreSlim One = new(1, 1);
+    static readonly List<GameKb.Game> Later = new();
+    public static bool Waiting(string key) { lock (Later) return Later.Any(g => g.Key == key); }
+
+    /// <summary>Every 10 s: builds put off during a game start when it's over.</summary>
+    public static void AfterGame()
+    {
+        List<GameKb.Game> go;
+        lock (Later) { if (Later.Count == 0) return; }
+        if (GameKb.Playing()) return;
+        lock (Later) { go = Later.ToList(); Later.Clear(); }
+        foreach (var g in go) _ = Build(g);
     }
 
     /// <summary>Wiki pages that aren't game content: credits, lists, galleries, patch notes.</summary>
@@ -241,36 +261,45 @@ public static class GameBuilder
     }
 
     /// <summary>
-    /// The storyline of each main character (the longest character pages: companions), from the whole page, split by stage:
-    /// what happens, where to go, what to do, which choices matter. One entry per character and stage, a spoiler of that stage.
+    /// The storyline of each main character, split by stage: where to find them, what to do, which choices matter.
+    /// Who: the wiki's own "Companions" category (longest pages first), else the characters the base has.
+    /// From the story sections of the page (a whole page is mostly approval tables). One entry per character and stage, a spoiler of that stage.
     /// </summary>
-    static async Task Arcs(GameBase b, Action<double> progress)
+    internal static Task ArcsFor(GameBase b, List<string> names) => Arcs(b, _ => { }, names);
+
+    static async Task Arcs(GameBase b, Action<double> progress, List<string>? only = null)
     {
         const int MaxCharacters = 12;
-        var people = b.Entries.Where(e => e.Kind == "character" && e.TitleEn.Length > 0 && !Junk.IsMatch(e.TitleEn)).Take(MaxCharacters).ToList();
-        for (int i = 0; i < people.Count; i++)
+        var names = only ?? await GameSources.Members(b.Wiki, b.WikiLang == "ru" ? "Спутники" : "Companions", MaxCharacters);
+        if (names.Count < 3) names = b.Entries.Where(e => e.Kind == "character" && e.TitleEn.Length > 0).Select(e => e.TitleEn).Take(MaxCharacters).ToList();
+        names = names.Where(n => !Junk.IsMatch(n)).ToList();
+        for (int i = 0; i < names.Count; i++)
         {
-            var who = people[i];
-            if (b.Entries.Any(e => e.Kind == "arc" && e.TitleEn == who.TitleEn)) { progress((i + 1.0) / people.Count); continue; }
-            var page = await GameSources.Text(b.Wiki, who.TitleEn, 9000);
-            if (page.Length < 600) continue;
-            var arr = await AskJson($"Игра: {b.Name}. Этапы игры: {StageList(b)}.\nПерсонаж: {who.Title} ({who.TitleEn}). Ниже — его статья на вики.\n" +
-                "Распиши его сюжетную линию по этапам игры — только те этапы, где с ним что-то происходит. Для каждого этапа: что с ним происходит, где его искать (локация), " +
-                "что делать игроку по шагам (личные задания, разговоры, кого найти), важные выборы и к чему они ведут. Пиши конкретно, с названиями мест и персонажей, только по тексту статьи.\n" +
-                "Верни JSON-массив объектов {\"stage\": номер этапа, \"title\": короткий заголовок этого шага, \"text\": 4–10 предложений}.\n\n" + page, 3000);
-            foreach (var o in arr.OfType<JsonObject>())
+            var en = names[i];
+            progress((double)i / names.Count);
+            if (b.Entries.Any(e => e.Kind == "arc" && e.TitleEn == en)) continue;
+            var page = await GameSources.Story(b.Wiki, en, 10000);
+            if (page.Length < 1500) continue;   // hirelings and extras: no storyline to tell
+            var ru = b.Entries.FirstOrDefault(e => e.Kind == "character" && e.TitleEn == en)?.Title;
+            var o = await Ask($"Игра: {b.Name}. Этапы игры: {StageList(b)}.\nПерсонаж: {ru ?? en} ({en}). Ниже — его сюжет из вики.\n" +
+                "Распиши его сюжетную линию по этапам игры — только те этапы, где с ним что-то происходит. Для каждого шага: что происходит, где его искать (локация), " +
+                "что делать игроку по шагам (личные задания, разговоры, кого найти), важные выборы и к чему они ведут. Пиши конкретно, с названиями мест и персонажей, только по тексту.\n" +
+                "Верни JSON-объект {\"name\": имя персонажа по-русски, \"steps\": [{\"stage\": номер этапа, \"title\": короткий заголовок шага, \"text\": 4–10 предложений}]}.\n\n" + page, 3000) as JsonObject;
+            var who = ru ?? (o != null && S(o, "name") is { Length: > 1 } n ? n : en);
+            var src = GameSources.PageUrl(b.Wiki, en);
+            foreach (var st in (o?["steps"] as JsonArray ?? new()).OfType<JsonObject>())
             {
-                if (S(o, "text").Length < 20) continue;
-                int st = I(o, "stage");
+                if (S(st, "text").Length < 20) continue;
+                int stage = I(st, "stage");
                 lock (b) b.Entries.Add(new KbEntry
                 {
-                    Kind = "arc", Title = $"{who.Title}: {(st > 0 ? $"этап {st} — " : "")}{S(o, "title")}", TitleEn = who.TitleEn,
-                    Text = S(o, "text"), Stage = st, Spoiler = st > 1, Source = who.Source,
+                    Kind = "arc", Title = $"{who}: {(stage > 0 ? $"этап {stage} — " : "")}{S(st, "title")}", TitleEn = en,
+                    Text = S(st, "text"), Stage = stage, Spoiler = stage > 1, Source = src,
                 });
             }
             GameKb.Save(b);
-            progress((i + 1.0) / people.Count);
         }
+        progress(1);
     }
 
     /// <summary>Many items: Russian titles in batches of 60; the text comes when one is opened.</summary>
@@ -306,41 +335,124 @@ public static class GameBuilder
     /// <summary>"Не нашёл в базе": the wiki is searched for it, and what's found is written up and kept.</summary>
     public static async Task<KbEntry?> Lookup(GameBase b, string query)
     {
-        if (b.Wiki.Length == 0) return null;
-        var title = await GameSources.Search(b.Wiki, query);
-        // An English wiki doesn't know «Касадор»: the name goes in as the game spells it in English.
-        if (title == null && b.WikiLang != "ru" && Regex.IsMatch(query, "[а-яё]", RegexOptions.IgnoreCase))
-        {
-            var m = await LlamaServer.Chat(new JsonArray(
-                new JsonObject { ["role"] = "system", ["content"] = $"Game: {b.Name}. Turn the player's Russian search into the English words this game's wiki uses (names as spelled in the English version). Output only the search words." },
-                new JsonObject { ["role"] = "user", ["content"] = query }), maxTokens: 40);
-            if (m["content"]?.GetValue<string>()?.Trim().Trim('"', '«', '»', '.') is { Length: > 1 } en) title = await GameSources.Search(b.Wiki, en);
-        }
-        if (title == null) return null;
-        if (b.Entries.FirstOrDefault(x => x.TitleEn == title) is { } have) return await Expand(b, have);
-        var text = await GameSources.Text(b.Wiki, title, 3000);
-        var arr = await AskJson($"Игра: {b.Name}. Этапы: {StageList(b)}.\nВопрос игрока: «{query}». Статья вики «{title}». Напиши по-русски 4–8 предложений по делу: что это и что игроку важно знать. " +
+        if (await WikiTitle(b, query) is not { } hit) return null;
+        if (b.Entries.FirstOrDefault(x => x.TitleEn == hit.Title) is { } have) return await Expand(b, have);
+        var text = await GameSources.Text(b.Wiki, hit.Title, 3000);
+        var arr = await AskJson($"Игра: {b.Name}. Этапы: {StageList(b)}.\nВопрос игрока: «{query}». Статья вики «{hit.Title}». Напиши по-русски 4–8 предложений по делу: что это и что игроку важно знать. " +
             "Верни JSON-массив из одного объекта {\"title\": русское название, \"text\": текст, \"stage\": номер этапа или 0, \"spoiler\": true/false}.\n\n" + text, 1200);
         if (arr.FirstOrDefault() is not JsonObject o || S(o, "text").Length < 10) return null;
-        var e = new KbEntry { Kind = "found", Title = S(o, "title") is { Length: > 0 } t ? t : title, TitleEn = title, Text = S(o, "text"), Stage = I(o, "stage"), Spoiler = B(o, "spoiler"), Source = GameSources.PageUrl(b.Wiki, title) };
+        var e = new KbEntry { Kind = "found", Title = S(o, "title") is { Length: > 0 } t ? t : hit.Ru, TitleEn = hit.Title, Text = S(o, "text"), Stage = I(o, "stage"), Spoiler = B(o, "spoiler"), Source = GameSources.PageUrl(b.Wiki, hit.Title) };
         Upsert(b, e);
         GameKb.Save(b);
         return e;
     }
 
-    /// <summary>A question about the game: answered from the entries that match it, without spoilers past the player's stage.</summary>
+    /// <summary>
+    /// The wiki page a question is about, and its subject in Russian. An English wiki doesn't know «воровское лакомство»:
+    /// the brain names the subject and guesses up to three English names (Rogue's Morsel, Thief's Treat…); every guess is searched,
+    /// and the page sharing most words with a guess wins.
+    /// </summary>
+    internal static async Task<(string Title, string Ru)?> WikiTitle(GameBase b, string query)
+    {
+        if (b.Wiki.Length == 0) return null;
+        if (b.WikiLang == "ru" || !Regex.IsMatch(query, "[а-яё]", RegexOptions.IgnoreCase))
+            return await GameSources.Search(b.Wiki, query) is { } t ? (t, query) : null;
+        var o = await Ask($"Игра: {b.Name}. Вопрос игрока: «{query}».\nО чём именно вопрос (предмет, персонаж, место, задание, загадка…)? Назови это по-русски в именительном падеже " +
+            "и дай до трёх вариантов, как это может называться в английской версии игры (официальное название, если знаешь)." +
+            "Ещё для каждого значимого слова названия (не больше трёх слов) дай до четырёх английских синонимов: локализаторы переводят вольно, " +
+            "например «огненная склянка» → [[\"fire\",\"flame\",\"alchemist\"],[\"flask\",\"bottle\",\"vial\"]]. " +
+            "Верни JSON-объект {\"ru\": название по-русски, \"en\": [варианты], \"words\": [[синонимы 1-го слова], [синонимы 2-го слова]]}.", 300) as JsonObject;
+        var guesses = (o?["en"] as JsonArray)?.Select(x => x?.ToString().Trim() ?? "").Where(x => x.Length > 1).Take(3).ToList() ?? new();
+        // Every combination of the words' synonyms is a guess too: the small local model rarely knows the official name, but it knows synonyms.
+        var combos = new List<string> { "" };
+        foreach (var syn in (o?["words"] as JsonArray ?? new()).OfType<JsonArray>().Take(3))
+        {
+            var ws = syn.Select(x => x?.ToString().Trim() ?? "").Where(x => x.Length > 1).Take(4).ToList();
+            if (ws.Count > 0) combos = combos.SelectMany(c => ws.Select(w => (c + " " + w).Trim())).Take(24).ToList();
+        }
+        guesses.AddRange(combos.Where(c => c.Length > 1 && !guesses.Contains(c)));
+        var ru = o != null && S(o, "ru") is { Length: > 1 } r ? char.ToUpper(r[0]) + r[1..] : query;
+        var cands = new List<string>();
+        foreach (var hits in await Task.WhenAll(guesses.Select(g => GameSources.SearchMany(b.Wiki, g, 3))))
+            foreach (var t in hits) if (!cands.Contains(t)) cands.Add(t);
+        var best = BestTitle(cands, guesses);
+        Log.Info($"game kb wiki title for «{query}»: ru={ru}, guesses={string.Join(" | ", guesses)}, found={string.Join(" | ", cands)} → {best}");
+        return best == null ? null : (best, ru);
+    }
+
+    /// <summary>The candidate sharing most words with any guess (apostrophes and "'s" ignored); the first one on a tie.</summary>
+    internal static string? BestTitle(List<string> cands, List<string> guesses)
+    {
+        static HashSet<string> W(string s) => Regex.Split(Regex.Replace(s.ToLowerInvariant(), "['’]s\\b", ""), @"[^\p{L}\p{N}]+").Where(w => w.Length > 1).ToHashSet();
+        var gw = guesses.Select(W).ToList();
+        // A page counts only if it has every word of some guess: one shared word ("Thief's Gloves" for "Thief's Treat") is some other thing.
+        return cands.Select((c, i) => (c, i, s: gw.Count == 0 ? 0 : gw.Where(g => g.Count > 0 && g.All(W(c).Contains)).Select(g => g.Count).DefaultIfEmpty(-1).Max()))
+            .Where(x => x.s > 0 || gw.Count == 0)
+            .OrderByDescending(x => x.s).ThenBy(x => gw.Count == 0 ? 0 : W(x.c).Count).ThenBy(x => x.i)   // "Rogue's Morsel" before "Salts of Rogue's Morsel"
+            .Select(x => x.c).FirstOrDefault();
+    }
+
+    /// <summary>
+    /// A question about the game. The thing asked about is found in the base by its title — or on the wiki, and kept —
+    /// and the pages it leads to are read too (an ingredient → the salt made of it → the potion), so "what is it for" gets answered.
+    /// Names of entries come back as [[links]]; nothing past the player's stage is told.
+    /// </summary>
     public static async Task<string> Answer(GameBase b, string question)
     {
-        var top = Rank(b, question).Take(8).ToList();
+        var ranked = Ranked(b, question).ToList();
+        var words = Words(question).Count;
+        var notes = new List<string>();
+        // The subject: an entry whose title has at least half the question's words.
+        var main = ranked.FirstOrDefault(r => r.Title * 2 >= Math.Max(1, words)).e;
+        string? wikiTitle = null, ru = null;
+        if (main == null && await WikiTitle(b, question) is { } hit)
+        {
+            main = b.Entries.FirstOrDefault(x => x.TitleEn == hit.Title);
+            if (main == null) { wikiTitle = hit.Title; ru = hit.Ru; notes.Add($"[Вики] {hit.Title}: {await GameSources.Text(b.Wiki, hit.Title, 2500)}"); }
+        }
+        if (main is { Text.Length: 0 }) await Expand(b, main);
+        // One hop further for things (what an ingredient is made into, what a key opens): their pages, as written on the wiki.
+        var page = wikiTitle ?? (main is { Kind: "item" or "found" or "mechanic", TitleEn.Length: > 0 } ? main.TitleEn : null);
+        if (page != null && b.Wiki.Length > 0)
+        {
+            var intro = await GameSources.Text(b.Wiki, page, 900);
+            foreach (var l in await GameSources.Linked(b.Wiki, page, intro, 3))
+                notes.Add(b.Entries.FirstOrDefault(x => x.TitleEn == l && x.Text.Length > 0) is { } known ? Note(known) : $"[Вики] {l}: {await GameSources.Text(b.Wiki, l, 900)}");
+        }
+        var top = ranked.Select(r => r.e).Where(e => e.Text.Length > 0 && e != main && !(e.Spoiler && e.Stage > b.Progress)).Take(main == null && notes.Count == 0 ? 8 : 4).ToList();
+        if (main != null) top.Insert(0, main);
         // A general question ("с чего начать?") matches no words: the overview and how the game works are the context then.
-        if (top.Count < 3)
-            top.AddRange(b.Entries.Where(e => e.Kind is "about" or "mechanic" or "stage" && e.Text.Length > 0 && !top.Contains(e) && !(e.Spoiler && e.Stage > b.Progress)).Take(8 - top.Count));
-        var ctx = string.Join("\n\n", top.Select(e => $"[{GameKb.KindName(e.Kind)}{(e.Stage > 0 ? ", этап " + e.Stage : "")}] {e.Title}: {e.Text}"));
+        if (top.Count + notes.Count < 3)
+            top.AddRange(b.Entries.Where(e => e.Kind is "about" or "mechanic" or "stage" && e.Text.Length > 0 && !top.Contains(e) && !(e.Spoiler && e.Stage > b.Progress)).Take(6 - top.Count));
+        var ctx = string.Join("\n\n", top.Select(Note).Concat(notes));
         var msgs = new JsonArray(
-            new JsonObject { ["role"] = "system", ["content"] = $"Ты помогаешь игроку в игре {b.Name}. Отвечай по-русски, коротко и по делу, только по заметкам из базы. Если в заметках нет ответа — честно скажи, что в базе этого нет, и предложи поискать в окне базы. Не выдумывай. Игрок сейчас на этапе {b.Progress} из {Math.Max(1, b.Stages.Count)}: не раскрывай сюжет более поздних этапов, если он сам не просит." },
-            new JsonObject { ["role"] = "user", ["content"] = $"Заметки из базы:\n{ctx}\n\nВопрос: {question}" });
-        var m = await LlamaServer.Chat(msgs, maxTokens: 700);
-        return m["content"]?.GetValue<string>()?.Trim() is { Length: > 0 } a ? a : "Не знаю.";
+            new JsonObject { ["role"] = "system", ["content"] = $"Ты помогаешь игроку в игре {b.Name}. Отвечай по-русски, по делу и коротко (до 8 предложений), только по заметкам. Если в заметках нет ответа — одной фразой скажи, что не нашёл. Не выдумывай. " +
+                "Разбери по порядку: что это, что делает или зачем нужно, где взять или как сделать (из чего, где крафтится), если это есть в заметках. " +
+                "Когда упоминаешь то, о чём есть заметка, ставь ссылку: [[название как в заметке]] или [[название как в заметке|как сказать по-русски]]. Английские названия переводи на русский. " +
+                $"Игрок сейчас на этапе {b.Progress} из {Math.Max(1, b.Stages.Count)}: не раскрывай сюжет более поздних этапов, если он сам не просит." },
+            new JsonObject { ["role"] = "user", ["content"] = $"Заметки:\n{ctx}\n\nВопрос: {question}" });
+        var m = await LlamaServer.Chat(msgs, maxTokens: 500);   // on the processor (during a game) every token is ~0,2 s
+        var answer = m["content"]?.GetValue<string>()?.Trim() is { Length: > 0 } a ? a : "Не знаю.";
+        // Found on the wiki: kept, so the next question (and the search) find it.
+        if (wikiTitle != null && answer.Length > 40)
+        {
+            Upsert(b, new KbEntry { Kind = "found", Title = ru ?? wikiTitle, TitleEn = wikiTitle, Text = Unlink(answer), Source = GameSources.PageUrl(b.Wiki, wikiTitle) });
+            GameKb.Save(b);
+        }
+        return answer;
+    }
+
+    static string Note(KbEntry e) => $"[{GameKb.KindName(e.Kind)}{(e.Stage > 0 ? ", этап " + e.Stage : "")}] {e.Title}{(e.TitleEn.Length > 0 && e.TitleEn != e.Title ? $" ({e.TitleEn})" : "")}: {e.Text}";
+
+    /// <summary>[[A|b]] → b, [[A]] → A: for the phone and the voice.</summary>
+    public static string Unlink(string s) => Regex.Replace(s, @"\[\[([^\]|]+)(?:\|([^\]]+))?\]\]", m => m.Groups[2].Success ? m.Groups[2].Value : m.Groups[1].Value);
+
+    /// <summary>An entry a link names: by Russian or original title, spelled loosely.</summary>
+    public static KbEntry? Find(GameBase b, string name)
+    {
+        var n = Norm(name.Trim());
+        return b.Entries.FirstOrDefault(e => Norm(e.Title) == n || Norm(e.TitleEn) == n)
+            ?? b.Entries.FirstOrDefault(e => n.Length > 4 && (Norm(e.Title).StartsWith(n) || Norm(e.TitleEn).StartsWith(n)));
     }
 
     // ---------------- search ----------------
@@ -363,23 +475,30 @@ public static class GameBuilder
     /// For questions: entries by how many of its meaningful words they share (a title hit counts most).
     /// «как победить Этель?» must find Этель even though "как" and "победить" aren't in her entry.
     /// </summary>
-    internal static IEnumerable<KbEntry> Rank(GameBase b, string question)
+    internal static IEnumerable<KbEntry> Rank(GameBase b, string question) => Ranked(b, question).Where(r => r.e.Text.Length > 0).Select(r => r.e);
+
+    static List<string> Words(string question) =>
+        Regex.Split(question.ToLowerInvariant(), @"[^\p{L}\p{N}]+").Where(w => w.Length > 3 && !Stop.Contains(w)).Select(w => Stem(Norm(w))).Distinct().ToList();
+
+    /// <summary>Entries by shared words (Title = how many are in the title); on a tie, the kinds a question is usually about come first.</summary>
+    static IEnumerable<(KbEntry e, int Title)> Ranked(GameBase b, string question)
     {
-        var words = Regex.Split(question.ToLowerInvariant(), @"[^\p{L}\p{N}]+").Where(w => w.Length > 3 && !Stop.Contains(w)).Select(w => Stem(Norm(w))).Distinct().ToList();
+        var words = Words(question);
         return b.Entries.Select(e =>
             {
                 var t = Norm(e.Title + " " + e.TitleEn);
                 var x = Norm(e.Text);
-                return (e, s: words.Sum(w => (t.Contains(w) ? 10 : 0) + (x.Contains(w) ? 1 : 0)));
+                int th = words.Count(t.Contains);
+                return (e, th, s: th * 10 + words.Count(x.Contains));
             })
-            // Only entries with a text help the answer; on a tie, the kinds a question is usually about come first.
-            .Where(r => r.s > 0 && r.e.Text.Length > 0)
-            .OrderByDescending(r => r.s).ThenBy(r => Array.IndexOf(AskOrder, r.e.Kind)).Select(r => r.e);
+            .Where(r => r.s > 0)
+            .OrderByDescending(r => r.s).ThenBy(r => Array.IndexOf(AskOrder, r.e.Kind)).Select(r => (r.e, r.th));
     }
 
     static readonly string[] AskOrder = { "boss", "quest", "location", "character", "problem", "mechanic", "found", "item", "stage", "about" };
 
-    static readonly HashSet<string> Stop = new() { "какой", "какая", "какие", "каком", "где", "найти", "можно", "нужно", "чтобы", "победить", "убить", "пройти", "сделать", "делать", "есть", "если", "этот", "этой", "игре", "игра" };
+    static readonly HashSet<string> Stop = new() { "какой", "какая", "какие", "каком", "где", "найти", "можно", "нужно", "чтобы", "победить", "убить", "пройти", "сделать", "делать", "есть", "если", "этот", "этой", "игре", "игра",
+        "нафига", "нахрена", "зачем", "нужен", "нужна", "нужны", "такое", "такой", "работает", "полезен", "полезна", "куда", "девать", "сделать", "скрафтить", "крафтить", "взять", "достать" };
 
     /// <summary>
     /// Spellings of the same name made alike: «Касадор» and «Казадор», «Астарион» and «Астарийон», ё and е.

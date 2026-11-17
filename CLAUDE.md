@@ -63,6 +63,7 @@ src/
     Alerts.cs          threshold toasts
     (Core/Backup.cs)   backup zip: known file names only, validated before anything is replaced
     Support.cs         support chat client (Supabase REST, anonymous sign-in per install, session encrypted with Core/Secrets.cs); Url/AnonKey constants empty = page offers GitHub
+    (Core/Deck.cs)     phone stream deck: Settings.Deck pages/keys (act|keys|text|open|page, live + style number/bar/graph/ring, W×H cells, slots up to 8×8), presets incl. AppWheels pages; over Phone WS deckOn/Off/Press/Save → deck/deckLive/deckPage; page follows the foreground process ("game" = game mode); Pages/DeckEditPage.cs = PC editor
     Phone.cs           Android app link: UDP discovery 8771 ("MISHKA?"), WebSocket /api/ws (status, notif, clip ↔ ring, clip, file offers /api/phone/file/{id})
     Focus.cs           game mode: DND + mute every app except the foreground game and voice chats (Settings.FocusKeepSound), phone toasts held; auto on full-screen + GPU load, auto off when the game exits
     PowerTimer.cs      shutdown in N min / now / when downloads finish (3 min below 150 KB/s net + 5 MB/s disk); Windows' own shutdown timer
@@ -89,10 +90,10 @@ src/
     Brain.cs           LLM agent with native tool calling (pc_command, read_site, notes, diagnose)
     GameKb.cs          game helper: GameBase/KbEntry JSON per game (Data\games), game in front (Steam appmanifest / Epic / GOG / known exe), offer + Ctrl+Alt+F1 toggle
     GameSources.cs     Steam appdetails (ru), Wikipedia plot section, game wiki via MediaWiki API (known map + Fandom slug guess), PCGamingWiki issues
-    GameBuilder.cs     brain writes Russian entries in batches of 4 (stages+plot, categories picked by the brain, items = titles only, Expand on open, Lookup, Answer); saved after each step
+    GameBuilder.cs     brain writes Russian entries in batches of 4 (stages+plot, categories picked by the brain, items = titles only, Expand on open, arcs = companions' story sections); one build at a time, during a game (local brain) put off until it ends (AfterGame). Answer: subject by title or WikiTitle (Russian → English guesses → wiki search) + pages it links to, [[links]] in the text; saved after each step
     GameKbWindow.cs / GamesPage.cs  base window (search, kind/stage filters, spoiler blur past Progress, ask box) and the «Игры» page
     Online.cs          online brain: OpenAI-compatible provider (Groq default, gpt-oss-120b) with the user's key (Secrets); LlamaServer.Post tries it first, local model is the fallback
-    LlamaServer.cs     llama.cpp server child process (Vulkan, picks discrete GPU, --fit), ChildJob (kill on exit)
+    LlamaServer.cs     llama.cpp server child process (Vulkan, picks discrete GPU, --fit; on the CPU, fewer threads, below normal while GameKb.Playing()), ChildJob (kill on exit)
     Models.cs          on-demand downloads to %LocalAppData%\MishkaHelper\models (Vosk, Whisper, Qwen, resumable)
     Notes.cs           notes store + chat history (jsonl)
     WebReader.cs       WebView2: login window + invisible page text reader for "web sources"
@@ -123,7 +124,7 @@ src/
     GameOverlay.cs     click-through corner line: FPS / CPU / GPU, follows game mode
     JarvisUi.cs        orb + chat window + JarvisInput (Ctrl+Alt+Enter typed request, silent answer)
     Shots.cs / SelfTest.cs  dev tooling
-mobile/                Android app «Mishka» (Kotlin + Compose, minSdk 26): Link (discovery, HTTP), LinkService (foreground WS, ring, files), NotifListener, ShareActivity, Cleaner (big/APK/dupes/old downloads), MainActivity tabs ПК/Пульт(WebView of the remote page)/Чистка. CI builds Mishka-Phone.apk only if repo secrets MISHKA_KEYSTORE_B64 + MISHKA_KEYSTORE_PASSWORD exist
+mobile/                Android app «Mishka» (Kotlin + Compose, minSdk 26): Link (discovery, HTTP), LinkService (foreground WS, ring, files), NotifListener, ShareActivity, Cleaner (big/APK/dupes/old downloads), MainActivity tabs ПК/Деск(Deck.kt: grid, per-device size in prefs, long-press editors)/Пульт(WebView of the remote page)/Чистка. CI builds Mishka-Phone.apk only if repo secrets MISHKA_KEYSTORE_B64 + MISHKA_KEYSTORE_PASSWORD exist
 supabase/schema.sql    support chat tables and row-level security: the app holds only the public anon key, so these rules are the whole protection
 docs/admin/            support admin panel (static, GitHub Pages, signs in to Supabase; user text only via textContent)
 docs/remote/           phone remote page: served by Remote.cs (embedded) over Wi-Fi, and by GitHub Pages (HTTPS → Web Bluetooth)

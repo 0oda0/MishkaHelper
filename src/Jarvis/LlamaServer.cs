@@ -68,7 +68,10 @@ public static class LlamaServer
         await StartLock.WaitAsync();
         try
         {
-            if (_proc is { HasExited: false } && _model == m.Key && await Healthy()) return;
+            // A game owns the video card: next to it the model gets none and every answer times out. On the processor it's slower but it answers
+            // (≈25 s for a short answer on an i9). The server is restarted when that changes, but never under a request in flight.
+            var dev = Settings.Current.Jarvis.AiGpu && !(Edition.HasGames && GameKb.Playing()) ? BestDevice() : "none";
+            if (_proc is { HasExited: false } && _model == m.Key && (_dev == dev || Volatile.Read(ref _busy) > 0) && await Healthy()) return;
             Stop();
             if (!File.Exists(Exe)) throw new InvalidOperationException("Нужен llama.cpp — скачай его на странице «Джарвис»");
             if (!Models.Has(m)) throw new InvalidOperationException("Нейросеть не скачана");
@@ -81,16 +84,18 @@ public static class LlamaServer
             }
 
             // Pick the discrete GPU explicitly: by default llama.cpp would also split onto the slow integrated one.
-            var dev = Settings.Current.Jarvis.AiGpu ? BestDevice() : "none";
             var gpu = dev == "none" ? "-dev none -ngl 0" : $"-dev {dev} --fit on";
+            bool cpuOnly = dev == "none" && Settings.Current.Jarvis.AiGpu;   // put there by a game: fewer threads, lower priority, the game comes first
             var psi = new ProcessStartInfo(Exe,
-                $"-m \"{Models.PathOf(m)}\" --host 127.0.0.1 --port {Port} -c 8192 {gpu} -fa auto --jinja --no-webui -t {Math.Max(2, Environment.ProcessorCount / 2)}")
+                $"-m \"{Models.PathOf(m)}\" --host 127.0.0.1 --port {Port} -c 8192 {gpu} -fa auto --jinja --no-webui -t {Math.Max(2, Environment.ProcessorCount / (cpuOnly ? 4 : 2))}")
             {
                 UseShellExecute = false, CreateNoWindow = true, RedirectStandardError = true, RedirectStandardOutput = true,
                 WorkingDirectory = Path.GetDirectoryName(Exe)!,
             };
             _proc = Process.Start(psi)!;
             ChildJob.Add(_proc);
+            _dev = dev;
+            if (cpuOnly) try { _proc.PriorityClass = ProcessPriorityClass.BelowNormal; } catch { }
             var tail = new Queue<string>();
             void Keep(string? l) { if (l == null) return; lock (tail) { tail.Enqueue(l); while (tail.Count > 30) tail.Dequeue(); } }
             _proc.ErrorDataReceived += (_, e) => Keep(e.Data);
@@ -116,6 +121,8 @@ public static class LlamaServer
     }
 
     static string? _device;
+    static string? _dev;   // what the running server was started on
+    static int _busy;
 
     /// <summary>"Vulkan0"… for the strongest GPU; integrated Intel/AMD graphics only if nothing else exists.</summary>
     static string BestDevice()
@@ -152,7 +159,10 @@ public static class LlamaServer
         if (Online.Active && await Online.Send(body, stream, localFallback: LocalReady) is { } online) return online;
         await EnsureRunning();
         var req = new HttpRequestMessage(HttpMethod.Post, "/v1/chat/completions") { Content = new StringContent(body.ToJsonString(), Encoding.UTF8, "application/json") };
-        var resp = await Http.SendAsync(req, stream ? HttpCompletionOption.ResponseHeadersRead : HttpCompletionOption.ResponseContentRead);
+        Interlocked.Increment(ref _busy);
+        HttpResponseMessage resp;
+        try { resp = await Http.SendAsync(req, stream ? HttpCompletionOption.ResponseHeadersRead : HttpCompletionOption.ResponseContentRead); }
+        finally { Interlocked.Decrement(ref _busy); }
         if (!resp.IsSuccessStatusCode) { var e = await resp.Content.ReadAsStringAsync(); resp.Dispose(); throw new InvalidOperationException("llama.cpp: " + e); }
         return resp;
     }

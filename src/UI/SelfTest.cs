@@ -160,6 +160,28 @@ public static class SelfTest
             await Remote.Do("kbProgress", b.Key + "	" + was);
         });
 
+        await Step("kbask", async () =>   // by name only: questions on the BG3 base (MISHKA_ASK, '|' between), then storylines of MISHKA_ARCS companions; times each
+        {
+            if (!filter.Contains("kbask")) return;
+            var b = GameKb.All().First(x => x.Key == "steam-1086940");
+            L($"kbask: playing={GameKb.Playing()} online={Online.Active} entries={b.Entries.Count}");
+            foreach (var q in (Environment.GetEnvironmentVariable("MISHKA_ASK") ?? "Нафига мне воровское лакомство?|Как попасть во дворец Касадора?").Split('|'))
+            {
+                var t0 = DateTime.Now;
+                var a = await GameBuilder.Answer(b, q);
+                L($"kbask: «{q}» ({(DateTime.Now - t0).TotalSeconds:0} s):\n{a}");
+            }
+            foreach (var q in new[] { "касадор", "Казадор", "воровское лакомство", "астарион шрамы" }) L($"kbask: search '{q}': {string.Join(", ", GameBuilder.Search(b, q).Take(5).Select(e => e.Title))}");
+            var arcs = Environment.GetEnvironmentVariable("MISHKA_ARCS");
+            if (!string.IsNullOrEmpty(arcs))
+            {
+                var t0 = DateTime.Now;
+                await GameBuilder.ArcsFor(b, arcs.Split('|').ToList());
+                L($"kbask: arcs {(DateTime.Now - t0).TotalMinutes:0.0} min");
+                foreach (var e in b.Entries.Where(e => e.Kind == "arc" && arcs.Contains(e.TitleEn))) L($"  [{e.Stage}] {e.Title}: {e.Text}");
+            }
+        });
+
         await Step("gamekb", async () =>   // by name only, game in MISHKA_GAME: builds its base with whatever brain is set up (no sound), writes what came out
         {
             if (!filter.Contains("gamekb")) return;
@@ -252,6 +274,35 @@ public static class SelfTest
                 if (reply != null) { L("support: reply arrived: " + reply.Body); await Task.Delay(15000); return; }
             }
             L("support: no reply in 15 min");
+        });
+
+        await Step("deck", async () =>   // by name only: the deck over the phone link on localhost:MISHKA_DECK_PORT (PIN 432198), checked in-process, then left open for the emulator (adb reverse) until <report>.stop
+        {
+            if (!filter.Contains("deck")) return;
+            Settings.Current.RemotePin = "432198";
+            if (int.TryParse(Environment.GetEnvironmentVariable("MISHKA_DECK_PORT"), out var port)) Settings.Current.RemotePort = port;
+            Remote.StartLocal();
+            using (var ws = new System.Net.WebSockets.ClientWebSocket())
+            {
+                ws.Options.SetRequestHeader("X-Pin", Settings.Current.RemotePin);
+                await ws.ConnectAsync(new Uri($"ws://localhost:{Settings.Current.RemotePort}/api/ws"), CancellationToken.None);
+                await ws.SendAsync(Encoding.UTF8.GetBytes("{\"t\":\"deckOn\"}"), System.Net.WebSockets.WebSocketMessageType.Text, true, CancellationToken.None);
+                var got = new List<string>();
+                var until = DateTime.Now.AddSeconds(4);
+                while (DateTime.Now < until && got.Count < 3)
+                {
+                    using var ms = new MemoryStream(); var b = new byte[65536]; System.Net.WebSockets.WebSocketReceiveResult r;
+                    try { do { r = await ws.ReceiveAsync(b, new CancellationTokenSource(3000).Token); ms.Write(b, 0, r.Count); } while (!r.EndOfMessage); } catch { break; }
+                    var text = Encoding.UTF8.GetString(ms.ToArray());
+                    got.Add(text);
+                    L($"deck ← {text.Length} chars: {text[..Math.Min(160, text.Length)]}");
+                }
+                L($"deck: {got.Count(x => x.Contains("\"t\":\"deck\""))} deck, {got.Count(x => x.Contains("deckLive"))} live");
+            }
+            L($"deck: open for the emulator on localhost:{Settings.Current.RemotePort}");
+            var stop = DateTime.Now.AddMinutes(25);
+            while (DateTime.Now < stop && !File.Exists(file + ".stop")) await Task.Delay(1000);
+            Deck.Off(); Remote.Stop();
         });
 
         await Step("phone", async () =>   // plays the phone app on this PC: discovery, websocket, status, ring, file

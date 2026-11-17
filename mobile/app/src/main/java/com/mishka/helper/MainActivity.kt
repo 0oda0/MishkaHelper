@@ -71,7 +71,7 @@ private fun App() {
         containerColor = Bg,
         bottomBar = {
             NavigationBar(containerColor = Color(0xFF10101E)) {
-                listOf(Triple("ПК", Icons.Filled.Computer, 0), Triple("Пульт", Icons.Filled.TouchApp, 1), Triple("Чистка", Icons.Filled.CleaningServices, 2)).forEach { (label, icon, i) ->
+                listOf(Triple("ПК", Icons.Filled.Computer, 0), Triple("Деск", Icons.Filled.GridView, 3), Triple("Пульт", Icons.Filled.TouchApp, 1), Triple("Чистка", Icons.Filled.CleaningServices, 2)).forEach { (label, icon, i) ->
                     NavigationBarItem(selected = tab == i, onClick = { tab = i }, icon = { Icon(icon, null) }, label = { Text(label) },
                         colors = NavigationBarItemDefaults.colors(selectedIconColor = Pink, selectedTextColor = Pink, indicatorColor = Color(0x33FF3DA8)))
                 }
@@ -79,7 +79,7 @@ private fun App() {
         }
     ) { pad ->
         Box(Modifier.padding(pad)) {
-            when (tab) { 0 -> PcTab(); 1 -> RemoteTab(); else -> CleanTab() }
+            when (tab) { 0 -> PcTab(); 1 -> RemoteTab(); 3 -> DeckTab(); else -> CleanTab() }
         }
     }
 }

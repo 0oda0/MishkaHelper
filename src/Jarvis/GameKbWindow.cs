@@ -73,6 +73,8 @@ public static class GameKbWindow
         var chips = new WrapPanel { Margin = new Thickness(0, 0, 0, 8) };
         DockPanel.SetDock(chips, Dock.Top); root.Children.Add(chips);
         string kind = "";
+        var toggled = new HashSet<string>();   // groups folded (or, in «Всё», unfolded) by hand
+        bool quiet = false;
         var stageFilter = new ComboBox { Width = 170, Margin = new Thickness(0, 0, 8, 6) };
 
         // ---- question box ----
@@ -101,6 +103,68 @@ public static class GameKbWindow
         bool Named(KbStage st) => b.Progress > b.Stages.Count || st.N <= b.Progress;
         bool Hidden(KbEntry e) => b.Progress > 0 && b.Progress <= b.Stages.Count && e.Stage > b.Progress;
 
+        // ---- links, like a wiki: [[names]] in answers, and names of other entries in any text ----
+        System.Text.RegularExpressions.Regex? names = null;
+        // Keyed by the name without its last vowel: a name is also met with a Russian ending («Ульма» → «Ульме»).
+        Dictionary<string, KbEntry> byStem = new(StringComparer.OrdinalIgnoreCase);
+        void Names()
+        {
+            byStem.Clear();
+            foreach (var x in b.Entries.Where(x => x.Kind is not ("stage" or "about" or "problem" or "arc") && !Hidden(x)))
+            {
+                var c = System.Text.RegularExpressions.Regex.Replace(x.Title, @"\s*[(:].*$", "").Trim();
+                if (c.Length >= 5) byStem.TryAdd(System.Text.RegularExpressions.Regex.Replace(c, "[аяоеиыуюйь]$", ""), x);
+            }
+            var alts = byStem.Keys.OrderByDescending(k => k.Length).Select(System.Text.RegularExpressions.Regex.Escape);
+            names = byStem.Count == 0 ? null : new(@"(?<!\p{L})(" + string.Join("|", alts) + @")\p{L}{0,3}(?!\p{L})", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        }
+
+        void Linked(TextBlock tb, string text, KbEntry? self)
+        {
+            tb.Inlines.Clear();
+            var used = new HashSet<KbEntry>();
+            if (self != null) used.Add(self);
+            int at = 0;
+            void Plain(string s)
+            {
+                int i = 0;
+                if (names != null)
+                    foreach (System.Text.RegularExpressions.Match m in names.Matches(s))
+                    {
+                        if (!byStem.TryGetValue(m.Groups[1].Value, out var to) || !used.Add(to)) continue;   // each name linked once
+                        tb.Inlines.Add(new System.Windows.Documents.Run(s[i..m.Index]));
+                        tb.Inlines.Add(Link(m.Value, to, null));
+                        i = m.Index + m.Length;
+                    }
+                tb.Inlines.Add(new System.Windows.Documents.Run(s[i..]));
+            }
+            foreach (System.Text.RegularExpressions.Match m in System.Text.RegularExpressions.Regex.Matches(text, @"\[\[([^\]|]+)(?:\|([^\]]+))?\]\]"))
+            {
+                Plain(text[at..m.Index]);
+                var target = m.Groups[1].Value.Trim();
+                var to = GameBuilder.Find(b, target);
+                if (to != null) used.Add(to);
+                tb.Inlines.Add(Link(m.Groups[2].Success ? m.Groups[2].Value : target, to, target));
+                at = m.Index + m.Length;
+            }
+            Plain(text[at..]);
+        }
+
+        System.Windows.Documents.Hyperlink Link(string label, KbEntry? to, string? lookup)
+        {
+            var h = new System.Windows.Documents.Hyperlink(new System.Windows.Documents.Run(label)) { Foreground = R("AccentBrush"), TextDecorations = null, Cursor = Cursors.Hand, ToolTip = to?.Title ?? "Поискать на вики" };
+            h.Click += async (_, _) =>
+            {
+                if (to != null) { Show(to); return; }
+                h.IsEnabled = false;
+                // Not in the base yet: looked up on the wiki and kept.
+                try { if (await GameBuilder.Lookup(b, lookup ?? label) is { } f) { Names(); Show(f); } else h.ToolTip = "Не нашлось"; }
+                catch (Exception ex) { h.ToolTip = ex.Message; }
+                h.IsEnabled = true;
+            };
+            return h;
+        }
+
         void Show(KbEntry e)
         {
             article.Children.Clear();
@@ -109,7 +173,8 @@ public static class GameKbWindow
             article.Children.Add(head);
             var meta = GameKb.KindName(e.Kind) + (e.Stage > 0 && b.Stages.FirstOrDefault(x => x.N == e.Stage) is { } st ? $" · этап {st.N}" + (Named(st) ? ": " + st.Name : "") : "") + (e.TitleEn.Length > 0 && e.TitleEn != e.Title ? $" · {e.TitleEn}" : "");
             article.Children.Add(new TextBlock { Text = meta, Foreground = R("DimBrush"), FontSize = 12, Margin = new Thickness(0, 2, 0, 10), TextWrapping = TextWrapping.Wrap });
-            var body = new TextBlock { Text = e.Text.Length > 0 ? e.Text : "Загружаю описание…", FontSize = 14, TextWrapping = TextWrapping.Wrap, LineHeight = 21 };
+            var body = new TextBlock { FontSize = 14, TextWrapping = TextWrapping.Wrap, LineHeight = 21 };
+            if (e.Text.Length > 0) Linked(body, e.Text, e); else body.Text = "Загружаю описание…";
             article.Children.Add(body);
             if (secret)
             {
@@ -133,16 +198,40 @@ public static class GameKbWindow
             var q = search.Text.Trim();
             var found = GameBuilder.Search(b, q).Where(e => kind.Length == 0 || e.Kind == kind);
             if (stageFilter.SelectedIndex > 0) found = found.Where(e => e.Stage == stageFilter.SelectedIndex || e.Stage == 0);
-            if (q.Length == 0) found = found.OrderBy(e => Array.FindIndex(GameKb.Kinds, k => k.Key == e.Kind)).ThenBy(e => e.Stage).ThenBy(e => e.Title);
+            var keep = list.SelectedItem is ListBoxItem { Tag: KbEntry was } ? was : null;
             list.Items.Clear();
-            foreach (var e in found.Take(400))
+            void Row(KbEntry e, string title, double indent)
             {
                 var row = new StackPanel { Orientation = Orientation.Horizontal };
                 row.Children.Add(new TextBlock { Text = GameKb.Kinds.FirstOrDefault(k => k.Key == e.Kind).Icon ?? "", FontFamily = (FontFamily)Application.Current.Resources["IconFont"], Foreground = R("AccentBrush"), Width = 24, VerticalAlignment = VerticalAlignment.Center });
-                var title = Hidden(e) && e.Spoiler ? $"Спойлер · этап {e.Stage}" : e.Title;
-                row.Children.Add(new TextBlock { Text = title, TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = 280, VerticalAlignment = VerticalAlignment.Center });
-                list.Items.Add(new ListBoxItem { Content = row, Tag = e, Padding = new Thickness(6, 5, 6, 5), Foreground = R("TextBrush") });
+                if (Hidden(e) && e.Spoiler) title = $"Спойлер · этап {e.Stage}";
+                row.Children.Add(new TextBlock { Text = title, TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = 280 - indent, VerticalAlignment = VerticalAlignment.Center });
+                list.Items.Add(new ListBoxItem { Content = row, Tag = e, Padding = new Thickness(6 + indent, 5, 6, 5), Foreground = R("TextBrush") });
             }
+            if (q.Length > 0)
+                foreach (var e in found.Take(400)) Row(e, e.Title, 0);
+            else
+            {
+                // Like the game's journal: groups that fold. Storylines by character, «Всё» by kind, the rest by stage.
+                var groups = found.GroupBy(e => Group(e)).OrderBy(g => g.Min(e => Order(e))).ToList();
+                foreach (var g in groups)
+                {
+                    var items = g.OrderBy(e => e.Stage).ThenBy(e => e.Kind == "arc" ? "" : e.Title).ToList();
+                    if (groups.Count == 1) { foreach (var e in items) Row(e, e.Title, 0); break; }
+                    var key = kind + "|" + g.Key;
+                    bool open = kind.Length == 0 ? toggled.Contains(key) : !toggled.Contains(key);
+                    var head = new ListBoxItem
+                    {
+                        Content = new TextBlock { Text = (open ? "▾  " : "▸  ") + g.Key + $"  ({items.Count})", FontWeight = FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis },
+                        Tag = key, Padding = new Thickness(4, 7, 6, 5), Foreground = R("TextBrush"), Focusable = false,
+                    };
+                    head.PreviewMouseLeftButtonDown += (_, a) => { a.Handled = true; if (!toggled.Remove(key)) toggled.Add(key); Fill(); };
+                    list.Items.Add(head);
+                    if (open) foreach (var e in items) Row(e, e.Kind == "arc" ? e.Title[(e.Title.IndexOf(':') + 1)..].Trim() : e.Title, 14);
+                }
+            }
+            // The entry being read stays selected (a fold doesn't throw the article away).
+            if (keep != null && list.Items.OfType<ListBoxItem>().FirstOrDefault(i => i.Tag == keep) is { } again) { quiet = true; list.SelectedItem = again; quiet = false; return; }
             if (list.Items.Count == 0)
             {
                 article.Children.Clear();
@@ -159,8 +248,18 @@ public static class GameKbWindow
                     article.Children.Add(look);
                 }
             }
-            else if (list.SelectedIndex < 0) list.SelectedIndex = 0;
+            else if (list.SelectedIndex < 0 && keep == null) list.SelectedItem = list.Items.OfType<ListBoxItem>().FirstOrDefault(i => i.Tag is KbEntry);
         }
+
+        string Group(KbEntry e)
+        {
+            if (kind.Length == 0) return GameKb.KindName(e.Kind);
+            if (e.Kind == "arc") return e.Title.Split(':')[0].Trim();
+            if (e.Stage <= 0 || b.Stages.FirstOrDefault(s => s.N == e.Stage) is not { } st) return "Без этапа";
+            return $"Этап {st.N}" + (Named(st) ? ": " + st.Name : "");
+        }
+        // Groups in the journal's order: kinds as the filters list them, stages by number, «Без этапа» last.
+        int Order(KbEntry e) => kind.Length == 0 ? Array.FindIndex(GameKb.Kinds, k => k.Key == e.Kind) : e.Kind == "arc" ? 0 : e.Stage <= 0 ? 99 : e.Stage;
 
         void Chips()
         {
@@ -184,16 +283,16 @@ public static class GameKbWindow
             }
         }
 
-        void Refresh() => w.Dispatcher.BeginInvoke(() => { Chips(); Fill(); });
+        void Refresh() => w.Dispatcher.BeginInvoke(() => { Names(); Chips(); Fill(); });
 
-        list.SelectionChanged += (_, _) => { if (list.SelectedItem is ListBoxItem { Tag: KbEntry e }) Show(e); };
+        list.SelectionChanged += (_, _) => { if (!quiet && list.SelectedItem is ListBoxItem { Tag: KbEntry e }) Show(e); };
         search.TextChanged += (_, _) => Fill();
         stageFilter.SelectionChanged += (_, _) => Fill();
         stageBox.SelectionChanged += (_, _) =>
         {
             b.Progress = stageBox.SelectedIndex == 0 ? b.Stages.Count + 1 : stageBox.SelectedIndex;
             GameKb.Save(b);
-            Fill();
+            Names(); Fill();
         };
         async void Ask()
         {
@@ -204,7 +303,7 @@ public static class GameKbWindow
             article.Children.Add(new TextBlock { Text = q, FontSize = 16, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap });
             var answer = new TextBlock { Text = "Думаю…", FontSize = 14, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 8, 0, 0), LineHeight = 21 };
             article.Children.Add(answer);
-            try { answer.Text = await GameBuilder.Answer(b, q); }
+            try { var a = await GameBuilder.Answer(b, q); answer.Text = ""; Linked(answer, a, null); }
             catch (Exception ex) { answer.Text = "Не получилось: " + ex.Message; }
             askBtn.IsEnabled = true;
         }
@@ -213,7 +312,7 @@ public static class GameKbWindow
         GameKb.Changed += Refresh;
         w.Closed += (_, _) => GameKb.Changed -= Refresh;
 
-        Chips(); Fill();
+        Names(); Chips(); Fill();
         _w = w;
         w.Show();
         w.Activate();

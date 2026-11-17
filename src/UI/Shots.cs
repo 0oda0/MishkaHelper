@@ -14,7 +14,7 @@ public static class Shots
         // Dev copies aren't elevated, so the LAN remote can't bind; localhost is enough to show its QR on the Tools page.
         if (!Remote.Running) try { Remote.StartLocal(); } catch { }
         await Task.Delay(1500);
-        foreach (var p in new[] { "Jarvis", "Scenarios", "Home", "Controls", "System", "Devices", "Phone", "Nitro", "Boost", "Security", "Tools", "Profiles", "Hotkeys", "Radial", "Widgets", "Settings", "Support", "Secretary", "Games" })
+        foreach (var p in new[] { "Jarvis", "Scenarios", "Home", "Controls", "System", "Devices", "Phone", "Nitro", "Boost", "Security", "Tools", "Profiles", "Hotkeys", "Radial", "Widgets", "Settings", "Support", "Secretary", "Games", "Deck" })
         {
             if (p is "Jarvis" or "Scenarios" && !Edition.HasJarvis || p == "Secretary" && !Edition.HasSecretary || p == "Games" && !Edition.HasGames) continue;
             main.Navigate(p);

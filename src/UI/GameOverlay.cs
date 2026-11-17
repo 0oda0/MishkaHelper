@@ -47,8 +47,12 @@ public static class GameOverlay
         _timer.Start();
     }
 
+    /// <summary>Frames in the last second of the game in front (0 = not counting): the phone deck shows it.</summary>
+    public static int LastFps { get; private set; }
+
     public static void Hide()
     {
+        LastFps = 0;
         _timer?.Stop(); _timer = null;
         _w?.Close(); _w = null;
         _live?.Dispose(); _live = null;
@@ -62,6 +66,7 @@ public static class GameOverlay
         Fps.Pid = (int)pid;
         int frames = Fps.Take();
         var s = SysMon.Last;
+        LastFps = _fps && same ? frames : 0;
         var fps = !_fps ? "" : same && frames > 0 ? $"{frames,3} FPS  " : "  — FPS  ";
         _text!.Text = $"{fps}CPU {s.Cpu,3:0}% {s.CpuTemp}°  GPU {s.Gpu,3:0}% {s.GpuTemp}°";
         _w!.Topmost = false; _w.Topmost = true;   // a game that went full-screen after us would cover it

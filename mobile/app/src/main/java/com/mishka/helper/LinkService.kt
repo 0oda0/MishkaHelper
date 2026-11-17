@@ -192,6 +192,7 @@ class LinkService : Service() {
             "toast" -> event("Mishka", m.optString("text"))
             "act" -> NotifListener.act(this, m.optString("id"), m.optInt("i", -1), if (m.has("text")) m.optString("text") else null)
             "file" -> Thread { download(m.optString("id"), m.optString("name")) }.start()
+            "deck", "deckLive", "deckPage" -> Deck.handle(m)
         }
     }
 

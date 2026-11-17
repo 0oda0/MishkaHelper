@@ -389,7 +389,7 @@ public static class Remote
             {
                 var parts = arg.Split('\t', 2);
                 if (parts.Length < 2 || GameKb.All().FirstOrDefault(x => x.Key == parts[0]) is not { } b) return new { answer = "" };
-                try { return new { answer = await GameBuilder.Answer(b, parts[1]) }; } catch (Exception ex) { return new { answer = "Не получилось: " + ex.Message }; }
+                try { return new { answer = GameBuilder.Unlink(await GameBuilder.Answer(b, parts[1])) }; } catch (Exception ex) { return new { answer = "Не получилось: " + ex.Message }; }
             }
             case "kbProgress" when Edition.HasGames:   // "key\tstage"
             {

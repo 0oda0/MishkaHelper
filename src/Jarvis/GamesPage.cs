@@ -73,6 +73,24 @@ public class GamesPage : UserControl
         ab.Children.Add(row2);
         root.Children.Add(add);
 
+        // Bases made ahead: in the game it's already there. They queue up and build one at a time (during a game — after it).
+        var steam = GameKb.SteamLibrary();
+        if (steam.Count > 0)
+        {
+            var (lib, lb) = Card("Игры Steam на этом ПК");
+            lb.Children.Add(UiKit.Text("Нажми на игру — база соберётся заранее, по очереди. Пока идёт игра, сборка ждёт её конца.", 12, true));
+            var wrap = new WrapPanel { Margin = new Thickness(0, 6, 0, 0) };
+            var have = GameKb.All().Select(b => b.Key).ToHashSet();
+            foreach (var g in steam.Where(g => !have.Contains(g.Key)))
+            {
+                var x = new Button { Content = g.Name, Margin = new Thickness(0, 0, 6, 6) };
+                x.Click += (_, _) => { x.IsEnabled = false; x.Content = g.Name + " ✓"; _ = GameBuilder.Build(g); };
+                wrap.Children.Add(x);
+            }
+            lb.Children.Add(wrap.Children.Count > 0 ? wrap : UiKit.Text("Для всех установленных игр базы уже есть.", 12, true));
+            root.Children.Add(lib);
+        }
+
         var (bases, bb) = Card("Базы");
         bb.Children.Add(_bases);
         root.Children.Add(bases);

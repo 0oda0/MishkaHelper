@@ -69,6 +69,7 @@ public partial class MainWindow : Window
             "Hotkeys" => new HotkeysPage(),
             "Radial" => new RadialPage(),
             "Phone" => new PhonePage(),
+            "Deck" => new DeckEditPage(),
             "Support" => new SupportPage(),
 #if SECRETARY
             "Secretary" => new SecretaryPage(),

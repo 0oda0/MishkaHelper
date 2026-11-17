@@ -793,8 +793,74 @@ public class HotkeyKindsTests
     }
 }
 
+public class DeckTests
+{
+    [Fact]
+    public void DefaultKeysAreValid()
+    {
+        var d = Deck.Default();
+        Assert.Contains(d.Pages, p => p.Processes.Contains("game"));
+        Assert.Contains(d.Pages, p => p.Processes.Contains("photoshop"));
+        foreach (var k in d.Pages.SelectMany(p => p.Keys))
+        {
+            Assert.InRange(k.Slot, 0, d.Cols * d.Rows - 1);
+            if (k.Kind == "keys") Assert.True(AppWheels.Valid(k.Value), k.Value);
+        }
+        Assert.All(d.Pages, p => Assert.Equal(p.Keys.Count, p.Keys.Select(k => k.Slot).Distinct().Count()));
+    }
+
+    [Fact]
+    public void PageFollowsTheProgram()
+    {
+        var d = Deck.Default();
+        Assert.Equal("photoshop", Deck.PageFor(d, "Photoshop", false));
+        Assert.Equal("game", Deck.PageFor(d, "bg3_dx11", true));
+        Assert.Null(Deck.PageFor(d, "notepad", false));   // nothing of its own: the phone keeps the page it shows
+    }
+
+    [Fact]
+    public void PhoneEditsAreMadeSafe()
+    {
+        var n = System.Text.Json.Nodes.JsonNode.Parse("""
+            {"cols":40,"rows":1,"autoPage":true,"pages":[{"id":"a","name":"A","processes":["x"],"keys":[
+              {"slot":0,"kind":"act","value":"mute","label":"M","emoji":"","color":"red","live":"evil"},
+              {"slot":0,"kind":"act","value":"volUp","label":"V","emoji":"","color":"#112233","live":"cpu"},
+              {"slot":99,"kind":"act","value":"lock"},
+              {"slot":40,"kind":"act","value":"night","style":"graph","w":3,"h":99},
+              {"slot":41,"kind":"act","value":"dnd","style":"sparkles"},
+              {"slot":1,"kind":"run-anything","value":"cmd"}]}]}
+            """);
+        var d = Deck.Parse(n)!;
+        Assert.Equal(8, d.Cols); Assert.Equal(2, d.Rows);
+        // Duplicate slot → last wins; past 8 × 8 and unknown kinds dropped; past the PC's grid kept (a tablet shows more).
+        Assert.Equal(new[] { 0, 40, 41 }, d.Pages[0].Keys.Select(x => x.Slot).OrderBy(x => x));
+        var g = d.Pages[0].Keys.First(x => x.Slot == 40);
+        Assert.Equal(("graph", 3, 8), (g.Style, g.W, g.H));
+        Assert.Equal("", d.Pages[0].Keys.First(x => x.Slot == 41).Style);   // unknown look → plain number
+        var k = d.Pages[0].Keys.First(x => x.Slot == 0);
+        Assert.Equal("volUp", k.Value); Assert.Equal("#112233", k.Color); Assert.Equal("cpu", k.Live);
+        Assert.Null(Deck.Parse(System.Text.Json.Nodes.JsonNode.Parse("""{"pages":[]}""")));
+    }
+}
+
 public class GameKbTests
 {
+    [Fact]
+    public void WikiGuessPicksTheMatchingPage()
+    {
+        var cands = new List<string> { "Potion of Healing", "Alchemy", "Rogue's Morsel", "Salts of Rogue's Morsel", "Trap" };
+        Assert.Equal("Rogue's Morsel", GameBuilder.BestTitle(cands, new() { "Thief's Treat", "Rogue's Morsel" }));
+        Assert.Equal("Potion of Healing", GameBuilder.BestTitle(cands, new()));   // no guesses: the search's own first hit
+        Assert.Null(GameBuilder.BestTitle(cands, new() { "Thief's Treat" }));     // nothing alike: no page rather than a wrong one
+        Assert.Equal("Rogue's Morsel", GameBuilder.BestTitle(new() { "Salts of Rogue's Morsel", "Rogue's Morsel" }, new() { "rogue", "rogue morsel", "thief morsel" }));   // the fullest guess wins over "Salts of…"
+    }
+
+    [Fact]
+    public void LinksAreTakenOutForThePhone()
+    {
+        Assert.Equal("Это ингредиент для Зелье лечения и соли.", GameBuilder.Unlink("Это ингредиент для [[Potion of Healing|Зелье лечения]] и [[соли]]."));
+    }
+
     [Fact]
     public void PlainText()
     {

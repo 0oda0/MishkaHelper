@@ -56,7 +56,7 @@ public static class Focus
         return Fills(IsZoomed(h), (r.Left, r.Top, r.Right, r.Bottom), (i.Monitor.Left, i.Monitor.Top, i.Monitor.Right, i.Monitor.Bottom));
     }
 
-    static (int Pid, string Name) Foreground()
+    internal static (int Pid, string Name) Foreground()
     {
         GetWindowThreadProcessId(GetForegroundWindow(), out var pid);
         try { using var p = Process.GetProcessById((int)pid); return ((int)pid, p.ProcessName); } catch { return (0, ""); }

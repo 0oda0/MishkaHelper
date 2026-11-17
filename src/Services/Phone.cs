@@ -126,6 +126,7 @@ public static class Phone
                         n.Text.Length > 160 ? n.Text[..160] + "…" : n.Text, null, buttons.Length > 0 ? buttons : null));
                 Fire();
                 break;
+            case var t when t.StartsWith("deck"): Deck.Handle(m); break;
             case "clip":
                 var text = S(m, "text");
                 if (text.Length is > 0 and < 100_000)
@@ -155,7 +156,7 @@ public static class Phone
         return list.ToArray();
     }
 
-    static async Task<bool> Send(object o)
+    internal static async Task<bool> Send(object o)
     {
         var ws = _ws;
         if (ws?.State != WebSocketState.Open) return false;
