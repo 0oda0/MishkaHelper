@@ -22,6 +22,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -37,9 +39,11 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 data class DeckKey(val slot: Int, val label: String, val emoji: String, val color: String, val kind: String, val value: String, val live: String,
-                   val style: String = "", val w: Int = 1, val h: Int = 1) {
+                   val style: String = "", val w: Int = 1, val h: Int = 1, val swipe: String = "", val img: String = "") {
+    /** A sideways swipe changes this: its own choice, or volume for a key that already is about sound (same rule as the PC). */
+    val swipes: String get() = swipe.ifEmpty { if (live == "vol" || value in setOf("mute", "volUp", "volDown")) "vol" else "" }
     fun json(): JSONObject = JSONObject().put("slot", slot).put("label", label).put("emoji", emoji).put("color", color).put("kind", kind).put("value", value).put("live", live)
-        .put("style", style).put("w", w).put("h", h)
+        .put("style", style).put("w", w).put("h", h).put("swipe", swipe).put("img", img)
 }
 data class DeckPage(val id: String, val name: String, val processes: List<String>, val keys: List<DeckKey>) {
     fun json(): JSONObject = JSONObject().put("id", id).put("name", name).put("processes", JSONArray(processes)).put("keys", JSONArray(keys.map { it.json() }))
@@ -59,6 +63,7 @@ object Deck {
     val actions = MutableStateFlow<List<Pair<String, String>>>(emptyList())   // action key → name
     val lives = MutableStateFlow<List<Pair<String, String>>>(emptyList())
     val styles = MutableStateFlow<List<Pair<String, String>>>(emptyList())
+    val swipes = MutableStateFlow<List<Pair<String, String>>>(emptyList())
     /** The last minute of every live number (one a second), for graphs. */
     val history = MutableStateFlow<Map<String, List<Float>>>(emptyMap())
     val icons = MutableStateFlow<Map<String, Bitmap>>(emptyMap())
@@ -69,6 +74,7 @@ object Deck {
             "deck" -> {
                 data.value = parse(m.getJSONObject("deck"))
                 actions.value = m.optJSONArray("actions")?.let { a -> (0 until a.length()).map { a.getJSONObject(it).let { o -> o.optString("a") to o.optString("n") } } }.orEmpty()
+                swipes.value = m.optJSONArray("swipes")?.let { a -> (0 until a.length()).map { a.getJSONObject(it).let { o -> o.optString("k") to o.optString("n") } } }.orEmpty()
                 styles.value = m.optJSONArray("styles")?.let { a -> (0 until a.length()).map { a.getJSONObject(it).let { o -> o.optString("k") to o.optString("n") } } }.orEmpty()
                 lives.value = m.optJSONArray("lives")?.let { a -> (0 until a.length()).map { a.getJSONObject(it).let { o -> o.optString("k") to o.optString("n") } } }.orEmpty()
                 icons.value = m.optJSONObject("icons")?.let { o ->
@@ -95,10 +101,32 @@ object Deck {
             DeckPage(p.optString("id"), p.optString("name"), (0 until procs.length()).map { procs.getString(it) }, (0 until keys.length()).map { j ->
                 val k = keys.getJSONObject(j)
                 DeckKey(k.optInt("slot"), k.optString("label"), k.optString("emoji"), k.optString("color"), k.optString("kind"), k.optString("value"), k.optString("live"),
-                    k.optString("style"), k.optInt("w", 1).coerceAtLeast(1), k.optInt("h", 1).coerceAtLeast(1))
+                    k.optString("style"), k.optInt("w", 1).coerceAtLeast(1), k.optInt("h", 1).coerceAtLeast(1), k.optString("swipe"), k.optString("img"))
             })
         })
     }
+
+    fun swipe(page: String, slot: Int, n: Int) = LinkService.send(JSONObject().put("t", "deckSwipe").put("page", page).put("slot", slot).put("n", n))
+
+    private val pictures = HashMap<String, Bitmap?>()
+    /** A key's picture, decoded once. */
+    fun picture(b64: String): Bitmap? = if (b64.isEmpty()) null else pictures.getOrPut(b64) {
+        runCatching { Base64.decode(b64, Base64.DEFAULT).let { BitmapFactory.decodeByteArray(it, 0, it.size) } }.getOrNull()
+    }
+
+    /** A picture from the gallery made key-sized: 128 px on the long side, PNG (JPEG if that comes out big). */
+    fun shrink(c: android.content.Context, uri: android.net.Uri): String? = runCatching {
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        c.contentResolver.openInputStream(uri)!!.use { BitmapFactory.decodeStream(it, null, bounds) }
+        var sample = 1
+        while (maxOf(bounds.outWidth, bounds.outHeight) / (sample * 2) >= 128) sample *= 2
+        val raw = c.contentResolver.openInputStream(uri)!!.use { BitmapFactory.decodeStream(it, null, BitmapFactory.Options().apply { inSampleSize = sample }) }!!
+        val scale = 128f / maxOf(raw.width, raw.height)
+        val small = if (scale < 1f) Bitmap.createScaledBitmap(raw, (raw.width * scale).toInt().coerceAtLeast(1), (raw.height * scale).toInt().coerceAtLeast(1), true) else raw
+        var out = java.io.ByteArrayOutputStream().also { small.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        if (out.size() > 60_000) out = java.io.ByteArrayOutputStream().also { small.compress(Bitmap.CompressFormat.JPEG, 85, it) }
+        Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP)
+    }.getOrNull()
 
     fun press(page: String, slot: Int) = LinkService.send(JSONObject().put("t", "deckPress").put("page", page).put("slot", slot))
     fun save(d: DeckData) { data.value = d; LinkService.send(JSONObject().put("t", "deckSave").put("deck", d.json())) }
@@ -197,7 +225,7 @@ fun DeckTab() {
                     for (dy in 0 until kh) for (dx in 0 until kw) covered += (r + dy) * cols + c + dx
                     val bw = w * kw + gap * (kw - 1); val bh = h * kh + gap * (kh - 1)
                     Box(Modifier.offset(x = (w + gap) * c, y = (h + gap) * r).size(bw, bh)) {
-                        DeckKeyView(k, bw, bh, live, history, icons,
+                        DeckKeyView(k, bw, bh, live, history, icons, onSwipe = { n -> haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove); Deck.swipe(page.id, slot, n) },
                             onClick = {
                                 if (k == null) { editing = slot; return@DeckKeyView }
                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -235,6 +263,13 @@ private fun KeyEditor(d: DeckData, page: DeckPage, slot: Int, close: () -> Unit)
     var kw by remember { mutableIntStateOf(k?.w ?: 1) }
     var kh by remember { mutableIntStateOf(k?.h ?: 1) }
     val styles by Deck.styles.collectAsState()
+    val swipeList by Deck.swipes.collectAsState()
+    var swipe by remember { mutableStateOf(k?.swipe ?: "") }
+    var img by remember { mutableStateOf(k?.img ?: "") }
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val pick = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.GetContent()) { uri ->
+        if (uri != null) Deck.shrink(ctx, uri)?.let { img = it }
+    }
     var query by remember { mutableStateOf("") }
     var picking by remember { mutableStateOf(k?.kind != "act") }
     val actions by Deck.actions.collectAsState()
@@ -279,6 +314,11 @@ private fun KeyEditor(d: DeckData, page: DeckPage, slot: Int, close: () -> Unit)
                 if (kind.isNotEmpty()) {
                     OutlinedTextField(label, { label = it }, label = { Text("Подпись") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                     OutlinedTextField(emoji, { emoji = it.take(16) }, label = { Text("Значок-эмодзи") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 6.dp)) {
+                        Deck.picture(img)?.let { Image(it.asImageBitmap(), null, Modifier.size(36.dp).padding(end = 8.dp)) }
+                        TextButton(onClick = { pick.launch("image/*") }) { Text(if (img.isEmpty()) "Картинка вместо эмодзи" else "Другая картинка") }
+                        if (img.isNotEmpty()) TextButton(onClick = { img = "" }) { Text("Убрать", color = Red) }
+                    }
                     Spacer(Modifier.height(8.dp))
                     Row { Swatches.forEach { s -> Box(Modifier.padding(end = 6.dp).size(28.dp).background(color(s, KeyBg), RoundedCornerShape(8.dp))
                         .border(if (s == color) 2.dp else 1.dp, if (s == color) Color.White else Color(0x33FFFFFF), RoundedCornerShape(8.dp)).clickable { color = s }) } }
@@ -293,6 +333,10 @@ private fun KeyEditor(d: DeckData, page: DeckPage, slot: Int, close: () -> Unit)
                             styles.forEach { (sk, sn) -> FilterChip(style == sk, { style = sk; if (sk == "graph" && kw == 1 && kh == 1) kw = 2 }, { Text(sn, fontSize = 12.sp) }, Modifier.padding(end = 4.dp)) }
                         }
                     }
+                    Text("Свайп по кнопке влево / вправо", color = Dim, fontSize = 12.sp)
+                    FlowRow {
+                        swipeList.forEach { (wk, wn) -> FilterChip(swipe == wk, { swipe = wk }, { Text(wn, fontSize = 12.sp) }, Modifier.padding(end = 4.dp)) }
+                    }
                     Text("Размер в клетках", color = Dim, fontSize = 12.sp)
                     FlowRow {
                         listOf(1 to 1, 2 to 1, 1 to 2, 2 to 2, 3 to 1, 4 to 2).forEach { (a, b) ->
@@ -304,7 +348,7 @@ private fun KeyEditor(d: DeckData, page: DeckPage, slot: Int, close: () -> Unit)
         },
         confirmButton = {
             TextButton(onClick = {
-                val keys = page.keys.filter { it.slot != slot } + (if (kind.isEmpty() || (kind != "text" && value.isBlank())) emptyList() else listOf(DeckKey(slot, label.trim(), emoji.trim(), color, kind, value.trim(), liveKey, if (liveKey.isEmpty()) "" else style, kw, kh)))
+                val keys = page.keys.filter { it.slot != slot } + (if (kind.isEmpty() || (kind != "text" && value.isBlank())) emptyList() else listOf(DeckKey(slot, label.trim(), emoji.trim(), color, kind, value.trim(), liveKey, if (liveKey.isEmpty()) "" else style, kw, kh, swipe, img)))
                 Deck.save(d.copy(pages = d.pages.map { if (it.id == page.id) it.copy(keys = keys) else it }))
                 close()
             }) { Text("Сохранить", color = Pink) }
@@ -367,14 +411,25 @@ private fun GridEditor(cols0: Int, rows0: Int, onDone: (Int, Int) -> Unit, onCan
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun DeckKeyView(k: DeckKey?, w: androidx.compose.ui.unit.Dp, h: androidx.compose.ui.unit.Dp, live: JSONObject, history: Map<String, List<Float>>,
-                        icons: Map<String, Bitmap>, onClick: () -> Unit, onLongClick: () -> Unit) {
+                        icons: Map<String, Bitmap>, onSwipe: (Int) -> Unit, onClick: () -> Unit, onLongClick: () -> Unit) {
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    // A sideways swipe: one step per ~36 dp of finger travel, sent as it goes.
+    val swipe = if (k != null && k.swipes.isNotEmpty()) Modifier.pointerInput(k) {
+        val step = with(density) { 36.dp.toPx() }
+        var acc = 0f
+        detectHorizontalDragGestures(onDragStart = { acc = 0f }) { change, dx ->
+            change.consume(); acc += dx
+            while (acc >= step) { acc -= step; onSwipe(1) }
+            while (acc <= -step) { acc += step; onSwipe(-1) }
+        }
+    } else Modifier
     val on = k != null && k.kind == "act" && live.optBoolean("s:" + k.value, false)
     // Off-switches (mic, sound) light up red when they are "on" = muted.
     val glow = if (!on) null else if (k!!.value in setOf("micMute", "mute")) Red else Pink
     val shape = RoundedCornerShape(16.dp)
     Box(Modifier.fillMaxSize().clip(shape).background(color(k?.color ?: "", KeyBg))
         .border(if (glow != null) 2.dp else 1.dp, glow ?: Color(0x33FF3DA8), shape)
-        .combinedClickable(onClick = onClick, onLongClick = onLongClick), contentAlignment = Alignment.Center) {
+        .then(swipe).combinedClickable(onClick = onClick, onLongClick = onLongClick), contentAlignment = Alignment.Center) {
         if (k == null) { Text("+", color = Color(0x33FFFFFF), fontSize = 22.sp); return@Box }
         val hist = history["n:" + k.live].orEmpty()
         val value = live.optDouble("n:" + k.live, Double.NaN).toFloat()
@@ -398,7 +453,7 @@ private fun DeckKeyView(k: DeckKey?, w: androidx.compose.ui.unit.Dp, h: androidx
             }
         }
         val low = h < 96.dp
-        val icon = if (k.emoji.isEmpty() && k.kind == "open") icons[k.value] else null
+        val icon = Deck.picture(k.img) ?: if (k.emoji.isEmpty() && k.kind == "open") icons[k.value] else null
         val graph = k.style == "graph" && k.live.isNotEmpty()
         Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(4.dp).let { if (graph) it.align(Alignment.TopCenter) else it }) {
             @Composable fun Face() {

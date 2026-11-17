@@ -827,13 +827,20 @@ public class DeckTests
               {"slot":0,"kind":"act","value":"volUp","label":"V","emoji":"","color":"#112233","live":"cpu"},
               {"slot":99,"kind":"act","value":"lock"},
               {"slot":40,"kind":"act","value":"night","style":"graph","w":3,"h":99},
-              {"slot":41,"kind":"act","value":"dnd","style":"sparkles"},
+              {"slot":41,"kind":"act","value":"dnd","style":"sparkles","swipe":"rm -rf","img":"PHNjcmlwdD4="},
+              {"slot":42,"kind":"act","value":"mute","swipe":"bright","img":"iVBORw0KGgoAAAANSUhEUg=="},
               {"slot":1,"kind":"run-anything","value":"cmd"}]}]}
             """);
         var d = Deck.Parse(n)!;
         Assert.Equal(8, d.Cols); Assert.Equal(2, d.Rows);
         // Duplicate slot → last wins; past 8 × 8 and unknown kinds dropped; past the PC's grid kept (a tablet shows more).
-        Assert.Equal(new[] { 0, 40, 41 }, d.Pages[0].Keys.Select(x => x.Slot).OrderBy(x => x));
+        Assert.Equal(new[] { 0, 40, 41, 42 }, d.Pages[0].Keys.Select(x => x.Slot).OrderBy(x => x));
+        var bad = d.Pages[0].Keys.First(x => x.Slot == 41);
+        Assert.Equal(("", ""), (bad.Swipe, bad.Img));   // unknown swipe dropped; "<script>" is no picture
+        var good = d.Pages[0].Keys.First(x => x.Slot == 42);
+        Assert.Equal("bright", good.Swipe); Assert.StartsWith("iVBOR", good.Img);   // a PNG header passes
+        Assert.Equal("vol", Deck.SwipeOf(new DeckKey { Value = "mute" }));    // a sound key swipes volume by itself
+        Assert.Equal("", Deck.SwipeOf(new DeckKey { Value = "lock" }));
         var g = d.Pages[0].Keys.First(x => x.Slot == 40);
         Assert.Equal(("graph", 3, 8), (g.Style, g.W, g.H));
         Assert.Equal("", d.Pages[0].Keys.First(x => x.Slot == 41).Style);   // unknown look → plain number

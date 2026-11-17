@@ -16,6 +16,8 @@ public class DeckKey
     public string Value { get; set; } = "";
     public string Live { get; set; } = "";      // shown on the key: cpu, gpu, cpuTemp, gpuTemp, ram, fps, vol, time, net
     public string Style { get; set; } = "";     // how the live number looks: "" number, bar, graph (last minute), ring
+    public string Swipe { get; set; } = "";     // a sideways swipe on the key: vol (±5), bright (±10); a volume key swipes by itself
+    public string Img { get; set; } = "";       // a picture instead of the emoji: base64 PNG/JPEG, made small (128 px) where it was picked
     public int W { get; set; } = 1;             // cells wide and high: a graph reads better on 2 × 1 or 4 × 2
     public int H { get; set; } = 1;
 }
@@ -95,6 +97,34 @@ public static class Deck
             case "text": InputSim.Type(k.Value.Length > 2000 ? k.Value[..2000] : k.Value); break;
             case "open": if (k.Value.Trim().Length > 0) Shell.Open(Environment.ExpandEnvironmentVariables(k.Value.Trim())); break;   // through Explorer: never elevated
         }
+    }
+
+    /// <summary>What a sideways swipe on this key changes: its own setting, or volume for a key that already is about sound.</summary>
+    internal static string SwipeOf(DeckKey k) => k.Swipe.Length > 0 ? k.Swipe : k.Live == "vol" || k.Value is "mute" or "volUp" or "volDown" ? "vol" : "";
+
+    static void Swipe(DeckKey k, int steps)
+    {
+        switch (SwipeOf(k))
+        {
+            case "vol": Audio.Volume = Math.Clamp(Audio.Volume + 5 * steps, 0, 100); Osd.Show("", "Громкость", Audio.Volume); break;
+            case "bright": Display.Brightness = Math.Clamp(Display.Brightness + 10 * steps, 0, 100); Osd.Show("", "Яркость", Display.Brightness); break;
+        }
+    }
+
+    public static readonly (string Key, string Name)[] Swipes = { ("", "Нет"), ("vol", "Громкость ±5"), ("bright", "Яркость ±10") };
+
+    /// <summary>A picture from the phone or the PC editor, kept only if it is a small PNG or JPEG.</summary>
+    internal static string SafeImg(string? b64)
+    {
+        if (string.IsNullOrEmpty(b64) || b64.Length > 140_000) return "";
+        try
+        {
+            var b = Convert.FromBase64String(b64);
+            bool png = b.Length > 8 && b[0] == 0x89 && b[1] == 0x50 && b[2] == 0x4E && b[3] == 0x47;
+            bool jpg = b.Length > 3 && b[0] == 0xFF && b[1] == 0xD8 && b[2] == 0xFF;
+            return png || jpg ? b64 : "";
+        }
+        catch { return ""; }
     }
 
     // ---------------- live numbers ----------------
@@ -207,7 +237,8 @@ public static class Deck
         foreach (var k in d.Pages.SelectMany(p => p.Keys).Where(k => k.Kind == "open" && k.Emoji.Length == 0))
             if (!icons.ContainsKey(k.Value) && IconPng(k.Value) is { } png) icons[k.Value] = png;
         var actions = CommandPalette.Commands().Select(c => new { a = c.Action, n = c.Name }).ToList();
-        return Phone.Send(new { t = "deck", deck = JsonSerializer.SerializeToNode(d, Json), icons, actions, lives = Lives.Select(l => new { k = l.Key, n = l.Name }), styles = Styles.Select(l => new { k = l.Key, n = l.Name }) });
+        return Phone.Send(new { t = "deck", deck = JsonSerializer.SerializeToNode(d, Json), icons, actions, lives = Lives.Select(l => new { k = l.Key, n = l.Name }),
+            styles = Styles.Select(l => new { k = l.Key, n = l.Name }), swipes = Swipes.Select(l => new { k = l.Key, n = l.Name }) });
     }
 
     /// <summary>A program's own icon as base64 PNG (32 px), for the phone.</summary>
@@ -241,6 +272,11 @@ public static class Deck
                 var page = D.Pages.FirstOrDefault(p => p.Id == m["page"]?.ToString());
                 if (page?.Keys.FirstOrDefault(k => k.Slot == (int?)m["slot"]) is { } key) Press(key);
                 break;
+            case "deckSwipe":   // n steps, left negative
+                var sp = D.Pages.FirstOrDefault(p => p.Id == m["page"]?.ToString());
+                if (sp?.Keys.FirstOrDefault(k => k.Slot == (int?)m["slot"]) is { } sk && int.TryParse(m["n"]?.ToString(), out var steps))
+                    System.Windows.Application.Current.Dispatcher.BeginInvoke(() => Swipe(sk, Math.Clamp(steps, -20, 20)));
+                break;
             case "deckSave":   // the phone's editor: the whole deck back, checked before it replaces ours
                 if (Parse(m["deck"]) is { } d) { Settings.Current.Deck = d; Settings.Save(); Changed?.Invoke(); _ = SendDeck(); }
                 break;
@@ -264,7 +300,8 @@ public static class Deck
             p.Name = Cut(p.Name, 40); p.Processes = p.Processes.Select(x => Cut(x.Trim(), 60)).Where(x => x.Length > 0).Take(10).ToList();
             p.Keys = p.Keys.Where(k => k.Slot >= 0 && k.Slot < MaxSlots && k.Kind is "act" or "keys" or "text" or "open" or "page")
                 .GroupBy(k => k.Slot).Select(g => g.Last()).ToList();
-            foreach (var k in p.Keys) { k.Label = Cut(k.Label, 40); k.Emoji = Cut(k.Emoji, 16); k.Value = Cut(k.Value, 2000); k.Color = System.Text.RegularExpressions.Regex.IsMatch(k.Color, "^#[0-9a-fA-F]{6}$") ? k.Color : ""; k.Live = Lives.Any(l => l.Key == k.Live) ? k.Live : ""; k.Style = Styles.Any(x => x.Key == k.Style) ? k.Style : ""; k.W = Math.Clamp(k.W, 1, 8); k.H = Math.Clamp(k.H, 1, 8); }
+            foreach (var k in p.Keys) { k.Label = Cut(k.Label, 40); k.Emoji = Cut(k.Emoji, 16); k.Value = Cut(k.Value, 2000); k.Color = System.Text.RegularExpressions.Regex.IsMatch(k.Color, "^#[0-9a-fA-F]{6}$") ? k.Color : ""; k.Live = Lives.Any(l => l.Key == k.Live) ? k.Live : ""; k.Style = Styles.Any(x => x.Key == k.Style) ? k.Style : ""; k.W = Math.Clamp(k.W, 1, 8); k.H = Math.Clamp(k.H, 1, 8);
+                k.Swipe = Swipes.Any(x => x.Key == k.Swipe) ? k.Swipe : ""; k.Img = SafeImg(k.Img); }
         }
         return d;
     }

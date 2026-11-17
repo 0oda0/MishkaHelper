@@ -115,7 +115,8 @@ public class DeckEditPage : UserControl
             var k = Page?.Keys.FirstOrDefault(x => x.Slot == i);
             int slot = i;
             var face = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-            face.Children.Add(new TextBlock { Text = k?.Emoji.Length > 0 ? k.Emoji : k?.Kind == "open" ? "🗔" : "", FontSize = 26, HorizontalAlignment = HorizontalAlignment.Center, FontFamily = new FontFamily("Segoe UI Emoji") });
+            if (Picture(k?.Img) is { } pic) face.Children.Add(new Image { Source = pic, Width = 34, Height = 34, HorizontalAlignment = HorizontalAlignment.Center });
+            else face.Children.Add(new TextBlock { Text = k?.Emoji.Length > 0 ? k.Emoji : k?.Kind == "open" ? "🗔" : "", FontSize = 26, HorizontalAlignment = HorizontalAlignment.Center, FontFamily = new FontFamily("Segoe UI Emoji") });
             face.Children.Add(new TextBlock { Text = k?.Label ?? "+", FontSize = 12, HorizontalAlignment = HorizontalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis, Foreground = k == null ? B("DimBrush") : B("TextBrush") });
             if (k is { W: > 1 } or { H: > 1 }) face.Children.Add(new TextBlock { Text = $"{k.W} × {k.H}", FontSize = 10, HorizontalAlignment = HorizontalAlignment.Center, Foreground = B("DimBrush") });
             if (k?.Live.Length > 0) face.Children.Add(new TextBlock { Text = Core.Deck.LiveText(k.Live), FontSize = 11, HorizontalAlignment = HorizontalAlignment.Center, Foreground = B("AccentBrush") });
@@ -128,6 +129,32 @@ public class DeckEditPage : UserControl
             cell.Click += (_, _) => { _slot = slot; FillGrid(); Edit(); };
             _grid.Children.Add(cell);
         }
+    }
+
+    static System.Windows.Media.Imaging.BitmapSource? Picture(string? b64)
+    {
+        if (string.IsNullOrEmpty(b64)) return null;
+        try
+        {
+            var bi = new System.Windows.Media.Imaging.BitmapImage();
+            bi.BeginInit(); bi.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad; bi.StreamSource = new System.IO.MemoryStream(Convert.FromBase64String(b64)); bi.EndInit(); bi.Freeze();
+            return bi;
+        }
+        catch { return null; }
+    }
+
+    /// <summary>A picked picture made phone-sized: 128 px on the long side, PNG (keeps transparency).</summary>
+    static string Shrink(string path)
+    {
+        var src = new System.Windows.Media.Imaging.BitmapImage();
+        src.BeginInit(); src.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad; src.UriSource = new Uri(path); src.EndInit();
+        double s = 128.0 / Math.Max(src.PixelWidth, src.PixelHeight);
+        System.Windows.Media.Imaging.BitmapSource small = s < 1 ? new System.Windows.Media.Imaging.TransformedBitmap(src, new ScaleTransform(s, s)) : src;
+        var enc = new System.Windows.Media.Imaging.PngBitmapEncoder();
+        enc.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(small));
+        using var ms = new System.IO.MemoryStream();
+        enc.Save(ms);
+        return Convert.ToBase64String(ms.ToArray());
     }
 
     /// <summary>The editor of the chosen key: what it does, how it looks, what live number it shows.</summary>
@@ -241,6 +268,24 @@ public class DeckEditPage : UserControl
         kw.SelectedItem = Math.Clamp(k.W, 1, 4); kh.SelectedItem = Math.Clamp(k.H, 1, 4);
         sizeRow.Children.Add(UiKit.Text("ширина", 12)); sizeRow.Children.Add(kw); sizeRow.Children.Add(UiKit.Text("  высота", 12)); sizeRow.Children.Add(kh);
         _editor.Children.Add(sizeRow);
+        _editor.Children.Add(UiKit.Text("Свайп по кнопке влево / вправо", 12, true));
+        var swipe = new ComboBox { Margin = new Thickness(0, 2, 0, 10) };
+        foreach (var (wk, wn) in Core.Deck.Swipes) swipe.Items.Add(new ComboBoxItem { Content = wn, Tag = wk });
+        swipe.SelectedItem = swipe.Items.OfType<ComboBoxItem>().FirstOrDefault(i => (string)i.Tag == k.Swipe) ?? swipe.Items[0];
+        _editor.Children.Add(swipe);
+        _editor.Children.Add(UiKit.Text("Картинка вместо эмодзи", 12, true));
+        string img = k.Img;
+        var imgRow = new WrapPanel { Margin = new Thickness(0, 2, 0, 10) };
+        var preview = new Image { Width = 40, Height = 40, Margin = new Thickness(0, 0, 8, 0), Source = Picture(img) };
+        imgRow.Children.Add(preview);
+        Btn(imgRow, "Выбрать…", () =>
+        {
+            var dlg = new Microsoft.Win32.OpenFileDialog { Filter = "Картинки|*.png;*.jpg;*.jpeg;*.bmp;*.gif;*.webp" };
+            if (dlg.ShowDialog() != true) return;
+            try { img = Shrink(dlg.FileName); preview.Source = Picture(img); } catch (Exception ex) { UiKit.Text("Не открылась: " + ex.Message, 12); }
+        });
+        Btn(imgRow, "Убрать", () => { img = ""; preview.Source = null; });
+        _editor.Children.Add(imgRow);
 
         var msg = UiKit.Text("", 12, true);
         var btns = new WrapPanel();
@@ -255,7 +300,8 @@ public class DeckEditPage : UserControl
                 if (kk == "keys" && !AppWheels.Valid(v)) { msg.Text = "Не понял клавиши: напиши как ctrl+shift+m или alt w f f"; return; }
                 if (kk is "act" or "open" or "page" && v.Length == 0) { msg.Text = "Выбери, что открыть или нажать"; return; }
                 page.Keys.Add(new DeckKey { Slot = _slot, Kind = kk, Value = v, Label = label.Text.Trim(), Emoji = emoji.Text.Trim(), Color = color, Live = (string)((ComboBoxItem)live.SelectedItem).Tag,
-                    Style = (string)((ComboBoxItem)style.SelectedItem).Tag, W = (int)kw.SelectedItem, H = (int)kh.SelectedItem });
+                    Style = (string)((ComboBoxItem)style.SelectedItem).Tag, W = (int)kw.SelectedItem, H = (int)kh.SelectedItem,
+                    Swipe = (string)((ComboBoxItem)swipe.SelectedItem).Tag, Img = img });
             }
             Save(); FillGrid(); msg.Text = "Сохранено — на телефоне уже обновилось";
         };
