@@ -21,7 +21,7 @@
     <SolidColorBrush x:Key="WarnBrush" Color="#FFC53D"/>
     <SolidColorBrush x:Key="BadBrush" Color="#FF4D6A"/>
 
-    <FontFamily x:Key="IconFont">Segoe Fluent Icons, Segoe MDL2 Assets</FontFamily>
+    <FontFamily x:Key="IconFont">pack://application:,,,/MishkaHelper;component/Assets/#Mishka Icons, Segoe Fluent Icons, Segoe MDL2 Assets</FontFamily>
     <FontFamily x:Key="MainFont">Segoe UI Variable Text, Segoe UI</FontFamily>
 
     <!-- Text -->

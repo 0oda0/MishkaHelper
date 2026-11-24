@@ -24,7 +24,25 @@ jobs:
           "APP_VERSION=$v" >> $env:GITHUB_ENV
 
       - name: Unit tests
-        run: dotnet test tests -c Release
+        shell: pwsh
+        run: |
+          dotnet test tests -c Release --collect "Code Coverage" --settings tests/coverage.runsettings --results-directory TestResults --logger "trx;LogFileName=tests.trx"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $report = Get-ChildItem TestResults -Recurse -Filter '*.cobertura.xml' | Select-Object -First 1
+          if (!$report) { throw 'Coverage report missing' }
+          [xml]$xml = Get-Content $report.FullName -Raw
+          $covered = [int]$xml.coverage.'lines-covered'
+          $total = [int]$xml.coverage.'lines-valid'
+          if ($total -le 0) { throw 'No application lines measured' }
+          $summary = "MishkaHelper line coverage: $covered / $total ({0:P2})" -f ($covered / $total)
+          Write-Host $summary
+          $summary >> $env:GITHUB_STEP_SUMMARY
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-coverage
+          path: TestResults
 
       # Folders, not single-file: native speech/GPU libraries must sit where their loaders look for them.
       # One build with everything; the installer's checkboxes (and the settings page) choose the parts.

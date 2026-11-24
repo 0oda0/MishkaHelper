@@ -2,6 +2,20 @@
 
 Неоновый системный помощник для Windows 11: все регуляторы, мониторинг железа, устройства, очистка, защита, горячие клавиши, радиальное меню и виджеты в одном приложении.
 
+## Установка и обновление
+
+На Windows 11 x64 скачай **MishkaHelper-Setup** из [последнего релиза](../../releases/latest). В установщике выбери нужные модули. Позже их можно переключить в меню «Настройки → О программе».
+
+| Файл | Для чего он нужен |
+| --- | --- |
+| `MishkaHelper-Setup-x.y.z.exe` | Установка на ПК и обновление поверх предыдущей версии |
+| `MishkaHelper-Portable-x.y.z.zip` | Запуск из папки. Распакуй весь архив и открой `MishkaHelper.exe` |
+| `Mishka-Phone.apk` | Приложение для Android 8+ с пультом и стримдеком для ПК |
+
+В установленном приложении обновление доступно через «Настройки → О программе → Обновить». Файлы с пометками Lite, Secretary и Jarvis сохранены для совместимости со старыми версиями. [Подробнее о вариантах загрузки](docs/EDITIONS.md)
+
+Для управления Defender, вентиляторами и системной очисткой нужны права администратора. Установщик не подписан цифровой подписью. Для автозапуска приложение использует планировщик задач Windows.
+
 ## Что умеет
 
 | Раздел | Возможности |
@@ -40,47 +54,24 @@
 | Ctrl+Alt+C | Пипетка |
 | Ctrl+Alt+N | Ночной свет |
 
-## Установка
+## Сборка и тесты
 
-Из [Releases](../../releases) — четыре редакции:
+Для сборки нужны Windows и .NET 9 SDK. Из корня репозитория выполни:
 
-| Файл | Что внутри |
-|---|---|
-| **`MishkaHelper-Setup-x.y.z.exe`** | Всё: инструменты, Джарвис и секретарша |
-| **`MishkaHelper-Jarvis-Setup-x.y.z.exe`** | Инструменты и голосовой помощник Джарвис |
-| **`MishkaHelper-Secretary-Setup-x.y.z.exe`** | Инструменты и секретарша: заметки, дела, сводки, почта |
-| **`MishkaHelper-Lite-Setup-x.y.z.exe`** | Только инструменты, самая лёгкая |
-| **`Mishka-Phone.apk`** | Приложение для Android 8+: уведомления, файлы, пульт, чистка, дела |
-
-Другую редакцию можно поставить поверх: настройки сохранятся.
-
-Есть и портативные `…-Portable-x.y.z.zip`. Обновляется прямо из приложения: «Настройки → О программе → Обновить». Все функции со скриншотами — кнопка «Что можно сделать» в приложении ([docs/features](docs/features/index.html)).
-Приложению нужны права администратора (Defender, вентиляторы, системная очистка). Автозапуск идёт через планировщик задач, поэтому UAC при входе в Windows не появляется.
-
-> Exe не подписан цифровой подписью, поэтому SmartScreen может предупредить при первом запуске: «Подробнее» → «Выполнить в любом случае».
-
-## Сборка
-
-```bash
-dotnet build src/MishkaHelper.csproj
+```powershell
+dotnet build src/MishkaHelper.csproj -c Release
+dotnet test tests/MishkaHelper.Tests.csproj -c Release --collect "Code Coverage" --settings tests/coverage.runsettings --results-directory TestResults
 ```
 
-Папка с программой (не single-file: нативным библиотекам распознавания речи и GPU нужна обычная раскладка):
+Отчёт Cobertura содержит покрытие строк сборки `MishkaHelper.dll`. Чтобы собрать автономную версию Windows x64 со всеми нативными библиотеками:
 
-```bash
+```powershell
 dotnet publish src/MishkaHelper.csproj -c Release -r win-x64 --self-contained -o publish
 ```
 
-Другие редакции: `-p:Flavor=Jarvis`, `-p:Flavor=Secretary` или `-p:Flavor=Lite` (только инструменты):
-
-```bash
-dotnet publish src/MishkaHelper.csproj -c Release -r win-x64 --self-contained -p:Flavor=Secretary -o publish-secretary
-```
-
-Релиз (установщик + портативная версия) собирается в GitHub Actions по тегу `v*`.
-
-Отладка интерфейса: `MishkaHelper.exe --shots <папка>` сохраняет скриншоты всех страниц.
+GitHub Actions собирает файлы релиза при публикации тега вида `v2.1.3`. Команда `MishkaHelper.exe --shots <папка>` сохраняет снимки страниц интерфейса.
 
 ## Технологии
 
 C# / .NET 9 / WPF, NAudio (CoreAudio), WMI (яркость, батарея, Defender, Acer gaming WMI), WinRT (Bluetooth, радио), RegisterHotKey. Без драйверов ядра: температуры на Acer читаются через встроенный WMI-интерфейс ноутбука.
+

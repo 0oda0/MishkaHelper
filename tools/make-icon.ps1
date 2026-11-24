@@ -7,24 +7,28 @@ $pngs = foreach ($s in $sizes) {
   $bmp = New-Object System.Drawing.Bitmap $s, $s
   $g = [System.Drawing.Graphics]::FromImage($bmp)
   $g.SmoothingMode = 'AntiAlias'; $g.TextRenderingHint = 'AntiAliasGridFit'
-  $r = New-Object System.Drawing.RectangleF 0, 0, $s, $s
-  $path = New-Object System.Drawing.Drawing2D.GraphicsPath
-  $rad = $s * 0.28
-  $path.AddArc(0, 0, $rad, $rad, 180, 90); $path.AddArc($s - $rad - 1, 0, $rad, $rad, 270, 90)
-  $path.AddArc($s - $rad - 1, $s - $rad - 1, $rad, $rad, 0, 90); $path.AddArc(0, $s - $rad - 1, $rad, $rad, 90, 90)
-  $path.CloseFigure()
-  $br = New-Object System.Drawing.Drawing2D.LinearGradientBrush $r, ([System.Drawing.Color]::FromArgb(255, 162, 89, 255)), ([System.Drawing.Color]::FromArgb(255, 255, 46, 151)), 45
-  $g.FillPath($br, $path)
-  # bear ears
-  $ear = [System.Drawing.Color]::FromArgb(235, 15, 15, 26)
-  $eb = New-Object System.Drawing.SolidBrush $ear
-  $g.FillEllipse($eb, $s * 0.17, $s * 0.14, $s * 0.22, $s * 0.22)
-  $g.FillEllipse($eb, $s * 0.61, $s * 0.14, $s * 0.22, $s * 0.22)
-  $g.FillEllipse($eb, $s * 0.18, $s * 0.24, $s * 0.64, $s * 0.6)
-  $font = New-Object System.Drawing.Font 'Segoe UI', ($s * 0.36), ([System.Drawing.FontStyle]::Bold), ([System.Drawing.GraphicsUnit]::Pixel)
-  $sf = New-Object System.Drawing.StringFormat; $sf.Alignment = 'Center'; $sf.LineAlignment = 'Center'
-  $tr = New-Object System.Drawing.RectangleF 0, ($s * 0.1), $s, $s
-  $g.DrawString('M', $font, (New-Object System.Drawing.SolidBrush ([System.Drawing.Color]::FromArgb(255, 255, 120, 200))), $tr, $sf)
+  # Draw on a common grid so the bear stays recognizable at tray sizes.
+  $g.ScaleTransform(($s / 100.0), ($s / 100.0))
+  $ink = [Drawing.SolidBrush]::new([Drawing.ColorTranslator]::FromHtml('#17162D'))
+  $light = [Drawing.SolidBrush]::new([Drawing.ColorTranslator]::FromHtml('#F1EFFF'))
+  $gradient = [Drawing.Drawing2D.LinearGradientBrush]::new(
+    [Drawing.Rectangle]::new(5, 8, 90, 85),
+    [Drawing.ColorTranslator]::FromHtml('#67EDFC'),
+    [Drawing.ColorTranslator]::FromHtml('#D77BFF'), 35)
+  $g.FillEllipse($gradient, 4, 9, 31, 31)
+  $g.FillEllipse($gradient, 65, 9, 31, 31)
+  $g.FillEllipse($ink, 11, 16, 17, 17)
+  $g.FillEllipse($ink, 72, 16, 17, 17)
+  $g.FillEllipse($gradient, 9, 16, 82, 78)
+  $g.FillEllipse($ink, 16, 23, 68, 63)
+  $g.FillEllipse($light, 29, 39, 10, 12)
+  $g.FillEllipse($light, 61, 39, 10, 12)
+  $g.FillEllipse($gradient, 32, 55, 36, 23)
+  $nose = [Drawing.Point[]]@([Drawing.Point]::new(42,60), [Drawing.Point]::new(58,60), [Drawing.Point]::new(50,68))
+  $g.FillPolygon($ink, $nose)
+  $ink.Dispose()
+  $light.Dispose()
+  $gradient.Dispose()
   $g.Dispose()
   $ms = New-Object System.IO.MemoryStream
   $bmp.Save($ms, [System.Drawing.Imaging.ImageFormat]::Png); $bmp.Dispose()
